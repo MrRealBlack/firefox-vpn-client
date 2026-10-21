@@ -1,6 +1,6 @@
 <div align="center" dir="ltr">
 
-[**🇺🇸 English**](../../README.md)
+[🇺🇸 English](../../README.md) &nbsp;/&nbsp; **🇮🇷 فارسی** &nbsp;/&nbsp; [🇨🇳 简体中文](README_zh.md) &nbsp;/&nbsp; [🇷🇺 Русский](README_ru.md)
 
 </div>
 <br>
@@ -23,9 +23,9 @@
 
 &rlm;**Firefox VPN** یک VPN رایگان و متن‌باز است که با حساب فایرفاکس (Firefox Account) کار می‌کند. اینترنت شما را از سرورهای موزیلا، روی زیرساخت **Fastly**، و با تونل‌های امن **HTTP/2 و HTTP/3** عبور می‌دهد.
 
-هر حساب فایرفاکس ماهی **۵۰ گیگابایت حجم رایگان** دارد. چند حساب اضافه کنید تا وقتی حجم یکی تمام شد، حساب بعدی **خودکار و بدون قطع شدن اتصال** جایش را بگیرد؛ مثلاً با سه حساب، ۱۵۰ گیگابایت در ماه.
+هر حساب فایرفاکس ماهی **۵۰ گیگابایت رایگان** است، و با ویژگی **مولتی اکانت** این حجم چند برابر می‌شود: وقتی یکی تمام شد، بعدی **خودکار** وصل می‌شود.
 
-&rlm;برای **اندروید، ویندوز، مک و لینوکس**؛ بدون تبلیغ، بدون ردیابی، و بدون هیچ سروری جز سرورهای موزیلا.
+&rlm;برای **اندروید، ویندوز، مک و لینوکس**؛ کاملاً رایگان، بدون تبلیغات.
 
 <p align="center"><a href="https://raw.githubusercontent.com/armanlife/firefox-vpn-client/main/docs/screenshots/main.webp" target="_blank"><img src="../screenshots/main.webp" width="720" alt="Firefox VPN"></a></p>
 
@@ -100,28 +100,35 @@ curl -fsSL https://raw.githubusercontent.com/armanlife/firefox-vpn-client/main/i
 
 ### 🌐 پنل تحت وب
 
-پنل تحت وب برای **سرورهای لینوکس بدون محیط گرافیکی (CLI)** است، جایی که برنامه اجرا نمی‌شود. در ویندوز، مک، اندروید و لینوکس دسکتاپ از خود برنامه استفاده کنید.
-
-این پنل داخل هسته است، با هر مرورگری باز می‌شود و همه کارهای برنامه را انجام می‌دهد: افزودن و مدیریت حساب‌ها و حجم باقی‌مانده هر کدام، انتخاب سرور و تست تأخیر واقعی، تست اتصال و IP عمومی، لاگ زنده، و همه تنظیمات.
+برای سرورهای لینوکس، Firefox VPN یک **پنل تحت وب** دارد که در هر مرورگری باز می‌شود و همه امکانات برنامه را دارد: مدیریت حساب‌ها و حجم، انتخاب سرور و تست تأخیر، تست اتصال، لاگ زنده، و همه تنظیمات.
 
 <p align="center"><img src="../screenshots/web.webp" width="720" alt="Web panel"></p>
 
-- **آدرس:** `http://<IP سرور>:10820/app/`. پنل روی سرور برای دسترسی از بیرون باز است و نام کاربری و رمز دارد. نشانی‌های داخلی و عمومی در پایان نصب نمایش داده می‌شوند.
-- **پروکسی:** SOCKS5 و HTTP روی پورت `10810`، با نام کاربری و رمز جداگانه، تا بتوانید آن را با دستگاه‌های دیگر شبکه هم به اشتراک بگذارید.
-- **اگر آدرس باز نشد:** پورت‌های `10820` و `10810` را در فایروال سرور و پنل ارائه‌دهنده سرور باز کنید.
+- **آدرس پنل:** `http://SERVER-IP:10820/app/`&lrm;، با نام کاربری و رمز. آدرس دقیق در پایان نصب نمایش داده می‌شود.
+- **پروکسی:** SOCKS5 و HTTP روی پورت `10810`، با نام کاربری و رمز جدا.
 
-### ⌨️ دستورهای سرور
+### ⌨️ مدیریت از ترمینال
 
-با `sudo firefox-vpn` (بدون چیز دیگری) یک منوی شماره‌دار از همه دستورها باز می‌شود. یا هر دستور را مستقیم بزنید:
+روی سرور، دستور `sudo firefox-vpn` را بزنید تا منوی مدیریت باز شود:
 
 </div>
 
-```bash
-sudo firefox-vpn                       # a numbered menu of all commands
-sudo firefox-vpn status                # the service, proxy, account, and data left
-sudo firefox-vpn add-account           # sign in to a Firefox Account (also possible in the web panel)
-sudo firefox-vpn list-accounts         # the accounts and their data used
-sudo firefox-vpn logs                  # show the service's log
-sudo firefox-vpn restart               # restart the service
-sudo firefox-vpn set-dashboard-login   # set the web panel's username and password
+```text
+$ sudo firefox-vpn
+
+  Firefox VPN
+  ────────────────────────────────────────────────────────────────────────────
+   1) Status                                   firefox-vpn status
+   2) Start                                    firefox-vpn start
+   3) Stop                                     firefox-vpn stop
+   4) Restart                                  firefox-vpn restart
+   5) Start with the server                    firefox-vpn enable
+   6) Do not start with the server             firefox-vpn disable
+   7) Show the log                             firefox-vpn logs
+   8) Add a Firefox Account                    firefox-vpn add-account
+   9) List the accounts and their quota        firefox-vpn list-accounts
+  10) Set the panel's username and password    firefox-vpn set-dashboard-login
+   0) Exit
+  ────────────────────────────────────────────────────────────────────────────
+  Enter a number [0-10]:
 ```

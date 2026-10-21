@@ -1,6 +1,6 @@
 <div align="center">
 
-[**🇮🇷 فارسی**](docs/readme/README_fa.md)
+**🇺🇸 English** &nbsp;/&nbsp; [🇨🇳 简体中文](docs/readme/README_zh.md) &nbsp;/&nbsp; [🇷🇺 Русский](docs/readme/README_ru.md) &nbsp;/&nbsp; [🇮🇷 فارسی](docs/readme/README_fa.md)
 
 </div>
 <br>
@@ -21,9 +21,9 @@
 
 **Firefox VPN** is a free, open-source VPN that works with a Firefox Account. It carries your internet traffic through Mozilla's servers, on **Fastly**'s infrastructure, over secure **HTTP/2 and HTTP/3** tunnels.
 
-Every Firefox Account comes with **50 GB of free data a month**. Add several accounts, and when one runs out the next takes its place **automatically, without dropping the connection**; with three accounts, for example, that is 150 GB a month.
+Every Firefox Account comes with **50 GB of free data a month**, and the **multi-account** feature multiplies it: when one runs out, the next connects **automatically**.
 
-For **Android, Windows, macOS, and Linux**; no ads, no tracking, and no server but Mozilla's.
+For **Android, Windows, macOS, and Linux**; completely free, with no ads.
 
 <p align="center"><a href="https://raw.githubusercontent.com/armanlife/firefox-vpn-client/main/docs/screenshots/main.webp" target="_blank"><img src="docs/screenshots/main.webp" width="720" alt="Firefox VPN"></a></p>
 
@@ -94,26 +94,33 @@ curl -fsSL https://raw.githubusercontent.com/armanlife/firefox-vpn-client/main/i
 
 ### 🌐 Web panel
 
-The web panel is for **Linux servers without a graphical environment (CLI)**, where the app cannot run. On Windows, macOS, Android, and Linux desktops, use the app itself.
-
-The panel is built into the core, opens in any browser, and does everything the app does: adding and managing accounts and the data left on each, choosing a server and testing real delay, the connection test and public IP, the live log, and every setting.
+For Linux servers, Firefox VPN has a **web panel** that opens in any browser and has everything the app has: managing accounts and data, choosing a server and testing delay, the connection test, the live log, and every setting.
 
 <p align="center"><img src="docs/screenshots/web.webp" width="720" alt="Web panel"></p>
 
-- **Address:** `http://<server IP>:10820/app/`. On a server the panel is open to access from outside and has a username and password. Its local and public addresses are shown at the end of the install.
-- **Proxy:** SOCKS5 and HTTP on port `10810`, with a username and password of its own, so you can share it with other devices on your network too.
-- **If the address does not open:** open ports `10820` and `10810` in the server's firewall and in the hosting provider's panel.
+- **Panel address:** `http://SERVER-IP:10820/app/`, with a username and password. The exact address is shown at the end of the install.
+- **Proxy:** SOCKS5 and HTTP on port `10810`, with a username and password of its own.
 
-### ⌨️ Server commands
+### ⌨️ Managing from the terminal
 
-`sudo firefox-vpn` on its own opens a numbered menu of all commands. Or type any command directly:
+On the server, run `sudo firefox-vpn` to open the management menu:
 
-```bash
-sudo firefox-vpn                       # a numbered menu of all commands
-sudo firefox-vpn status                # the service, proxy, account, and data left
-sudo firefox-vpn add-account           # sign in to a Firefox Account (also possible in the web panel)
-sudo firefox-vpn list-accounts         # the accounts and their data used
-sudo firefox-vpn logs                  # show the service's log
-sudo firefox-vpn restart               # restart the service
-sudo firefox-vpn set-dashboard-login   # set the web panel's username and password
+```text
+$ sudo firefox-vpn
+
+  Firefox VPN
+  ────────────────────────────────────────────────────────────────────────────
+   1) Status                                   firefox-vpn status
+   2) Start                                    firefox-vpn start
+   3) Stop                                     firefox-vpn stop
+   4) Restart                                  firefox-vpn restart
+   5) Start with the server                    firefox-vpn enable
+   6) Do not start with the server             firefox-vpn disable
+   7) Show the log                             firefox-vpn logs
+   8) Add a Firefox Account                    firefox-vpn add-account
+   9) List the accounts and their quota        firefox-vpn list-accounts
+  10) Set the panel's username and password    firefox-vpn set-dashboard-login
+   0) Exit
+  ────────────────────────────────────────────────────────────────────────────
+  Enter a number [0-10]:
 ```
