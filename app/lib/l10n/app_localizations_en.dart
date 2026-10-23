@@ -35,6 +35,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Add a Firefox Account on the Accounts page to connect.';
 
   @override
+  String get waitingForEnabledAccount =>
+      'All accounts are turned off. Turn one on in Accounts.';
+
+  @override
   String get stateError => 'Error';
 
   @override
@@ -148,7 +152,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'They are used in the order of this list, each up to $percent%.';
+    return 'In the order of this list: each up to $percent%, the last one until its data runs out.';
   }
 
   @override
@@ -211,8 +215,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInAgain => 'Sign in again';
 
   @override
-  String get reasonQuotaThreshold =>
-      'Reached its switch point; it is used again after the monthly reset.';
+  String reasonQuotaThreshold(int percent) {
+    return 'Used $percent% of its data, so the next account took over.';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -363,6 +368,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get signInWrongPassword => 'Incorrect password.';
+
+  @override
+  String get signInNoPassword =>
+      'This account has no password: it was made with Google or Apple sign-in. Set a password, then sign in here with it.';
+
+  @override
+  String get setPasswordButton => 'Set a password';
 
   @override
   String get signInTooManyAttempts =>
@@ -667,13 +679,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get search => 'Search';
 
   @override
-  String get locked => 'Locked';
-
-  @override
-  String get lockedHint =>
-      'Mozilla may not allow your account to use this location.';
-
-  @override
   String get noAnswer => 'No answer';
 
   @override
@@ -720,9 +725,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'The next account takes over when this share of the quota is used.';
-
-  @override
-  String get quotaInterval => 'Check the quota every';
 
   @override
   String get sectionDns => 'DNS';
@@ -889,9 +891,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get verboseLogs => 'Detailed logs';
 
   @override
-  String get allowLocked => 'Allow locked locations';
-
-  @override
   String get webDashboard => 'Web dashboard';
 
   @override
@@ -899,9 +898,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'Advanced settings and more tools';
-
-  @override
-  String get durationInvalid => 'Use a duration like 30s, 15m, or 6h';
 
   @override
   String numberInvalid(int min, int max) {
@@ -1023,37 +1019,64 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectRetrying => 'Couldn\'t connect. Check your internet.';
 
   @override
-  String get failUnreachable => 'Mozilla\'s servers are blocked';
+  String get failUnreachable =>
+      'Mozilla\'s servers are blocked on this internet. Try another internet connection.';
 
   @override
-  String get failRefused => 'Mozilla\'s server refused the connection';
+  String get failRefused =>
+      'Mozilla\'s server refused the connection. Try again in a few minutes.';
 
   @override
-  String get failSignIn => 'The account must sign in again';
+  String get failLocationRefused =>
+      'This country isn\'t open to your account. Choose another country.';
+
+  @override
+  String get useRecommendedLocation => 'Use the recommended location';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return 'You chose $chosen, but your IP is in $exit.';
+  }
+
+  @override
+  String get failSignIn =>
+      'This account\'s sign-in has expired. Sign in again on the Accounts page.';
 
   @override
   String get failQuota => 'This month\'s data is used up. Add another account.';
 
   @override
-  String get failNotEntitled => 'This account can\'t use the VPN';
+  String get failNotEntitled =>
+      'Mozilla doesn\'t let this account use the VPN. Add another account.';
 
   @override
-  String get failRegion => 'Mozilla refuses connections from your region.';
+  String get failRegion =>
+      'Mozilla doesn\'t offer its service in your country.';
 
   @override
-  String get failServer => 'Mozilla\'s service has a problem';
+  String get failServer =>
+      'Mozilla\'s service has a temporary problem. The app tries again by itself.';
 
   @override
-  String get failNoAccount => 'No account can connect now: open Accounts.';
+  String get failNoAccount => 'No account is ready. Open the Accounts page.';
 
   @override
-  String get failTestSite => 'Connected to the server, but sites don\'t open';
+  String get failTestSite =>
+      'Connected to the server, but sites don\'t open. Try another country.';
 
   @override
-  String get failOther => 'Couldn\'t connect';
+  String get failOther => 'Couldn\'t connect. Try again.';
 
   @override
-  String get failNoInternet => 'No internet';
+  String get failNoInternet => 'No internet. Check Wi-Fi or mobile data.';
+
+  @override
+  String get waitingForNetwork => 'Waiting for an internet connection…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'The proxy couldn\'t start on port $port. Choose another port.';
+  }
 
   @override
   String get connectionSettings => 'Connection settings';
@@ -1119,14 +1142,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get locationsSection => 'Locations';
-
-  @override
-  String get hideLocked => 'Hide locked locations';
-
-  @override
-  String showLocked(int count) {
-    return 'Show locked locations ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'Encrypted DNS works';

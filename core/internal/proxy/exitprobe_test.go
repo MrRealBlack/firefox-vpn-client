@@ -135,10 +135,13 @@ func TestVerifyExitFindsBothFamilies(t *testing.T) {
 	pool := x509.NewCertPool()
 	pool.AddCert(server.Certificate())
 	exitProbeRoots = pool
-	oldV4, oldV6 := exitCheckIPv4URLs, exitCheckIPv6URLs
-	t.Cleanup(func() { exitProbeRoots, exitCheckIPv4URLs, exitCheckIPv6URLs = nil, oldV4, oldV6 })
+	oldV4, oldV6, oldDetails := exitCheckIPv4URLs, exitCheckIPv6URLs, exitDetailsURLs
+	t.Cleanup(func() {
+		exitProbeRoots, exitCheckIPv4URLs, exitCheckIPv6URLs, exitDetailsURLs = nil, oldV4, oldV6, oldDetails
+	})
 	opener := tunnelToAddr(server.Listener.Addr().String())
 
+	exitDetailsURLs = []string{"https://example.com/v4-busy"}
 	exitCheckIPv4URLs = []string{"https://example.com/v4-busy", "https://example.com/v4-trace"}
 	exitCheckIPv6URLs = []string{"https://example.com/v6-wrong-family", "https://example.com/v6-geoip"}
 	got, err := VerifyExit(opener, 5*time.Second)
@@ -161,5 +164,36 @@ func TestVerifyExitFindsBothFamilies(t *testing.T) {
 	exitCheckIPv4URLs = []string{"https://example.com/v4-busy"}
 	if _, err := VerifyExit(opener, 5*time.Second); err == nil || !strings.Contains(err.Error(), "IPv4") || !strings.Contains(err.Error(), "HTTP 503") {
 		t.Fatalf("expected both families to fail: %v", err)
+	}
+}
+
+// Cloudflare's country wins; ip.sb, asked alongside, adds only the city and
+// network, even when its database names another country.
+func TestVerifyExitTakesTheCountryFromCloudflare(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/trace4":
+			fmt.Fprint(w, "ip=203.0.113.8\nloc=GB\n")
+		case "/trace6":
+			fmt.Fprint(w, "ip=2001:db8::8\nloc=GB\n")
+		case "/geoip":
+			fmt.Fprint(w, `{"ip":"203.0.113.8","country_code":"US","city":"London","isp":"Example VPN"}`)
+		}
+	}))
+	defer server.Close()
+	pool := x509.NewCertPool()
+	pool.AddCert(server.Certificate())
+	exitProbeRoots = pool
+	oldV4, oldV6, oldDetails := exitCheckIPv4URLs, exitCheckIPv6URLs, exitDetailsURLs
+	t.Cleanup(func() {
+		exitProbeRoots, exitCheckIPv4URLs, exitCheckIPv6URLs, exitDetailsURLs = nil, oldV4, oldV6, oldDetails
+	})
+	exitCheckIPv4URLs = []string{"https://example.com/trace4"}
+	exitCheckIPv6URLs = []string{"https://example.com/trace6"}
+	exitDetailsURLs = []string{"https://example.com/geoip"}
+
+	got, err := VerifyExit(tunnelToAddr(server.Listener.Addr().String()), 5*time.Second)
+	if err != nil || got.CountryCode != "GB" || got.Place() != "GB, London, Example VPN" {
+		t.Fatalf("got %+v %v", got, err)
 	}
 }

@@ -11,12 +11,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/armanlife/firefox-vpn-client/core/internal/config"
 	"github.com/armanlife/firefox-vpn-client/core/internal/desktop"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 	"github.com/armanlife/firefox-vpn-client/core/internal/service"
 	"github.com/armanlife/firefox-vpn-client/core/internal/version"
-	"github.com/armanlife/firefox-vpn-client/core/internal/winsvc"
 )
 
 func main() {
@@ -27,7 +25,6 @@ func main() {
 		fmt.Fprintln(out, "       firefox-vpn-core -app [-data-dir DIR] [-verbose]   (started by the desktop app)")
 		fmt.Fprintln(out, "       firefox-vpn-core -add-account | -list-accounts | -set-dashboard-login [-data-dir DIR]")
 		fmt.Fprintln(out, "       firefox-vpn-core -setup-server USERNAME [-data-dir DIR]   (install.sh, new Linux servers)")
-		fmt.Fprintln(out, "       firefox-vpn-core -install-service | -uninstall-service [-data-dir DIR]   (Windows)")
 		fmt.Fprintln(out)
 		fmt.Fprintln(out, "Without a command, runs the proxy service and its web dashboard (default")
 		fmt.Fprintln(out, "http://127.0.0.1:10820) with a status screen in the terminal (-plain prints the")
@@ -52,11 +49,8 @@ func main() {
 	setupServer := flag.String("setup-server", "", "Open the dashboard and the proxy to the network (the dashboard login for USERNAME, \"-\" for a random one, and a random proxy login, each with a random password), print the logins, then exit (install.sh runs it on a new server)")
 	tray := flag.Bool("tray", false, "Show the tray icon; runs the service in-process unless one is already running")
 	app := flag.Bool("app", false, "Run the service for the desktop app (no tray icon or status screen); stops when standard input ends")
-	installSvc := flag.Bool("install-service", false, "Install and start the Windows service that starts with Windows (asks for administrator rights)")
-	uninstallSvc := flag.Bool("uninstall-service", false, "Stop and remove the Windows service")
 	showVersion := flag.Bool("version", false, "Print the version and exit")
 	plain := flag.Bool("plain", false, "Print the log instead of the status screen")
-	service := flag.Bool("service", false, "Run under the Windows Service Control Manager (used by the installed service)")
 	verbose := flag.Bool("verbose", false, "Log CONNECT destinations and debug lines regardless of the config")
 	checkQUIC := flag.Bool("check-quic", false, "Try QUIC (HTTP/3) handshakes to Mozilla's proxy servers and to well-known sites, print the results, then exit; tells whether this network lets HTTP/3 through")
 	flag.Parse()
@@ -85,9 +79,6 @@ func main() {
 		setupServer:  *setupServer,
 		tray:         *tray,
 		app:          *app,
-		install:      *installSvc,
-		uninstall:    *uninstallSvc,
-		service:      *service,
 		plain:        *plain,
 		verbose:      *verbose,
 	}); err != nil {
@@ -111,9 +102,6 @@ type commandOptions struct {
 	setupServer  string
 	tray         bool
 	app          bool
-	install      bool
-	uninstall    bool
-	service      bool
 	plain        bool
 	verbose      bool
 }
@@ -122,13 +110,13 @@ type commandOptions struct {
 // command is given.
 func runCommand(opts commandOptions) error {
 	commands := 0
-	for _, set := range []bool{opts.addAccount, opts.listAccounts, opts.status, opts.setLogin, opts.setupServer != "", opts.tray, opts.app, opts.install, opts.uninstall, opts.service} {
+	for _, set := range []bool{opts.addAccount, opts.listAccounts, opts.status, opts.setLogin, opts.setupServer != "", opts.tray, opts.app} {
 		if set {
 			commands++
 		}
 	}
 	if commands > 1 {
-		return errors.New("use only one of -add-account, -list-accounts, -status, -set-dashboard-login, -setup-server, -tray, -app, -install-service, -uninstall-service, -service")
+		return errors.New("use only one of -add-account, -list-accounts, -status, -set-dashboard-login, -setup-server, -tray, -app")
 	}
 	if opts.app && opts.plain {
 		return errors.New("-plain applies to the terminal; -app logs to the log file only")
@@ -148,40 +136,6 @@ func runCommand(opts commandOptions) error {
 		return runSetDashboardLogin(paths)
 	case opts.setupServer != "":
 		return runSetupServer(paths, opts.setupServer)
-	case opts.install:
-		if config.BesideApp() {
-			// The app starts this file; a service would keep running it
-			// after an update and could not set the user's Windows proxy.
-			return errors.New("this core belongs to the desktop app beside it, which starts and stops it; for a Windows service use a copy of the core in its own folder")
-		}
-		// Sign-in start is a per-user setting; an elevated process may
-		// belong to another account, so only the user's own copy sets it.
-		userCopy := !winsvc.IsElevated()
-		if err := winsvc.Install(paths); err != nil {
-			return err
-		}
-		fmt.Println(`Service "FirefoxVPN" installed and running; it starts with Windows.`)
-		if userCopy {
-			if err := desktop.SetAutostart(paths, true); err != nil {
-				fmt.Println("The tray icon could not be added to sign-in:", err)
-			} else {
-				fmt.Println("The tray icon now appears at sign-in.")
-			}
-		}
-		return nil
-	case opts.uninstall:
-		userCopy := !winsvc.IsElevated()
-		if err := winsvc.Uninstall(paths); err != nil {
-			return err
-		}
-		fmt.Println("Service removed.")
-		// Sign-in start came with the service.
-		if userCopy {
-			_ = desktop.SetAutostart(paths, false)
-		}
-		return nil
-	case opts.service || winsvc.RunningAsService():
-		return winsvc.Run(paths, opts.verbose)
 	case opts.app:
 		// Standard output and error are pipes the app may never read; a
 		// full pipe would block logging, so the log goes to the file only.
@@ -194,8 +148,8 @@ func runCommand(opts commandOptions) error {
 		return desktop.RunApp(paths, opts.verbose)
 	case opts.tray:
 		if desktop.StartedWithOwnConsole() {
-			// Started from the sign-in Run key: the tray icon replaces the
-			// console window.
+			// Started from Explorer (a shortcut): the tray icon replaces
+			// the console window.
 			desktop.DetachConsole()
 			logx.EnableFile(paths.LogDir, false)
 		} else {

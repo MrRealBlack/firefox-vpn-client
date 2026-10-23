@@ -279,6 +279,32 @@ func TestDashboardSignInWithoutAnAccount(t *testing.T) {
 	}
 }
 
+// An account made with Google or Apple sign-in has no password; FxA says
+// so with errno 210, which gets its own code.
+func TestDashboardSignInWithoutAPassword(t *testing.T) {
+	d := newTestDaemon(t)
+	setCoreControlPlane(t, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/v1/account/login" {
+			return coreResponse(r, http.StatusBadRequest, `{"errno":210,"message":"Complete account setup, please reset password to continue."}`, nil), nil
+		}
+		return nil, fmt.Errorf("unexpected request %s %s", r.Method, r.URL)
+	})
+	c := newDashboardClient(t, d)
+	rec := c.do(http.MethodPost, "/api/signin", map[string]string{"email": "google@example.com", "password": "pw"})
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("sign-in start failed: %d %s", rec.Code, rec.Body)
+	}
+	id := decodeBody[signInView](t, rec).ID
+	var view signInView
+	waitForCondition(t, 5*time.Second, func() bool {
+		view = decodeBody[signInView](t, c.do(http.MethodGet, "/api/signin/"+id, nil))
+		return view.Step == stepFailed
+	})
+	if view.ErrorCode != signInNoPassword || !strings.Contains(view.Error, "no password") {
+		t.Fatalf("want the no-password code and text, got %+v", view)
+	}
+}
+
 func TestDashboardSignInWithEmailCode(t *testing.T) {
 	d := newTestDaemon(t)
 	session := strings.Repeat("ab", 32)
@@ -445,5 +471,42 @@ func TestDashboardSessionsLastAndEnd(t *testing.T) {
 	}
 	if status(c) != http.StatusUnauthorized {
 		t.Fatal("a new password must end old sessions")
+	}
+}
+
+// The exit mismatch is reported only for a country the user chose, and
+// only when the public IP's country is known and another one.
+func TestExitMismatchOnlyForAChosenCountry(t *testing.T) {
+	gb := proxy.Candidate{CountryCode: "GB", CountryName: "United Kingdom"}
+	rec := proxy.Candidate{CountryCode: "REC", CountryName: "Recommended"}
+	inDE := &exitView{CountryCode: "de", CountryName: "Germany"}
+	cases := []struct {
+		name     string
+		cfg      config.Proxy
+		selected proxy.Candidate
+		exit     *exitView
+		want     bool
+	}{
+		{"chosen country, other exit", config.Proxy{Country: "GB"}, gb, inDE, true},
+		{"chosen by name", config.Proxy{Country: "United Kingdom"}, gb, inDE, true},
+		{"chosen country, same exit", config.Proxy{Country: "GB"}, gb, &exitView{CountryCode: "GB"}, false},
+		{"exit country unknown", config.Proxy{Country: "GB"}, gb, &exitView{IPv4: "203.0.113.1"}, false},
+		{"no exit probe yet", config.Proxy{Country: "GB"}, gb, nil, false},
+		{"recommended", config.Proxy{}, rec, inDE, false},
+		{"fastest", config.Proxy{Country: proxy.FastestCountry}, gb, inDE, false},
+		{"server set by hand", config.Proxy{Server: "gb.example:443"}, gb, inDE, false},
+	}
+	for _, tc := range cases {
+		got := exitMismatch(tc.cfg, tc.selected, tc.exit)
+		if (got != nil) != tc.want {
+			t.Fatalf("%s: got %+v, want mismatch=%v", tc.name, got, tc.want)
+		}
+		if got != nil && (got.ChosenCountryCode != "GB" || got.ExitCountryCode != "DE" || got.ChosenCountryName != "United Kingdom" || got.ExitCountryName != "Germany") {
+			t.Fatalf("%s: got %+v", tc.name, got)
+		}
+	}
+	data, _ := json.Marshal(exitMismatch(config.Proxy{Country: "GB"}, gb, inDE))
+	if string(data) != `{"chosen_country_code":"GB","chosen_country_name":"United Kingdom","exit_country_code":"DE","exit_country_name":"Germany"}` {
+		t.Fatalf("JSON %s", data)
 	}
 }

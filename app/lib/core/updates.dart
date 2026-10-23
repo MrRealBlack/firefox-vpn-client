@@ -84,7 +84,8 @@ String? updateProxy(CoreStatus? status) {
 /// after it starts, and then every hour, whether 5 days have passed since
 /// the last look that worked. What it finds is kept in the settings, so the
 /// home page shows it after a restart too; the computer also shows a
-/// notification while the window is in the tray.
+/// notification while the window is in the tray. The About page looks at
+/// once, whenever asked.
 abstract final class Updates {
   /// How long a successful look holds.
   static const every = Duration(days: 5);

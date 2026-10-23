@@ -173,7 +173,7 @@ func fxaLoginAttempt(ctx context.Context, email, password, verificationMethod, u
 			return nil, fmt.Errorf("creating login request: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		controlplane.ApplyMozillaVPNHeaders(req)
+		controlplane.ApplyFirefoxHeaders(req)
 		return req, nil
 	})
 	if err != nil {
@@ -217,7 +217,7 @@ func fxaVerifySession(ctx context.Context, sessionToken, code string) error {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", authHeader)
-		controlplane.ApplyMozillaVPNHeaders(req)
+		controlplane.ApplyFirefoxHeaders(req)
 		return req, nil
 	})
 	if err != nil {
@@ -255,7 +255,7 @@ func DestroySession(ctx context.Context, sessionToken string) error {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", authHeader)
-		controlplane.ApplyMozillaVPNHeaders(req)
+		controlplane.ApplyFirefoxHeaders(req)
 		return req, nil
 	})
 	if err != nil {
@@ -296,7 +296,7 @@ func fxaOAuthToken(ctx context.Context, sessionToken string) (*TokenResponse, er
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", authHeader)
-		controlplane.ApplyMozillaVPNHeaders(req)
+		controlplane.ApplyFirefoxHeaders(req)
 		return req, nil
 	})
 	if err != nil {
@@ -336,7 +336,7 @@ func fxaRefreshToken(ctx context.Context, refreshToken string) (*TokenResponse, 
 			return nil, fmt.Errorf("creating refresh request: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		controlplane.ApplyMozillaVPNHeaders(req)
+		controlplane.ApplyFirefoxHeaders(req)
 		return req, nil
 	})
 	if err != nil {

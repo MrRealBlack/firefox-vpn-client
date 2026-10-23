@@ -35,7 +35,7 @@ func TestLocalClientReadsStatusThroughToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := st.Summary(); got != "Waiting" {
+	if got := st.Summary(); got != "Waiting: Add an account" {
 		t.Fatalf("summary = %q", got)
 	}
 	st.State.Phase = "running"
@@ -81,6 +81,28 @@ func TestLoopbackAddr(t *testing.T) {
 	} {
 		if got := loopbackAddr(in); got != want {
 			t.Errorf("loopbackAddr(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSummaryNamesTheStateAndReason(t *testing.T) {
+	long := "listen tcp 127.0.0.1:10810: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted"
+	for _, tc := range []struct{ phase, code, message, want string }{
+		{PhaseOff, "", "Proxy off", "Proxy off"},
+		{PhaseStarting, "", "Starting", "Starting…"},
+		{PhaseWaiting, CodeWaitingForNetwork, MessageWaitingForNetwork, MessageWaitingForNetwork},
+		{PhaseWaiting, CodeNoAccounts, "Add an account in the dashboard to start the proxy", "Waiting: Add an account"},
+		{PhaseWaiting, CodeNoUsableAccount, "No usable account: a@example.com: needs sign-in", "Waiting: No usable account"},
+		{PhaseError, CodeProxyPortInUse, "address in use. Choose another SOCKS5 listen address in Settings", "Error: The proxy's port is in use"},
+		{PhaseError, CodeStartFailed, "Guardian refused the pass. Sign in again", "Error: Guardian refused the pass"},
+		{PhaseError, CodeStartFailed, long, "Error: " + string([]rune(long)[:summaryReasonRunes-1]) + "…"},
+		{PhaseError, "", "", "Error"},
+		{"", "", "", "Unknown state"},
+	} {
+		var st TrayStatus
+		st.State.Phase, st.State.Code, st.State.Message = tc.phase, tc.code, tc.message
+		if got := st.Summary(); got != tc.want {
+			t.Errorf("%s/%s: summary = %q, want %q", tc.phase, tc.code, got, tc.want)
 		}
 	}
 }

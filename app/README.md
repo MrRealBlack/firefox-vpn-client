@@ -67,9 +67,11 @@ executable in `Contents/MacOS`, and `DesktopBridge` in
 
 The data folder (accounts, settings, logs) on Windows is `user-data` next
 to the app (not `data`, which holds Flutter's own files). The installer puts
-the app in `%LOCALAPPDATA%\Programs\Firefox VPN Client`, a folder of the user's own,
-and a new version replaces the app there, keeping `user-data`; the portable
-zip holds a `Firefox VPN` folder to unpack over the old one. On macOS the
+the app by default in `%LOCALAPPDATA%\Programs\Firefox VPN Client`, a folder
+of the user's own; the first install lets the user choose another folder they
+can write to. A new version replaces the app where it is, keeping
+`user-data`; the portable zip holds a `Firefox VPN` folder to unpack over the
+old one. On macOS the
 data is in `~/Library/Application Support/Firefox VPN Client`, on Linux in
 `~/.local/share/firefox-vpn-client`; a file named `portable` next to the app keeps
 it in `user-data` beside it there too.
@@ -78,18 +80,26 @@ Arguments: `--data-dir=<path>` (overrides the above) and `--core=<path>`
 (default: `firefox-vpn-core.exe` next to the app).
 
 - Ports: the core's defaults are 10810 (SOCKS5 and HTTP proxy) and 10820
-  (its API). When the API port is taken, the core exits with
-  `app-error: dashboard_port_in_use <address>` on stderr and the app offers
-  another port (it edits `dashboard.listen` in config.json, since the core
-  is not running). When the proxy port is taken, the status carries
-  `code: proxy_port_in_use` and the app offers another port through the
-  API. Settings changes either port at any time.
+  (its API). When the API port is taken (the core exits with
+  `app-error: dashboard_port_in_use <address>` on stderr), Windows keeps it
+  for itself, or another program answers there, the app moves the API by
+  itself to a free port above it (it edits `dashboard.listen` in
+  config.json, since the core is not running); only this app uses that
+  port. After three moves in a run it shows the problem and offers another
+  port. The proxy port never moves on its own, since the user may have set
+  it up in other programs: when it is taken, the status carries
+  `code: proxy_port_in_use`, and when it cannot be used otherwise (such as
+  a port Windows reserves) `code: start_failed` with its `address`; the home
+  page says so and offers another port through the API. Settings changes
+  either port at any time.
 
-- The proxy always runs; the user only chooses whether Windows uses it, in
-  v2rayN's words: Set system proxy or Clear system proxy. The round button
-  on the home page switches between the two. The tray menu is short: Open,
-  Set system proxy, Clear system proxy, Quit. Notifications show while the
-  window is in the tray.
+- The core starts with the proxy off; the round button on the home page
+  connects and disconnects (`POST /api/power`), and Connect on startup
+  (Settings) connects when the app starts. Whether Windows uses the proxy
+  is a separate choice beside it, in v2rayN's words: Set system proxy
+  ("System proxy") or Clear system proxy ("Proxy"). The tray menu is
+  short: Open, Proxy service only, Set system proxy, Quit. Notifications
+  show while the window is in the tray.
 - Developer mode (Settings > General) adds the technical details: the
   connection test's stages and total, server addresses, and the Logs tab.
 - About shows the versions and checks GitHub for a newer release
@@ -163,7 +173,7 @@ Every icon of the program comes from `tool/app_icon.png` (the fox shield,
 1024 px, transparent): `python tool/app_icons.py` (Pillow) writes the
 Android launcher icon (adaptive, over a blue gradient, and the older PNG),
 the Windows `app_icon.ico`, the web dashboard's `icon.png`, and the core's
-`appicon.png` (its executable and notifications). The same script draws
+`appicon.ico` (its executable). The same script draws
 the tray icons, which show the connection state and are not made from the
 art (16 px cannot show it): a disk in the state's color with the logo's
 shield in white, for the app's tray (`assets/tray`) and the core's

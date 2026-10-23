@@ -35,6 +35,10 @@ class AppLocalizationsVi extends AppLocalizations {
       'Thêm một Firefox Account ở trang Tài khoản để kết nối.';
 
   @override
+  String get waitingForEnabledAccount =>
+      'Tất cả tài khoản đang tắt. Hãy bật một tài khoản ở trang Tài khoản.';
+
+  @override
   String get stateError => 'Lỗi';
 
   @override
@@ -147,7 +151,7 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'Các tài khoản được dùng theo thứ tự trong danh sách này, mỗi tài khoản tới $percent%.';
+    return 'Theo thứ tự danh sách này: mỗi tài khoản đến $percent%, tài khoản cuối dùng đến khi hết dữ liệu.';
   }
 
   @override
@@ -210,8 +214,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get signInAgain => 'Đăng nhập lại';
 
   @override
-  String get reasonQuotaThreshold =>
-      'Đã đến ngưỡng chuyển; sẽ dùng lại sau khi làm mới hằng tháng.';
+  String reasonQuotaThreshold(int percent) {
+    return 'Tài khoản này đã dùng $percent% dữ liệu, nên tài khoản tiếp theo đã thay thế.';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -362,6 +367,13 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get signInWrongPassword => 'Mật khẩu không đúng.';
+
+  @override
+  String get signInNoPassword =>
+      'Tài khoản này chưa có mật khẩu: nó được tạo bằng đăng nhập Google hoặc Apple. Hãy đặt mật khẩu, rồi đăng nhập tại đây bằng mật khẩu đó.';
+
+  @override
+  String get setPasswordButton => 'Đặt mật khẩu';
 
   @override
   String get signInTooManyAttempts =>
@@ -667,13 +679,6 @@ class AppLocalizationsVi extends AppLocalizations {
   String get search => 'Tìm kiếm';
 
   @override
-  String get locked => 'Bị khóa';
-
-  @override
-  String get lockedHint =>
-      'Mozilla có thể không cho phép tài khoản của bạn dùng vị trí này.';
-
-  @override
   String get noAnswer => 'Không phản hồi';
 
   @override
@@ -720,9 +725,6 @@ class AppLocalizationsVi extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'Khi dung lượng đã dùng đạt mức này, ứng dụng chuyển sang tài khoản tiếp theo.';
-
-  @override
-  String get quotaInterval => 'Kiểm tra dung lượng mỗi';
 
   @override
   String get sectionDns => 'DNS';
@@ -888,9 +890,6 @@ class AppLocalizationsVi extends AppLocalizations {
   String get verboseLogs => 'Nhật ký chi tiết';
 
   @override
-  String get allowLocked => 'Cho phép vị trí bị khóa';
-
-  @override
   String get webDashboard => 'Bảng điều khiển web';
 
   @override
@@ -898,9 +897,6 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'Cài đặt nâng cao và thêm công cụ';
-
-  @override
-  String get durationInvalid => 'Nhập thời gian dạng 30s, 15m hoặc 6h';
 
   @override
   String numberInvalid(int min, int max) {
@@ -1022,39 +1018,67 @@ class AppLocalizationsVi extends AppLocalizations {
   String get connectRetrying => 'Không thể kết nối. Hãy kiểm tra internet.';
 
   @override
-  String get failUnreachable => 'Máy chủ của Mozilla bị chặn';
+  String get failUnreachable =>
+      'Máy chủ Mozilla bị chặn trên mạng này. Hãy thử kết nối internet khác.';
 
   @override
-  String get failRefused => 'Máy chủ Mozilla đã từ chối kết nối';
+  String get failRefused =>
+      'Máy chủ Mozilla đã từ chối kết nối. Hãy thử lại sau vài phút.';
 
   @override
-  String get failSignIn => 'Tài khoản cần đăng nhập lại';
+  String get failLocationRefused =>
+      'Quốc gia này không mở cho tài khoản của bạn. Hãy chọn quốc gia khác.';
+
+  @override
+  String get useRecommendedLocation => 'Dùng vị trí đề xuất';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return 'Bạn đã chọn $chosen, nhưng IP của bạn ở $exit.';
+  }
+
+  @override
+  String get failSignIn =>
+      'Phiên đăng nhập của tài khoản này đã hết hạn. Hãy đăng nhập lại ở trang Tài khoản.';
 
   @override
   String get failQuota =>
       'Dung lượng tháng này đã hết. Hãy thêm tài khoản khác.';
 
   @override
-  String get failNotEntitled => 'Tài khoản này không thể dùng VPN';
+  String get failNotEntitled =>
+      'Mozilla không cho tài khoản này dùng VPN. Hãy thêm tài khoản khác.';
 
   @override
-  String get failRegion => 'Mozilla từ chối kết nối từ khu vực của bạn.';
+  String get failRegion =>
+      'Mozilla không cung cấp dịch vụ tại quốc gia của bạn.';
 
   @override
-  String get failServer => 'Dịch vụ của Mozilla đang gặp sự cố';
+  String get failServer =>
+      'Dịch vụ Mozilla đang gặp sự cố tạm thời. Ứng dụng sẽ tự thử lại.';
 
   @override
   String get failNoAccount =>
-      'Hiện không tài khoản nào kết nối được: hãy mở Tài khoản.';
+      'Không có tài khoản nào sẵn sàng. Hãy mở trang Tài khoản.';
 
   @override
-  String get failTestSite => 'Đã kết nối máy chủ nhưng không mở được trang web';
+  String get failTestSite =>
+      'Đã kết nối máy chủ nhưng không mở được trang web. Hãy thử quốc gia khác.';
 
   @override
-  String get failOther => 'Không thể kết nối';
+  String get failOther => 'Không thể kết nối. Hãy thử lại.';
 
   @override
-  String get failNoInternet => 'Không có internet';
+  String get failNoInternet =>
+      'Không có internet. Hãy kiểm tra Wi-Fi hoặc dữ liệu di động.';
+
+  @override
+  String get waitingForNetwork => 'Đang chờ kết nối internet…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'Không thể khởi động proxy trên cổng $port. Hãy chọn cổng khác.';
+  }
 
   @override
   String get connectionSettings => 'Cài đặt kết nối';
@@ -1119,14 +1143,6 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get locationsSection => 'Vị trí';
-
-  @override
-  String get hideLocked => 'Ẩn vị trí bị khóa';
-
-  @override
-  String showLocked(int count) {
-    return 'Hiện vị trí bị khóa ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'DNS mã hóa hoạt động tốt';

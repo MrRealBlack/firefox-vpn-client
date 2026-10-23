@@ -17,7 +17,7 @@ The current source and nearby tests are authoritative. These guides explain exis
 | Implement a behavior change | [Change guide](CHANGE-GUIDE.md) | The matching source/test row |
 | Choose or run tests | [Testing](TESTING.md) | Existing tests for the affected behavior |
 | Operate or troubleshoot the proxy | [Operator guide](OPERATOR.md) | Dashboard, `-help`, installer as applicable |
-| Tray icon, Windows service, autostart | [Operator guide](OPERATOR.md), [change guide](CHANGE-GUIDE.md) | `cmd/firefox-vpn-core`: `tray.go`, `service_windows.go`, `platform_*.go`, `localclient.go` |
+| Tray icon, status screen, notifications | [Operator guide](OPERATOR.md), [change guide](CHANGE-GUIDE.md) | `internal/desktop`: `tray.go`, `console_ui.go`, `platform_*.go`; `internal/service/client.go` |
 
 ## Documentation map
 
@@ -32,7 +32,7 @@ The current source and nearby tests are authoritative. These guides explain exis
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Local setup, edit loop, builds, completion expectations |
 | [TESTING.md](TESTING.md) | Verification tiers, focused test commands, isolation and live opt-ins |
 | [CHANGE-GUIDE.md](CHANGE-GUIDE.md) | Concrete change recipes, review checks, documentation maintenance |
-| [OPERATOR.md](OPERATOR.md) | Running on Windows and Linux, tray icon, Windows and systemd services, commands, troubleshooting |
+| [OPERATOR.md](OPERATOR.md) | Running on Windows and Linux, tray icon, systemd service, commands, troubleshooting |
 
 The root [README.md](../README.md) is the user entry point.
 
@@ -43,7 +43,7 @@ The root [README.md](../README.md) is the user entry point.
 - Control: per-account FxA OAuth -> Guardian ProxyPass -> bearer token for CONNECT; the account manager picks the account.
 - Settings and accounts: `user-data/` next to the executable (the desktop app's data folder when the core sits beside `firefox-vpn.exe`), edited through the dashboard (`127.0.0.1:10820`).
 - Default SOCKS5 listener: `127.0.0.1:10810`; dashboard: `127.0.0.1:10820`.
-- Run modes: status screen in an interactive terminal (also a double-click), plain log (`-plain` or non-interactive), tray (`-tray`), desktop app core process (`-app`, started by the Flutter app), Windows service `FirefoxVPN` (LocalService), systemd on Linux.
+- Run modes: status screen in an interactive terminal (also a double-click), plain log (`-plain` or non-interactive), tray (`-tray`), desktop app core process (`-app`, started by the Flutter app), systemd on Linux (plain log mode).
 - The proxy has no direct-target fallback, TUN, or SOCKS UDP support; connections go directly only by the opt-in routing rules.
 - Ordinary development uses isolated local tests. Real-account tests have explicit side effects and opt-in requirements.
 

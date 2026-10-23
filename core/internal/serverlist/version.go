@@ -22,7 +22,7 @@ func LatestFirefoxVersion(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Accept", "application/json")
+	controlplane.ApplyFirefoxHeaders(req)
 	resp, err := controlplane.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("fetching Firefox versions: %w", err)
@@ -42,6 +42,8 @@ func LatestFirefoxVersion(ctx context.Context) (string, error) {
 	if err := json.Unmarshal(data, &versions); err != nil {
 		return "", fmt.Errorf("parsing Firefox versions: %w", err)
 	}
+	// The release names this program in its User-Agent.
+	controlplane.SetFirefoxVersion(versions.Release)
 	for _, v := range []string{versions.Nightly, versions.Release} {
 		if v = strings.TrimSpace(v); v != "" && v[0] >= '0' && v[0] <= '9' {
 			return v, nil

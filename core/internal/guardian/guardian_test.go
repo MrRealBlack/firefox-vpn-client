@@ -20,7 +20,7 @@ func TestFetchProxyPassSendsNoCacheAndAnchorsExpiry(t *testing.T) {
 	skewed := time.Now().Add(-8 * time.Hour)
 	token := testJWT(t, map[string]any{"sub": "s", "aud": "https://vpn.mozilla.org", "iss": "https://vpn.mozilla.org", "iat": skewed.Unix(), "nbf": skewed.Unix(), "exp": skewed.Add(10 * time.Minute).Unix()})
 	controlplane.SetTransport(roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		if r.Header.Get("Cache-Control") != "no-cache" || r.Header.Get("Authorization") != "Bearer access" {
+		if r.Header.Get("Cache-Control") != "max-age=0" || r.Header.Get("Pragma") != "" || r.Header.Get("Authorization") != "Bearer access" {
 			t.Errorf("unexpected Guardian request headers: %v", r.Header)
 		}
 		header := make(http.Header)

@@ -199,3 +199,41 @@ func TestSystemProxyWaitsForAutoConnect(t *testing.T) {
 	}
 	sync.clear()
 }
+
+// Two copies apply the same setting (a status screen running the proxy, a
+// tray that controls it): the tray hands the setting over, so closing it
+// or a failed poll leaves the host's setting, which the host still
+// restores.
+func TestSystemProxyHandOver(t *testing.T) {
+	k := useTestProxyKeys(t)
+	user := proxySetting{enabled: true, server: "user.example:3128"}
+	if err := writeProxySetting(k, user); err != nil {
+		t.Fatal(err)
+	}
+	var host, tray systemProxySync
+	running := trayStatus("running", config.SystemProxySet)
+	host.update(running)
+	tray.update(running) // before it saw system_proxy_by_host
+	running.SystemProxyByHost = true
+	tray.handOver(running)
+	tray.update(nil)
+	tray.clear()
+	if p := setting(t); p.server != "127.0.0.1:10810" || !p.enabled || !host.active() || tray.active() {
+		t.Fatalf("the tray undid the host's setting: %+v", p)
+	}
+	host.clear()
+	if p := setting(t); p != user {
+		t.Fatalf("the host restores the previous setting: %+v", p)
+	}
+
+	// A setting of the tray's for another address goes.
+	if err := setSystemProxy("127.0.0.1:20810"); err != nil {
+		t.Fatal(err)
+	}
+	var old systemProxySync
+	old.applied = "127.0.0.1:20810"
+	old.handOver(running)
+	if p := setting(t); p != user {
+		t.Fatalf("the tray's setting for another address stays: %+v", p)
+	}
+}

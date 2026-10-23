@@ -30,6 +30,11 @@ const (
 	FailureUnreachable = "unreachable"
 	// FailureRefused: a Mozilla proxy server refused the tunnel.
 	FailureRefused = "refused"
+	// FailureLocationRefused: the server of a location the user chose
+	// kept refusing the tunnel (CONNECT 403 or 407) with a proxy pass
+	// fetched after the first refusal: Mozilla does not let this account
+	// use this location (LocationRefusedError).
+	FailureLocationRefused = "location_refused"
 	// FailureSignIn: the account must sign in again.
 	FailureSignIn = "sign_in"
 	// FailureQuota: the account's monthly data is used up.
@@ -55,6 +60,7 @@ func FailureCode(err error) string {
 		return ""
 	}
 	var noAccount *accounts.NoUsableAccountError
+	var locationErr *LocationRefusedError
 	var connectErr *proxyConnectHTTPError
 	var dnsErr *net.DNSError
 	var errno syscall.Errno
@@ -80,6 +86,8 @@ func FailureCode(err error) string {
 		return FailureNoAccount
 	case errors.Is(err, guardian.ErrServer):
 		return FailureServer
+	case errors.As(err, &locationErr):
+		return FailureLocationRefused
 	// A rebuild that waits carries its cause, which decides.
 	case errors.As(err, &connectErr):
 		return FailureRefused
@@ -95,6 +103,32 @@ func FailureCode(err error) string {
 		return FailureUnreachable
 	}
 	return FailureOther
+}
+
+// LocationRefusedError is a CONNECT refusal (403 or 407) by the server of a
+// location the user chose, with a proxy pass fetched after the first
+// refusal: a new pass did not help, so Mozilla most likely does not let
+// this account use the location.
+type LocationRefusedError struct {
+	Err error
+}
+
+const locationRefusedText = "Mozilla does not let this account use this location"
+
+func (e *LocationRefusedError) Error() string {
+	return locationRefusedText + ": " + e.Err.Error()
+}
+
+func (e *LocationRefusedError) Unwrap() error { return e.Err }
+
+// Redacted is the error without the response body, for logs that are not
+// verbose.
+func (e *LocationRefusedError) Redacted() string {
+	var connectErr *proxyConnectHTTPError
+	if errors.As(e.Err, &connectErr) {
+		return locationRefusedText + ": " + connectErr.Redacted()
+	}
+	return e.Error()
 }
 
 // SessionReplaced reports an error text of a request whose upstream

@@ -35,6 +35,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'أضف Firefox Account من صفحة الحسابات للاتصال.';
 
   @override
+  String get waitingForEnabledAccount =>
+      'كل الحسابات متوقفة. شغّل أحدها من صفحة الحسابات.';
+
+  @override
   String get stateError => 'خطأ';
 
   @override
@@ -150,7 +154,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'تُستخدم الحسابات بترتيب هذه القائمة، كل منها حتى $percent٪.';
+    return 'بترتيب هذه القائمة: كل حساب حتى $percent٪، والحساب الأخير حتى نفاد بياناته.';
   }
 
   @override
@@ -213,8 +217,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get signInAgain => 'تسجيل الدخول مجددًا';
 
   @override
-  String get reasonQuotaThreshold =>
-      'وصل إلى حدّ التبديل؛ يُستخدم مجددًا بعد التصفير الشهري.';
+  String reasonQuotaThreshold(int percent) {
+    return 'بلغ استهلاك هذا الحساب $percent%، فتولّى الحساب التالي.';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -366,6 +371,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get signInWrongPassword => 'كلمة المرور غير صحيحة.';
+
+  @override
+  String get signInNoPassword =>
+      'هذا الحساب بلا كلمة مرور: أُنشئ عبر تسجيل الدخول بـ Google أو Apple. عيّن كلمة مرور، ثم سجّل الدخول بها هنا.';
+
+  @override
+  String get setPasswordButton => 'تعيين كلمة مرور';
 
   @override
   String get signInTooManyAttempts =>
@@ -669,12 +681,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get search => 'بحث';
 
   @override
-  String get locked => 'مقفل';
-
-  @override
-  String get lockedHint => 'قد لا تسمح Mozilla لحسابك باستخدام هذا الموقع.';
-
-  @override
   String get noAnswer => 'لا استجابة';
 
   @override
@@ -721,9 +727,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'ينتقل التطبيق إلى الحساب التالي عند استهلاك هذه النسبة من الرصيد.';
-
-  @override
-  String get quotaInterval => 'تحديث الرصيد كل';
 
   @override
   String get sectionDns => 'DNS';
@@ -897,9 +900,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get verboseLogs => 'سجلات مفصّلة';
 
   @override
-  String get allowLocked => 'السماح بمواقع الخوادم المقفلة';
-
-  @override
   String get webDashboard => 'لوحة التحكم عبر الويب';
 
   @override
@@ -907,9 +907,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'إعدادات متقدمة وأدوات إضافية';
-
-  @override
-  String get durationInvalid => 'استخدم مدة مثل 30s أو 15m أو 6h';
 
   @override
   String numberInvalid(int min, int max) {
@@ -1030,38 +1027,64 @@ class AppLocalizationsAr extends AppLocalizations {
   String get connectRetrying => 'تعذّر الاتصال. تحقّق من الإنترنت.';
 
   @override
-  String get failUnreachable => 'خوادم Mozilla محجوبة';
+  String get failUnreachable =>
+      'خوادم Mozilla محجوبة على هذا الإنترنت. جرّب اتصال إنترنت آخر.';
 
   @override
-  String get failRefused => 'رفض خادم Mozilla الاتصال';
+  String get failRefused =>
+      'رفض خادم Mozilla الاتصال. حاول مجددًا بعد بضع دقائق.';
 
   @override
-  String get failSignIn => 'يجب تسجيل الدخول إلى الحساب مجددًا';
+  String get failLocationRefused =>
+      'هذه الدولة غير متاحة لحسابك. اختر دولة أخرى.';
+
+  @override
+  String get useRecommendedLocation => 'استخدام الموقع المُوصى به';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return 'اخترت $chosen، لكن عنوان IP الخاص بك في $exit.';
+  }
+
+  @override
+  String get failSignIn =>
+      'انتهت صلاحية تسجيل دخول هذا الحساب. سجّل الدخول مجددًا من صفحة الحسابات.';
 
   @override
   String get failQuota => 'نفدت بيانات هذا الشهر. أضف حسابًا آخر.';
 
   @override
-  String get failNotEntitled => 'لا يمكن لهذا الحساب استخدام VPN';
+  String get failNotEntitled =>
+      'لا تسمح Mozilla لهذا الحساب باستخدام VPN. أضف حسابًا آخر.';
 
   @override
-  String get failRegion => 'ترفض Mozilla الاتصالات من منطقتك.';
+  String get failRegion => 'لا تقدّم Mozilla خدمتها في بلدك.';
 
   @override
-  String get failServer => 'خدمة Mozilla بها مشكلة';
+  String get failServer =>
+      'خدمة Mozilla بها مشكلة مؤقتة. سيعيد التطبيق المحاولة تلقائيًا.';
 
   @override
-  String get failNoAccount =>
-      'لا يوجد حساب يمكنه الاتصال الآن: افتح «الحسابات».';
+  String get failNoAccount => 'لا يوجد حساب جاهز. افتح صفحة الحسابات.';
 
   @override
-  String get failTestSite => 'تم الاتصال بالخادم، لكن المواقع لا تفتح';
+  String get failTestSite =>
+      'تم الاتصال بالخادم، لكن المواقع لا تفتح. جرّب دولة أخرى.';
 
   @override
-  String get failOther => 'تعذّر الاتصال';
+  String get failOther => 'تعذّر الاتصال. حاول مجددًا.';
 
   @override
-  String get failNoInternet => 'لا يوجد اتصال بالإنترنت';
+  String get failNoInternet =>
+      'لا يوجد اتصال بالإنترنت. تحقّق من Wi-Fi أو بيانات الجوال.';
+
+  @override
+  String get waitingForNetwork => 'في انتظار الاتصال بالإنترنت…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'تعذّر تشغيل البروكسي على المنفذ $port. اختر منفذًا آخر.';
+  }
 
   @override
   String get connectionSettings => 'إعدادات الاتصال';
@@ -1129,14 +1152,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get locationsSection => 'المواقع';
-
-  @override
-  String get hideLocked => 'إخفاء المواقع المقفلة';
-
-  @override
-  String showLocked(int count) {
-    return 'إظهار المواقع المقفلة ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'DNS المشفّر يعمل';

@@ -6,24 +6,27 @@ import (
 	"context"
 	"sync"
 	"time"
+	"unicode/utf16"
 
 	"github.com/armanlife/firefox-vpn-client/core/internal/config"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 	"github.com/armanlife/firefox-vpn-client/core/internal/service"
 	"github.com/armanlife/firefox-vpn-client/core/internal/version"
-	"github.com/armanlife/firefox-vpn-client/core/internal/winsvc"
 
 	"fyne.io/systray"
 )
 
 const trayPollInterval = 3 * time.Second
 
+// trayErrorShown is how long the tooltip shows a menu action's error.
+const trayErrorShown = 2 * time.Minute
+
 // trayApp is the notification-area icon. Its color and tooltip show the
-// service state; its menu is kept short on purpose (dashboard, restart,
-// exit). Start at sign-in comes with the Windows service. Status details, accounts, and the Windows
-// service live in the dashboard and the terminal status screen. When no service is reachable it runs the
-// service in its own process; when the Windows service (or another copy)
-// already serves the data folder, it only talks to it through the local API.
+// service state; its menu is kept short on purpose (dashboard, system
+// proxy, restart, exit). Status details and accounts live in the dashboard
+// and the terminal status screen. When no service is reachable it runs the
+// service in its own process; when another copy already serves the data
+// folder, it only talks to it through the local API.
 type trayApp struct {
 	paths   service.DataPaths
 	verbose bool
@@ -31,6 +34,18 @@ type trayApp struct {
 
 	mu  sync.Mutex
 	own *service.Daemon // in-process service; nil when another process serves
+	// Windows shows no notifications, so the tooltip carries the errors
+	// that would have been one (all are logged too): why the service
+	// could not start or stopped, until it answers again, and the last
+	// menu action's error for trayErrorShown.
+	startErr    string
+	actionErr   string
+	actionErrAt time.Time
+	// newerVersion is set once a newer version of the program served the
+	// data folder; this icon then never runs the service itself, so older
+	// code does not take over a folder a newer version wrote, and it quits
+	// when that copy stops, so a newer tray or app can take the folder.
+	newerVersion string
 
 	// Last observed state, for notifications on changes.
 	seen        bool
@@ -59,13 +74,12 @@ type trayApp struct {
 func RunTray(paths service.DataPaths, verbose bool) error {
 	release, ok := acquireSingleInstance(paths)
 	if !ok {
-		// A tray already runs for this data folder (two windows opened at
-		// once, or sign-in start plus a double-click); this copy leaves.
+		// A tray already runs for this data folder (two copies started at
+		// once); this copy leaves.
 		logx.Debug("tray: another tray serves this data folder; exiting")
 		return nil
 	}
 	defer release()
-	registerNotificationApp(paths)
 	app := &trayApp{paths: paths, verbose: verbose, client: service.NewClient(paths)}
 	app.iconOK = trayIcon(iconRunning)
 	app.iconWait = trayIcon(iconWaiting)
@@ -114,11 +128,7 @@ func (a *trayApp) start() {
 	_, err := a.client.Status(ctx)
 	cancel()
 	if err != nil {
-		if st, qerr := winsvc.QueryFor(a.paths); qerr == nil && st.Installed {
-			logx.Info("tray: waiting for the background service state=%s", st)
-		} else {
-			a.startOwn()
-		}
+		a.startOwn()
 	} else {
 		logx.Info("tray: using the running service")
 	}
@@ -141,16 +151,21 @@ func (a *trayApp) startOwn() {
 	d, err := newHostedDaemon(a.paths, a.verbose, systray.Quit)
 	if err != nil {
 		logx.Error("tray: starting the service failed err=%s", logx.Err(err))
+		a.startErr = "Could not start: " + err.Error()
 		notify("Firefox VPN could not start", err.Error())
 		return
 	}
 	a.own = d
 	go func() {
-		if err := d.Run(); err != nil {
+		err := d.Run()
+		if err != nil {
 			logx.Error("tray: the service stopped err=%s", logx.Err(err))
 			notify("Firefox VPN stopped", err.Error())
 		}
 		a.mu.Lock()
+		if err != nil {
+			a.startErr = "Stopped: " + err.Error()
+		}
 		if a.own == d {
 			a.own = nil
 		}
@@ -174,49 +189,135 @@ func (a *trayApp) ownsService() bool {
 	return a.own != nil
 }
 
+// servedByNewer is the newer version that served the data folder, or "".
+func (a *trayApp) servedByNewer() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.newerVersion
+}
+
+// actionFailed logs a menu action's error, keeps it for the tooltip, and
+// shows it as a notification where there are notifications (Linux).
+func (a *trayApp) actionFailed(title string, err error) {
+	logx.Warn("tray: %s err=%s", title, logx.Err(err))
+	a.mu.Lock()
+	a.actionErr, a.actionErrAt = title+": "+err.Error(), time.Now()
+	a.mu.Unlock()
+	notify(title, err.Error())
+}
+
+// actionDone forgets the last menu action's error.
+func (a *trayApp) actionDone() {
+	a.mu.Lock()
+	a.actionErr = ""
+	a.mu.Unlock()
+}
+
+// problem is the error the tooltip shows, if any.
+func (a *trayApp) problem() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	switch {
+	case a.startErr != "":
+		return a.startErr
+	case a.actionErr != "" && time.Since(a.actionErrAt) < trayErrorShown:
+		return a.actionErr
+	}
+	return ""
+}
+
+// setTooltip shows text as the icon's hover text, followed by the error
+// to show, if any.
+func (a *trayApp) setTooltip(text string) {
+	if problem := a.problem(); problem != "" {
+		text += " · " + problem
+	}
+	systray.SetTooltip(capTooltip("Firefox VPN: " + text))
+}
+
+// maxTooltipUnits is the longest tooltip in UTF-16 units: Windows keeps it
+// in 128 units, and the tray library copies it there without making room
+// for the terminating zero.
+const maxTooltipUnits = 127
+
+// capTooltip shortens s to maxTooltipUnits, ending in "…" when it cuts.
+func capTooltip(s string) string {
+	if len(utf16.Encode([]rune(s))) <= maxTooltipUnits {
+		return s
+	}
+	units := 0
+	for i, r := range s {
+		n := utf16.RuneLen(r)
+		if units+n > maxTooltipUnits-1 { // room for the "…"
+			return s[:i] + "…"
+		}
+		units += n
+	}
+	return s
+}
+
 // refresh polls the service and updates the icon, menu, and notifications.
 func (a *trayApp) refresh() {
 	st, err := pollStatus(a.client)
-	svcState, _ := winsvc.QueryFor(a.paths)
 	if a.ownsService() {
 		a.mQuit.SetTitle("Exit Firefox VPN (stops the proxy)")
 	} else {
 		a.mQuit.SetTitle("Close icon (the service keeps running)")
 	}
+	newer := a.servedByNewer()
 	if err != nil {
-		// Take over when the copy we were talking to has gone away.
+		// Take over when the copy we were talking to has gone away. When it
+		// was a newer version, this older icon quits instead and frees the
+		// single-instance lock (onExit restores the system proxy).
 		a.failures++
-		if a.failures >= 2 && !svcState.Installed && !a.ownsService() && time.Since(a.lastOwnStart) > time.Minute {
+		if a.failures >= 2 && newer != "" && !a.ownsService() {
+			logx.Info("tray: version %s no longer serves the data folder; this %s icon exits", newer, version.Current)
+			systray.Quit()
+			return
+		}
+		if a.failures >= 2 && newer == "" && !a.ownsService() && time.Since(a.lastOwnStart) > time.Minute {
 			a.startOwn()
 		}
 		systray.SetIcon(a.iconOff)
 		text := "Service not reachable"
-		switch {
-		case svcState.Installed && !svcState.Running():
-			text = "Background service " + svcState.String()
-		case svcState.Running() || a.ownsService():
+		if a.ownsService() {
 			text = "Starting…"
 		}
-		systray.SetTooltip("Firefox VPN: " + text)
+		a.setTooltip(text)
 		a.mRestart.Disable()
 		a.sysproxy.update(nil)
 		return
 	}
 	a.failures = 0
-	// A newer copy of the program serves the data folder (after an
-	// update); leave the icon to it.
-	if !a.ownsService() && st.Version != "" && version.Newer(st.Version, version.Current) {
-		logx.Info("tray: version %s serves the data folder; closing this %s icon", st.Version, version.Current)
-		systray.Quit()
-		return
+	a.mu.Lock()
+	a.startErr = ""
+	a.mu.Unlock()
+	// A newer copy of the program serves the data folder (one in a
+	// terminal, after an update). The icon keeps controlling it, but this
+	// older code never runs the service on that folder again; it quits
+	// once that copy stops.
+	if !a.ownsService() && st.Version != "" && version.Newer(st.Version, version.Current) && newer != st.Version {
+		logx.Info("tray: version %s serves the data folder; this %s icon no longer starts the service itself", st.Version, version.Current)
+		a.mu.Lock()
+		a.newerVersion = st.Version
+		a.mu.Unlock()
+		newer = st.Version
 	}
 	a.mRestart.Enable()
-	a.sysproxy.update(&st)
-	// The Windows service cannot open a window on this desktop; the
-	// dashboard's "Open folder" asks the tray through the status.
+	// A copy that applies the mode itself keeps the setting; this icon only
+	// shows it. For one that does not (the plain log mode), the tray does.
+	hostApplies := !a.ownsService() && st.SystemProxyByHost
+	if hostApplies {
+		a.sysproxy.handOver(&st)
+	} else {
+		a.sysproxy.update(&st)
+	}
+	// A copy that runs without a desktop of its own (the plain log mode)
+	// cannot open a window here; the dashboard's "Open folder" asks the
+	// tray through the status.
 	if a.folderRequestSeen && st.OpenFolderRequest > a.folderRequest {
 		if err := openBrowser(a.paths.Dir); err != nil {
-			notify("Cannot open the folder", err.Error())
+			a.actionFailed("Cannot open the folder", err)
 		}
 	}
 	a.folderRequest, a.folderRequestSeen = st.OpenFolderRequest, true
@@ -227,8 +328,17 @@ func (a *trayApp) refresh() {
 			item.Uncheck()
 		}
 	}
-	active := a.sysproxy.active()
-	systray.SetTooltip("Firefox VPN: " + st.Summary())
+	_, want := wantedSystemProxy(&st)
+	active := a.sysproxy.active() || hostApplies && want != ""
+	tip := st.Summary()
+	if st.Accounts["reauth_required"] > 0 {
+		// Windows shows no notifications, so the tooltip says it.
+		tip += " · sign-in needed"
+	}
+	if newer != "" {
+		tip += " · served by version " + newer
+	}
+	a.setTooltip(tip)
 	switch st.State.Phase {
 	case "running":
 		asleep := st.Proxy != nil && !st.Proxy.SleepingSince.IsZero()
@@ -272,7 +382,7 @@ func (a *trayApp) notifyChanges(st service.TrayStatus) {
 				notify("Firefox VPN error", st.State.Message)
 			case "waiting":
 				// Waiting for Wi-Fi or a cable is expected, not news.
-				if st.State.Message != service.MessageWaitingForNetwork {
+				if st.State.Code != service.CodeWaitingForNetwork {
 					notify("Firefox VPN is waiting", st.State.Message)
 				}
 			case "running":
@@ -320,8 +430,10 @@ func (a *trayApp) openDashboard() {
 		err = openBrowser(url)
 	}
 	if err != nil {
-		notify("Cannot open the dashboard", err.Error())
+		a.actionFailed("Cannot open the dashboard", err)
+		return
 	}
+	a.actionDone()
 }
 
 // systemProxyModes are the tray's system proxy items, in v2rayN's order.
@@ -335,9 +447,11 @@ func (a *trayApp) setSystemProxyMode(mode string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := a.client.SetSystemProxy(ctx, mode); err != nil {
-		notify("System proxy", err.Error())
+		a.actionFailed("Changing the system proxy failed", err)
+		a.refresh()
 		return
 	}
+	a.actionDone()
 	a.refresh()
 }
 
@@ -345,8 +459,10 @@ func (a *trayApp) restartProxy() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := a.client.RestartProxy(ctx); err != nil {
-		notify("Restart failed", err.Error())
+		a.actionFailed("Restart failed", err)
+		a.refresh()
 		return
 	}
+	a.actionDone()
 	a.refresh()
 }

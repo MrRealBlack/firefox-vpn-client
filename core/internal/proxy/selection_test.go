@@ -154,7 +154,7 @@ func TestSelectProxyCandidateRequiresExplicitCountry(t *testing.T) {
 	}
 }
 
-func TestSelectProxyCandidateFiltersCountryDeterministically(t *testing.T) {
+func TestSelectProxyCandidateFiltersCountry(t *testing.T) {
 	t.Parallel()
 
 	countries := []serverlist.Country{
@@ -186,8 +186,9 @@ func TestSelectProxyCandidateFiltersCountryDeterministically(t *testing.T) {
 		if err != nil {
 			t.Fatalf("selectProxyCandidate(%q) returned error: %v", filter, err)
 		}
-		if got.Addr != "us-primary.example:443" {
-			t.Fatalf("expected deterministic first US proxy for %q, got %q", filter, got.Addr)
+		// One of the US servers, at random as in Firefox; never France's.
+		if got.Addr != "us-primary.example:443" && got.Addr != "us-secondary.example:443" {
+			t.Fatalf("expected a US proxy for %q, got %q", filter, got.Addr)
 		}
 	}
 }
@@ -319,18 +320,18 @@ func TestSelectProxyCandidateDefaultsToRecommendedLocation(t *testing.T) {
 	}
 }
 
-func TestSelectProxyCandidateRejectsLockedCountryUnlessAllowed(t *testing.T) {
-	// Serial: mutates the AllowLockedLocations flag.
-	_, err := selectProxyCandidate(liveShapedCountries(), "GB")
-	if err == nil || !strings.Contains(err.Error(), "-allow-locked") {
-		t.Fatalf("expected a locked-location error, got %v", err)
-	}
-
-	AllowLockedLocations.Store(true)
-	t.Cleanup(func() { AllowLockedLocations.Store(false) })
+func TestSelectProxyCandidateChoosesLockedCountry(t *testing.T) {
+	// GB is marked locked in the server list; it is chosen like any other.
 	got, err := selectProxyCandidate(liveShapedCountries(), "GB")
-	if err != nil || got.Addr != "gb.example:2499" || !got.Locked {
-		t.Fatalf("expected the locked GB proxy with -allow-locked, got %#v %v", got, err)
+	if err != nil || got.Addr != "gb.example:2499" || got.CountryCode != "GB" {
+		t.Fatalf("expected the GB proxy, got %#v %v", got, err)
+	}
+}
+
+func TestSelectProxyCandidateUnknownCountryListsLockedCodes(t *testing.T) {
+	_, err := selectProxyCandidate(liveShapedCountries(), "ZZ")
+	if err == nil || !strings.Contains(err.Error(), "US,GB,") {
+		t.Fatalf("expected an error listing every country code, got %v", err)
 	}
 }
 
@@ -341,14 +342,14 @@ func TestSelectProxyCandidateCountryFilterSkipsRecommendedRecord(t *testing.T) {
 	}
 }
 
-func TestResolveProxyReplacesPersistedLockedSelection(t *testing.T) {
+func TestResolveProxyKeepsPersistedLockedSelection(t *testing.T) {
 	path := t.TempDir() + "/proxy-selection.json"
 	if err := SaveSelection(path, Candidate{Addr: "gb.example:2499", CountryCode: "GB"}); err != nil {
 		t.Fatal(err)
 	}
-	got, fromState, err := resolveProxyWithState("", liveShapedCountries(), path)
-	if err != nil || fromState || !got.IsRecommended() {
-		t.Fatalf("expected the locked persisted selection to be replaced, got %#v fromState=%v err=%v", got, fromState, err)
+	got, fromState, err := ResolveWithStateAndCountry("", "GB", liveShapedCountries(), path)
+	if err != nil || !fromState || got.Addr != "gb.example:2499" || got.CountryName != "United Kingdom" {
+		t.Fatalf("expected the persisted locked selection to be reused, got %#v fromState=%v err=%v", got, fromState, err)
 	}
 }
 

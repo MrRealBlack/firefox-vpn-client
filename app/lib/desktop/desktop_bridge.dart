@@ -105,6 +105,11 @@ class DesktopBridge {
         'command': command,
       });
 
+  /// Opens an http or https [url] in the default browser through the
+  /// shell (Windows only; the runner refuses other schemes).
+  static Future<void> openUrl(String url) =>
+      _channel.invokeMethod('openUrl', url);
+
   Future<void> show() => _channel.invokeMethod('show');
 
   Future<void> hide() => _channel.invokeMethod('hide');

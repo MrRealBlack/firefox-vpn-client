@@ -49,12 +49,24 @@ class _MobileShellState extends State<MobileShell> {
           listenable: widget.core,
           builder: (context, _) => Scaffold(
             appBar: AppBar(title: Text(title)),
-            body: SafeArea(top: false, child: OwnTopBar(child: page())),
+            body: SafeArea(
+              top: false,
+              child: OwnTopBar(child: _readable(page())),
+            ),
           ),
         ),
       ),
     );
   }
+
+  /// [page] no wider than a line can be read on a tablet; the home page
+  /// keeps the whole width for its colors and limits its own content.
+  static Widget _readable(Widget page) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 720),
+      child: page,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -83,12 +95,14 @@ class _MobileShellState extends State<MobileShell> {
                 onOpenConnection: openConnection,
                 phone: true,
               )
-            : _SettingsList(
-                onOpenServers: openServers,
-                onOpenAccounts: openAccounts,
-                push: _push,
-                core: core,
-                settings: settings,
+            : _readable(
+                _SettingsList(
+                  onOpenServers: openServers,
+                  onOpenAccounts: openAccounts,
+                  push: _push,
+                  core: core,
+                  settings: settings,
+                ),
               ));
     return PopScope(
       canPop: _tab == 0,

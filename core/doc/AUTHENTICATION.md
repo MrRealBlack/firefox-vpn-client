@@ -48,7 +48,7 @@ Defaults and relevant paths:
 | Guardian status | `GET /api/v1/fpn/status` |
 | Guardian activation | `POST /api/v1/fpn/activate` |
 
-Every Guardian request sends `Authorization: Bearer`, `Content-Type: application/json`, and `Cache-Control`/`Pragma: no-cache`, matching Firefox's `GuardianClient`.
+Every Guardian request sends `Authorization: Bearer`, `Content-Type: application/json`, and `Cache-Control: max-age=0` (fetch's no-cache mode), as Firefox's `GuardianClient` does. Every control-plane request also carries desktop Firefox's `User-Agent` and `Accept: */*` (`controlplane.ApplyFirefoxHeaders`).
 
 [internal/guardian/guardian.go](../internal/guardian/guardian.go) parses the pass and quota headers. A non-200 answer is a `guardian.HTTPError` whose `errors.Is` classification follows Firefox's `GuardianClient.toError`:
 
@@ -124,7 +124,7 @@ RunRenewalLoop
 | Retry after a terminal renewal failure | `terminalRenewalRetryDelay`: 15 minutes; spent quota waits for `X-Quota-Reset` (capped at six hours) |
 | Renewal watchdog | `PassRenewTimeout`: two minutes, then `proxyPassRenewAbandonGrace`: 30 seconds |
 | Runtime OAuth lead | `oauthRefreshLead`: two minutes |
-| Quota polling | `accounts.quota_check_interval` (default 5 minutes), `HEAD`, plus an early check after every 512 MiB of tunnel traffic |
+| Quota reading | From the quota headers of every pass request (about every 8 minutes), as Firefox does; once the last reading plus the tunnel traffic since then is within 5 GiB of the switch threshold (whether or not another account can take over), also a `HEAD` request after every 512 MiB of tunnel traffic |
 
 OAuth refresh is reached through the authentication/pass lifecycle; there is no separate periodic OAuth refresh timer.
 

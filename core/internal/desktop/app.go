@@ -133,7 +133,7 @@ func RunApp(paths service.DataPaths, verbose bool) error {
 	defer release()
 	client := service.NewClient(paths)
 	if reachable(client, appReachTimeout) {
-		return &alreadyRunningError{dir: paths.Dir, who: "its dashboard API already answers (the Windows service or a terminal copy)"}
+		return &alreadyRunningError{dir: paths.Dir, who: "its dashboard API already answers (a copy in a terminal or a systemd service)"}
 	}
 
 	stop := newStopRequest()
@@ -183,7 +183,9 @@ func RunApp(paths service.DataPaths, verbose bool) error {
 	}
 	defer stopEnd()
 	return runHosted(d, stop.ch,
-		func(ctx context.Context) { sysproxy.follow(ctx, client, appPollInterval) },
+		func(ctx context.Context) {
+			sysproxy.follow(ctx, func() (service.TrayStatus, error) { return pollStatus(client) }, appPollInterval)
+		},
 		cleanup)
 }
 

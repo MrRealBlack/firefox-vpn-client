@@ -226,10 +226,6 @@
 
           <div class="toolbar-row">
             <div class="toolbar">
-              <div class="segmented" role="tablist" aria-label="Which locations">
-                <button class="seg active" data-scope="available">Available</button>
-                <button class="seg" data-scope="all">All servers</button>
-              </div>
               <div class="segmented" role="group" aria-label="Sort">
                 <button class="seg active" data-sort="latency">Real delay</button>
                 <button class="seg" data-sort="name">Name</button>
@@ -240,14 +236,6 @@
           </div>
           <p class="muted small" id="ping-note"></p>
           <p class="muted small" id="serverlist-note"></p>
-          <aside class="callout" id="locked-note">
-            <svg><use href="#i-lock"/></svg>
-            <div>
-              <strong>What “locked” means</strong>
-              <p>Mozilla's server list marks some locations as locked. Firefox offers them only to accounts that Mozilla allows to use them (for example, an upgraded account, or a location that is still being rolled out). With an ordinary free account the proxy is usually refused there; the real-delay column then shows “not allowed for this account”. The lock comes from Mozilla, not from this program.</p>
-              <p>Locked locations are never chosen automatically and cannot be selected unless <a href="#settings">Allow locations marked as locked</a> is on in Settings. Turn it on only if your account can use them.</p>
-            </div>
-          </aside>
           <div class="table-card card">
             <table class="table" id="location-table">
               <thead><tr><th>Server</th><th class="hide-sm">Address</th><th>Real delay</th><th></th></tr></thead>
@@ -342,11 +330,6 @@
                         <label><input type="radio" name="proxy.transport" value="h3"><span>HTTP/3</span></label>
                       </span>
                     </span>
-                  </div>
-                  <div class="set-row">
-                    <span class="set-ic"><svg><use href="#i-lock"/></svg></span>
-                    <span class="set-text"><label for="f-locked">Allow locked locations</label><small>Locations Mozilla may refuse for your accounts</small></span>
-                    <span class="set-ctl"><label class="switch"><input type="checkbox" id="f-locked" name="proxy.allow_locked"><span></span></label></span>
                   </div>
                   <div class="set-row">
                     <span class="set-ic"><svg><use href="#i-moon"/></svg></span>
@@ -559,18 +542,6 @@
                     <span class="set-text"><label for="f-threshold">Switch accounts at</label><small>The next account takes over when the active one has used this share of its data, without dropping connections</small></span>
                     <span class="set-ctl"><span class="suffix"><input id="f-threshold" name="accounts.switch_threshold_percent" type="number" min="1" max="100" step="1"><i>%</i></span></span>
                   </div>
-                  <div class="set-row">
-                    <span class="set-ic"><svg><use href="#i-timer"/></svg></span>
-                    <span class="set-text"><label for="f-quota-check">Check the data left every</label></span>
-                    <span class="set-ctl">
-                      <select id="f-quota-check" name="accounts.quota_check_interval">
-                        <option value="5m0s">5 minutes</option>
-                        <option value="15m0s">15 minutes</option>
-                        <option value="30m0s">30 minutes</option>
-                        <option value="1h0m0s">1 hour</option>
-                      </select>
-                    </span>
-                  </div>
                 </div>
               </fieldset>
 
@@ -679,9 +650,9 @@
               <p>Each Firefox Account has a monthly data quota, shown on Accounts. When the active account reaches the switch threshold (Settings, Accounts), the next account takes over without dropping connections. Add more accounts to have more data.</p>
             </article>
 
-            <article class="card help-card" id="help-locked">
-              <h3>Locked servers</h3>
-              <p>Mozilla offers some locations only to entitled accounts; they are marked <em>locked</em> on Servers. A locked server that answers the real-delay test can be used by your account.</p>
+            <article class="card help-card" id="help-locations">
+              <h3>Every location</h3>
+              <p>Every location on Servers can be used with any account, including those Mozilla's server list marks as locked (Firefox shows them only under conditions). If Mozilla refuses a location you chose, the status says so; choose another location or the recommended one.</p>
             </article>
 
             <article class="card help-card" id="help-ip">

@@ -53,13 +53,28 @@ class EngineState {
   final DateTime? since;
   final DateTime? retryAt;
 
-  /// A stable reason for some errors, such as `proxy_port_in_use`.
+  /// What the state is, for the waiting and error states ([StateCode]);
+  /// empty otherwise. [message] is the core's English.
   final String code;
 
   /// The listen address [code] is about.
   final String address;
 
-  bool get proxyPortInUse => code == 'proxy_port_in_use';
+  bool get proxyPortInUse => code == StateCode.proxyPortInUse;
+
+  /// The proxy cannot listen on its port: another program holds it, or
+  /// it cannot be used (Windows reserves it); another port helps.
+  bool get proxyPortBlocked =>
+      proxyPortInUse || (code == StateCode.startFailed && address.isNotEmpty);
+}
+
+/// The core's state codes (state.code in /api/status, core/doc/DASHBOARD.md).
+abstract final class StateCode {
+  static const waitingForNetwork = 'waiting_for_network';
+  static const noAccounts = 'no_accounts';
+  static const noUsableAccount = 'no_usable_account';
+  static const proxyPortInUse = 'proxy_port_in_use';
+  static const startFailed = 'start_failed';
 }
 
 class ProxyInfo {
@@ -113,6 +128,22 @@ class ExitInfo {
   final String countryName;
   final String city;
   final String network;
+}
+
+/// The public IP is in another country than the one the user chose
+/// (`exit_mismatch`; only for a chosen country, never for the recommended
+/// location or the fastest one).
+class ExitMismatch {
+  ExitMismatch.fromJson(Map<String, Object?> j)
+    : chosenCountryCode = _str(j['chosen_country_code']),
+      chosenCountryName = _str(j['chosen_country_name']),
+      exitCountryCode = _str(j['exit_country_code']),
+      exitCountryName = _str(j['exit_country_name']);
+
+  final String chosenCountryCode;
+  final String chosenCountryName;
+  final String exitCountryCode;
+  final String exitCountryName;
 }
 
 class Usage {
@@ -215,6 +246,10 @@ abstract final class Failure {
   static const noNetwork = 'no_network';
   static const unreachable = 'unreachable';
   static const refused = 'refused';
+
+  /// The server of a location the user chose refused the account again
+  /// with a new pass: Mozilla does not let it use that location.
+  static const locationRefused = 'location_refused';
   static const signIn = 'sign_in';
   static const quota = 'quota';
   static const notEntitled = 'not_entitled';
@@ -281,6 +316,10 @@ class CoreStatus {
         final m? => ExitInfo.fromJson(m),
         null => null,
       },
+      exitMismatch = switch (_mapOrNull(j['exit_mismatch'])) {
+        final m? => ExitMismatch.fromJson(m),
+        null => null,
+      },
       lastTest = switch (_mapOrNull(j['last_test'])) {
         final m? => ConnectionTest.fromJson(m),
         null => null,
@@ -317,6 +356,9 @@ class CoreStatus {
   final ProxyInfo? proxy;
   final Account? activeAccount;
   final ExitInfo? exit;
+
+  /// Set when the public IP is in another country than the chosen one.
+  final ExitMismatch? exitMismatch;
   final ConnectionTest? lastTest;
   final Traffic? traffic;
   final PassInfo? pass;
@@ -394,6 +436,7 @@ abstract final class SignInStep {
 abstract final class SignInError {
   static const noAccount = 'no_account';
   static const wrongPassword = 'wrong_password';
+  static const noPassword = 'no_password';
   static const tooManyAttempts = 'too_many_attempts';
   static const unblockCodeRejected = 'unblock_code_rejected';
   static const wrongCode = 'wrong_code';

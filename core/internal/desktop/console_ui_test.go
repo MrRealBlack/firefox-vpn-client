@@ -10,8 +10,6 @@ import (
 
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 	"github.com/armanlife/firefox-vpn-client/core/internal/service"
-	"github.com/armanlife/firefox-vpn-client/core/internal/version"
-	"github.com/armanlife/firefox-vpn-client/core/internal/winsvc"
 )
 
 func TestConsoleMenuItems(t *testing.T) {
@@ -23,7 +21,7 @@ func TestConsoleMenuItems(t *testing.T) {
 		return strings.Join(names, ",")
 	}
 
-	// Not reachable, nothing installed: offer to start, never to exit.
+	// Not reachable: offer to start, never to exit.
 	ui := &consoleUI{lastErr: "connection refused"}
 	if got := actions(ui.menuItems()); !strings.Contains(got, actStart) || strings.Contains(got, actExit) {
 		t.Fatalf("stopped menu = %s", got)
@@ -34,69 +32,11 @@ func TestConsoleMenuItems(t *testing.T) {
 	if !strings.Contains(got, actLocation) || !strings.HasSuffix(got, actExit) {
 		t.Fatalf("tray menu = %s", got)
 	}
-	// A service running an older file offers a highlighted update.
-	if winsvc.Supported {
-		// A development build is version 0.0; a release build is newer.
-		oldVersion := version.Current
-		version.Current = "1.2.0"
-		defer func() { version.Current = oldVersion }()
-		ui = &consoleUI{status: &service.StatusView{Version: "1.0"}}
-		ui.svc.Installed, ui.svc.ExePath = true, `C:\old\firefox-vpn-core.exe`
-		found := false
-		for _, it := range ui.menuItems() {
-			if it.action == actUpdate {
-				found = true
-				if !it.highlight || !strings.Contains(it.label, version.Current) {
-					t.Fatalf("update item = %+v", it)
-				}
-			}
-		}
-		if !found {
-			t.Fatal("no update item for a service running another file")
-		}
-		ui.status.Version = version.Current
-		for _, it := range ui.menuItems() {
-			if it.action == actUpdate && it.highlight {
-				t.Fatal("the same version is not an update")
-			}
-		}
-	}
-	// The computer's service serves another folder: installing would move
-	// it, and the menu says so.
-	if winsvc.Supported {
-		ui = &consoleUI{status: &service.StatusView{CanExit: true}}
-		ui.svc.OtherDataDir = `D:\other\data`
-		moved := false
-		for _, it := range ui.menuItems() {
-			if it.action == actInstall {
-				moved = it.warn && strings.Contains(it.label, "Move") && strings.Contains(it.label, ui.svc.OtherDataDir)
-			}
-			if it.action == actUninstall {
-				t.Fatal("a service of another folder must not be removed from here")
-			}
-		}
-		if !moved {
-			t.Fatal("the install item must say that it moves the service")
-		}
-	}
-	// Beside the desktop app: no service to install or move, but one
-	// installed earlier can be removed.
-	if winsvc.Supported {
-		ui = &consoleUI{status: &service.StatusView{CanExit: true}, besideApp: true}
-		ui.svc.OtherDataDir = `D:\other\data`
-		if got := actions(ui.menuItems()); strings.Contains(got, actInstall) || strings.Contains(got, actUpdate) {
-			t.Fatalf("beside the app: %s", got)
-		}
-		ui = &consoleUI{status: &service.StatusView{CanExit: false}, besideApp: true}
-		ui.svc.Installed = true
-		if got := actions(ui.menuItems()); strings.Contains(got, actUpdate) || !strings.Contains(got, actUninstall) {
-			t.Fatalf("beside the app, service installed: %s", got)
-		}
-	}
-	// A service cannot be exited from here.
+	// A copy that no tray or app hosts (another terminal, systemd) cannot
+	// be exited from here.
 	ui = &consoleUI{status: &service.StatusView{CanExit: false}}
 	if got := actions(ui.menuItems()); strings.Contains(got, actExit) {
-		t.Fatalf("service menu must not offer exit: %s", got)
+		t.Fatalf("a copy that cannot exit must not offer exit: %s", got)
 	}
 }
 

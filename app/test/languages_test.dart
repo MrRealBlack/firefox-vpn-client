@@ -45,19 +45,24 @@ void main() {
           'reason_detail': detail,
         });
     expect(
-      accountReason(fa, account('signin_required', 'sign-in required')),
+      accountReason(fa, account('signin_required', 'sign-in required'), 95),
       fa.reasonSignInRequired,
     );
     expect(
-      accountReason(fa, account('signin_failed', 'failed', 'bad password')),
+      accountReason(fa, account('signin_failed', 'failed', 'bad password'), 95),
       contains('bad password'),
     );
     // A reason this app does not know: the core's words.
     expect(
-      accountReason(fa, account('new_code', 'Something new')),
+      accountReason(fa, account('new_code', 'Something new'), 95),
       'Something new',
     );
-    expect(accountReason(fa, account('', '')), isNull);
+    expect(accountReason(fa, account('', ''), 95), isNull);
+    // The switch reason names the setting.
+    expect(
+      accountReason(fa, account('quota_threshold', 'threshold'), 92),
+      fa.reasonQuotaThreshold(92),
+    );
   });
 
   testWidgets('every language formats dates', (tester) async {

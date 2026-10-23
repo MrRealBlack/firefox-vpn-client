@@ -35,6 +35,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'Добавьте аккаунт Firefox на странице «Аккаунты», чтобы подключиться.';
 
   @override
+  String get waitingForEnabledAccount =>
+      'Все аккаунты выключены. Включите один на странице «Аккаунты».';
+
+  @override
   String get stateError => 'Ошибка';
 
   @override
@@ -149,7 +153,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'Аккаунты используются в порядке этого списка, каждый до $percent%.';
+    return 'В порядке этого списка: каждый до $percent%, последний — пока не кончится трафик.';
   }
 
   @override
@@ -212,8 +216,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get signInAgain => 'Войти снова';
 
   @override
-  String get reasonQuotaThreshold =>
-      'Достигнут порог переключения; аккаунт снова используется после обнуления трафика.';
+  String reasonQuotaThreshold(int percent) {
+    return 'Аккаунт израсходовал $percent% трафика, поэтому подключился следующий.';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -365,6 +370,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get signInWrongPassword => 'Неверный пароль.';
+
+  @override
+  String get signInNoPassword =>
+      'У этого аккаунта нет пароля: он создан через вход с Google или Apple. Задайте пароль, а затем войдите с ним здесь.';
+
+  @override
+  String get setPasswordButton => 'Задать пароль';
 
   @override
   String get signInTooManyAttempts =>
@@ -669,13 +681,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get search => 'Поиск';
 
   @override
-  String get locked => 'Закрыта';
-
-  @override
-  String get lockedHint =>
-      'Mozilla может не разрешить вашему аккаунту эту локацию.';
-
-  @override
   String get noAnswer => 'Нет ответа';
 
   @override
@@ -722,9 +727,6 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'Когда израсходована эта доля трафика, включается следующий аккаунт.';
-
-  @override
-  String get quotaInterval => 'Проверять трафик каждые';
 
   @override
   String get sectionDns => 'DNS';
@@ -890,9 +892,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get verboseLogs => 'Подробные логи';
 
   @override
-  String get allowLocked => 'Разрешить закрытые локации';
-
-  @override
   String get webDashboard => 'Веб-панель';
 
   @override
@@ -900,10 +899,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'Расширенные настройки и другие инструменты';
-
-  @override
-  String get durationInvalid =>
-      'Укажите длительность, например 30s, 15m или 6h';
 
   @override
   String numberInvalid(int min, int max) {
@@ -1025,39 +1020,66 @@ class AppLocalizationsRu extends AppLocalizations {
   String get connectRetrying => 'Не удалось подключиться. Проверьте интернет.';
 
   @override
-  String get failUnreachable => 'Серверы Mozilla заблокированы';
+  String get failUnreachable =>
+      'Серверы Mozilla заблокированы в этой сети. Попробуйте другое подключение к интернету.';
 
   @override
-  String get failRefused => 'Сервер Mozilla отклонил подключение';
+  String get failRefused =>
+      'Сервер Mozilla отклонил подключение. Попробуйте снова через несколько минут.';
 
   @override
-  String get failSignIn => 'Нужно снова войти в аккаунт';
+  String get failLocationRefused =>
+      'Эта страна недоступна для вашего аккаунта. Выберите другую страну.';
+
+  @override
+  String get useRecommendedLocation => 'Использовать рекомендуемую локацию';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return 'Выбрано: $chosen, но ваш IP определяется как $exit.';
+  }
+
+  @override
+  String get failSignIn =>
+      'Сеанс этого аккаунта истёк. Войдите снова на странице «Аккаунты».';
 
   @override
   String get failQuota =>
       'Трафик этого месяца исчерпан. Добавьте другой аккаунт.';
 
   @override
-  String get failNotEntitled => 'Этот аккаунт не может использовать VPN';
+  String get failNotEntitled =>
+      'Mozilla не разрешает этому аккаунту пользоваться VPN. Добавьте другой аккаунт.';
 
   @override
-  String get failRegion => 'Mozilla отклоняет подключения из вашего региона.';
+  String get failRegion => 'Mozilla не предоставляет сервис в вашей стране.';
 
   @override
-  String get failServer => 'В сервисе Mozilla проблема';
+  String get failServer =>
+      'Временная проблема в сервисе Mozilla. Приложение само попробует снова.';
 
   @override
   String get failNoAccount =>
-      'Сейчас ни один аккаунт не может подключиться: откройте «Аккаунты».';
+      'Нет готового аккаунта. Откройте страницу «Аккаунты».';
 
   @override
-  String get failTestSite => 'Подключено к серверу, но сайты не открываются';
+  String get failTestSite =>
+      'Подключено к серверу, но сайты не открываются. Попробуйте другую страну.';
 
   @override
-  String get failOther => 'Не удалось подключиться';
+  String get failOther => 'Не удалось подключиться. Попробуйте снова.';
 
   @override
-  String get failNoInternet => 'Нет интернета';
+  String get failNoInternet =>
+      'Нет интернета. Проверьте Wi-Fi или мобильный интернет.';
+
+  @override
+  String get waitingForNetwork => 'Ожидание подключения к интернету…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'Прокси не удалось запустить на порту $port. Выберите другой порт.';
+  }
 
   @override
   String get connectionSettings => 'Настройки подключения';
@@ -1124,14 +1146,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get locationsSection => 'Локации';
-
-  @override
-  String get hideLocked => 'Скрыть закрытые';
-
-  @override
-  String showLocked(int count) {
-    return 'Показать закрытые ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'Шифрованный DNS работает';

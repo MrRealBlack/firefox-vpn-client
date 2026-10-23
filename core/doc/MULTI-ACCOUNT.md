@@ -55,9 +55,8 @@ Files are written atomically with owner-only permissions on POSIX systems. On Wi
 | (fixed) `config.ConnectTimeout` | `20s` | Upstream dial/handshake and CONNECT opening budget; not in `config.json` |
 | (fixed) `config.HandshakeTimeout` / `IdleTimeout` | `10s` / `0` | SOCKS/HTTP handshake limit / established-tunnel idle limit (`0`: never); not in `config.json`. The fixed settings are together in [config.go](../internal/config/config.go), with `ExitCheckTimeout` (20 s, the public IP check) |
 | `proxy.idle_sleep` | `15m` | The proxy starts asleep and connects on first use whatever this value. After this long without a connection through Mozilla, the proxy sleeps again: its upstream session closes and the account renews no pass and checks no quota; the next connection, a connection test, or a real-delay test wakes it. `0s` or at least `1m` |
-| `proxy.allow_locked` | `false` | Allow locations marked locked |
-| `accounts.switch_threshold_percent` | `90` | Used share of an account's quota at which the next account takes over (45 GB of 50 GB) |
-| `accounts.quota_check_interval` | `5m` | Quota read interval for the active account (minimum `30s`) |
+| `proxy.allow_locked` | absent | Ignored: every location is offered, including those Mozilla's server list marks locked. Still accepted so that older files load; not written back |
+| `accounts.switch_threshold_percent` | `95` | Used share of an account's quota at which the next account takes over (47.5 GB of 50 GB); with no other account to take over, the active one goes on to the end of its quota |
 | `accounts.order` | `[]` | Priority order: `{"id": "...", "enabled": true}` entries |
 | `dashboard.enabled` / `listen` | `true` / `127.0.0.1:10820` | Web dashboard; `enabled` can only be changed in the file |
 | `dashboard.username` / `password_hash` | empty | Dashboard login; set from Settings or `-set-dashboard-login` (bcrypt hash) |
@@ -70,7 +69,7 @@ Files are written atomically with owner-only permissions on POSIX systems. On Wi
 | `routing.direct` / `block` | Iran's presets / empty | Rules, editable: geosite:TAG, geoip:TAG, ext:FILE:TAG, domain:, full:, keyword:, regexp:, IP, CIDR |
 | `routing.resolve_domains` | `false` | Look names up to apply IP rules (DNS over HTTPS through Mozilla, never the local DNS) |
 | `routing.geosite_url` / `geoip_url` / `update_interval` | Iran-v2ray-rules `geosite.dat` / Iran-v2ray-rules `geoip.dat` / `240h` | List sources and how often they are downloaded again |
-| `system_proxy.mode` | `clear` | Windows, applied by the tray or the app mode; the user's choice is kept here, so the next start uses it: `set` (Windows' proxy setting points at the local proxy while it runs) or `clear` (system proxy off, once); any other value is refused |
+| `system_proxy.mode` | `clear` | Windows, applied by the tray, the app mode, or the status screen running the proxy; the user's choice is kept here, so the next start uses it: `set` (Windows' proxy setting points at the local proxy while it runs) or `clear` (system proxy off, once); any other value is refused |
 | `logging.verbose` | `false` | Log CONNECT destinations (privacy sensitive) |
 
 New accounts are appended to `accounts.order` automatically. Entries for deleted accounts are dropped. Set `enabled` to `false` to keep an account stored but out of rotation.
@@ -82,7 +81,7 @@ New accounts are appended to `accounts.order` automatically. Entries for deleted
 | Status | Meaning | Returns to rotation |
 | --- | --- | --- |
 | `ready` | Can supply a ProxyPass | — |
-| `reserved` | Usage reached the switch threshold, or the quota is spent (HTTP 429) | At the quota reset (`X-Quota-Reset`); after one hour when the reset is unknown |
+| `reserved` | Usage reached the switch threshold while another account could take over (reason code `quota_threshold`), or the quota is spent (`quota_exhausted`: nothing left in the quota headers, or HTTP 429) | At the quota reset (`X-Quota-Reset`); after one hour when the reset is unknown |
 | `unavailable` | Guardian rejected the account after refresh and activation | After 15 minutes |
 | `reauth_required` | FxA rejected the stored refresh token | After signing in again (dashboard or `-add-account`) |
 
@@ -90,9 +89,9 @@ Rules:
 
 1. The active account stays active until it becomes unusable, even when a higher-priority account becomes usable again (its quota reset).
 2. When the active account is unusable, the first usable account in priority order takes over. The switch updates the bearer token of the existing upstream session in place; open tunnels continue.
-3. Usage is read from the quota headers of every pass request, by a `HEAD` request every `quota_check_interval`, and early after every 512 MiB of tunnel traffic, so a large transfer cannot run far past the threshold.
+3. Usage is read from the quota headers of every pass request (about every 8 minutes). Between readings, the tunnel traffic since the last one is added to it; once that estimate is within 5 GiB of the threshold, a `HEAD` request reads the usage after every 512 MiB of tunnel traffic, so a large transfer cannot run far past the threshold.
 4. Failures that affect every account alike (network errors, Guardian 5xx, HTTP 451) do not switch accounts.
-5. When no account is usable, new tunnels stop once the current pass expires; the status file reports `last_error=no_usable_account` with `next_attempt_at`, and the daemon retries at the earliest quota reset (capped at six hours). The remaining reserve above the threshold is not used.
+5. When no account is usable, new tunnels stop once the current pass expires; the status file reports `last_error=no_usable_account` with `next_attempt_at`, and the daemon retries at the earliest quota reset (capped at six hours). Before that, an account set aside at the threshold with quota left is used again, so no quota goes unused. This includes an account set aside a moment before: when the account that was to take over at the threshold cannot supply a pass (it must sign in again, Guardian refuses it, or the request fails for every account alike), the account set aside goes on with the pass it supplied and is ready and active again. The same holds when a quota check set it aside: it goes on with its current pass, and the switch is tried again at the next check or renewal.
 
 The active account id survives restarts in `user-data/state.json`. `status.json` adds `active_account` (label or email) to the fields documented in [CONFIGURATION.md](CONFIGURATION.md).
 
@@ -110,7 +109,7 @@ The active account id survives restarts in `user-data/state.json`. `status.json`
 | Data folder, account store opening, order reconciliation | [internal/service/paths.go](../internal/service/paths.go) |
 | Quota checks, early checks, in-place switch | `checkQuota`, `noteTraffic` in [renewal.go](../internal/proxy/renewal.go) and [controller.go](../internal/proxy/controller.go) |
 
-Tests: `internal/config/config_test.go`, `internal/accounts/accounts_test.go`, `internal/proxy/accounts_test.go` (failover at the threshold, HTTP 429 and revoked refresh tokens, shared failures, all accounts reserved, in-place switch during a quota check, early quota checks), and `internal/service/paths_test.go` (order reconciliation).
+Tests: `internal/config/config_test.go`, `internal/accounts/accounts_test.go`, `internal/proxy/accounts_test.go` (failover at the threshold, the account set aside going on when the next one cannot take over, HTTP 429 and revoked refresh tokens, shared failures, all accounts reserved, in-place switch during a quota check, the account a quota check set aside going on when the next one fails, early quota checks counting the traffic since the last reading), and `internal/service/paths_test.go` (order reconciliation).
 
 ## Limits
 

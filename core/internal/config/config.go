@@ -32,10 +32,7 @@ const FileName = "config.json"
 const (
 	DefaultProxyListen            = "127.0.0.1:10810"
 	DefaultDashboardListen        = "127.0.0.1:10820"
-	DefaultSwitchThresholdPercent = 90
-	DefaultQuotaCheckInterval     = 30 * time.Minute
-
-	minQuotaCheckInterval = 30 * time.Second
+	DefaultSwitchThresholdPercent = 95
 )
 
 // Fixed settings: values the program uses that are not in config.json.
@@ -142,8 +139,11 @@ type Proxy struct {
 	// account renews no proxy pass and checks no quota until the next
 	// connection, a connection test, or a real-delay test wakes it.
 	IdleSleep Duration `json:"idle_sleep"`
-	// AllowLocked permits locations the server list marks as locked.
-	AllowLocked bool `json:"allow_locked"`
+	// AllowLocked is ignored: every location is offered, including those
+	// the server list marks locked. It stays only so that files and
+	// settings requests that still carry it load; it is cleared on load
+	// and not written back.
+	AllowLocked bool `json:"allow_locked,omitempty"`
 }
 
 // Accounts configures multi-account failover.
@@ -151,8 +151,6 @@ type Accounts struct {
 	// SwitchThresholdPercent is the share of an account's quota after
 	// which the next account takes over (90 means 45 GB of 50 GB).
 	SwitchThresholdPercent float64 `json:"switch_threshold_percent"`
-	// QuotaCheckInterval is how often the active account's quota is read.
-	QuotaCheckInterval Duration `json:"quota_check_interval"`
 	// Order lists the accounts by priority.
 	Order []AccountRef `json:"order"`
 }
@@ -225,7 +223,6 @@ func Default() Config {
 		},
 		Accounts: Accounts{
 			SwitchThresholdPercent: DefaultSwitchThresholdPercent,
-			QuotaCheckInterval:     Duration(DefaultQuotaCheckInterval),
 			Order:                  []AccountRef{},
 		},
 		Dashboard: Dashboard{
@@ -340,6 +337,10 @@ func Load(path string) (cfg Config, created bool, err error) {
 		cfg.Proxy.Country = ""
 		rewrite = true
 	}
+	if cfg.Proxy.AllowLocked {
+		cfg.Proxy.AllowLocked = false
+		rewrite = true
+	}
 	if cfg.Accounts.Order == nil {
 		cfg.Accounts.Order = []AccountRef{}
 	}
@@ -431,9 +432,6 @@ func (c Config) Validate() error {
 	a := c.Accounts
 	if a.SwitchThresholdPercent <= 0 || a.SwitchThresholdPercent > 100 {
 		return errors.New("accounts.switch_threshold_percent must be above 0 and at most 100")
-	}
-	if a.QuotaCheckInterval.Duration() < minQuotaCheckInterval {
-		return fmt.Errorf("accounts.quota_check_interval must be at least %s", minQuotaCheckInterval)
 	}
 	seen := make(map[string]bool, len(a.Order))
 	for _, ref := range a.Order {
@@ -530,14 +528,6 @@ func DefaultDataDir() (string, error) {
 		return "", err
 	}
 	return defaultDataDirFor(dir, runtime.GOOS, os.Getenv, fileExists), nil
-}
-
-// BesideApp reports whether the running executable belongs to the desktop
-// app (beside it, or in its core folder): the app starts and stops this
-// core, so the core offers no Windows service of its own.
-func BesideApp() bool {
-	dir, err := executableDir()
-	return err == nil && appDir(dir, fileExists) != ""
 }
 
 // ProgramDir is the program's folder: the desktop app's when this core

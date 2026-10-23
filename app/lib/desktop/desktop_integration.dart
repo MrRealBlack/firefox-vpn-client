@@ -194,7 +194,8 @@ class DesktopIntegration {
     _lastReauth = reauth;
   }
 
-  /// While connecting, the tray icon turns through its four frames.
+  /// While connecting, the tray icon turns through its four frames; while
+  /// waiting, it shows the first.
   Timer? _spin;
   int _frame = 1;
 
@@ -217,6 +218,9 @@ class DesktopIntegration {
         Phase.running => 'on',
         Phase.error => 'error',
         Phase.off => 'off',
+        // A wait can last hours (no internet, or no account until the
+        // monthly reset): one still frame rather than a spin.
+        Phase.waiting => 'busy1',
         _ => 'busy',
       };
     }

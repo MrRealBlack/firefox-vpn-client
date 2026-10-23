@@ -21,11 +21,6 @@ const (
 	proxyPassRetryDelay = 30 * time.Second
 	PassRenewTimeout    = 2 * time.Minute
 
-	// quotaCheckInterval is how often the remaining monthly quota is polled
-	// (HEAD, without minting a pass) so a token pool rotates as soon as a
-	// token is exhausted, without waiting for the proxy pass to expire.
-	quotaCheckInterval = 15 * time.Minute
-
 	// proxyPassRenewAbandonGrace is how long a timed-out, cancelled renewal
 	// may take to unwind before the loop reports it as stuck (it then waits
 	// for it; the process keeps running).
@@ -36,8 +31,16 @@ const (
 	minRenewalInterval = 10 * time.Second
 
 	// usageProbeBytes is the tunnel traffic after which the quota is read
-	// before the next periodic check.
+	// before the next pass renewal (whose answer carries it too), while the
+	// account is within quotaProbeMargin of its switch point.
 	usageProbeBytes = 512 << 20
+
+	// quotaProbeMargin is how close to its switch point (nearSwitch: the
+	// switch threshold, with an account pool) the active account's usage,
+	// as last read plus the tunnel traffic since then, must come for
+	// traffic to read its quota early; farther away, the pass renewals'
+	// quota is enough, as in Firefox, which reads it only with its passes.
+	quotaProbeMargin = 5 << 30
 
 	// wakeRetryFirst and wakeRetryMax bound WakeRetryDelay's growing wait.
 	wakeRetryFirst = 10 * time.Second
@@ -131,12 +134,15 @@ func (c *Controller) recordRenewalOutcome(err error, retryAt time.Time) {
 	c.nextAttemptAt = retryAt
 }
 
+// setUsage records a new quota reading of the active account; the tunnel
+// traffic that nearSwitch adds to it starts again from zero.
 func (c *Controller) setUsage(usage *guardian.ProxyUsage) {
 	if usage == nil {
 		return
 	}
 	c.mu.Lock()
 	c.usage = usage
+	c.trafficSinceReading.Store(0)
 	c.mu.Unlock()
 }
 
@@ -613,19 +619,14 @@ func (c *Controller) adoptPass(pass *guardian.ProxyPassInfo) error {
 	return nil
 }
 
-// RunQuotaMonitorLoop periodically checks the remaining monthly quota. With
-// a session token pool it rotates to the next token once the quota is
-// exhausted, without waiting for the proxy pass itself to expire.
-func (c *Controller) RunQuotaMonitorLoop(interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
+// RunQuotaMonitorLoop reads the quota when heavy traffic brings the active
+// account near its switch point (noteTraffic), so the next account takes
+// over without waiting for the pass renewal, which reads it otherwise.
+func (c *Controller) RunQuotaMonitorLoop() {
 	for {
 		select {
 		case <-c.done:
 			return
-		case <-ticker.C:
-			c.checkQuota()
 		case <-c.quotaCheckNow:
 			logx.Debug("tunnel traffic reached the usage probe size; checking quota early")
 			c.checkQuota()
@@ -634,8 +635,10 @@ func (c *Controller) RunQuotaMonitorLoop(interval time.Duration) {
 }
 
 // checkQuota reads the quota with a HEAD request, as Firefox does, so no
-// pass is minted while quota remains. Only an exhausted quota with a token
-// pool falls through to pass acquisition, which rotates the token.
+// pass is minted while quota remains. Only an exhausted quota or the switch
+// threshold with an account pool falls through to pass acquisition, which
+// rotates the account; when no other account supplies a pass, the account
+// set aside goes on with its current pass.
 func (c *Controller) checkQuota() {
 	c.renewMu.Lock()
 	defer c.renewMu.Unlock()
@@ -671,9 +674,13 @@ func (c *Controller) checkQuota() {
 	}
 	c.setUsage(usage)
 	handOver := usage.Exhausted()
-	if c.accounts != nil && c.accounts.observeActiveUsage(usage) {
-		handOver = true
-		logx.Info("active account reached the switch threshold; switching account=%s", logx.Email(c.accounts.ActiveName()))
+	// setAside is the active account this check takes out of rotation.
+	var setAside accounts.Account
+	if c.accounts != nil {
+		if acc, reached := c.accounts.observeActiveUsage(usage); reached {
+			handOver, setAside = true, acc
+			logx.Info("active account reached the switch threshold; switching account=%s", logx.Email(acc.Name()))
+		}
 	}
 	c.writeStatus("quota_checked")
 	if !handOver {
@@ -687,6 +694,9 @@ func (c *Controller) checkQuota() {
 	_, pass, err := c.acquireUsablePass(ctx)
 	if err != nil {
 		logx.Warn("quota check failed: %s", logx.Err(err))
+		if setAside.ID != "" {
+			c.accounts.resumeAfterQuotaCheck(setAside, err)
+		}
 		return
 	}
 

@@ -21,12 +21,16 @@ const maxExitCheckResponseSize = 64 * 1024
 // at the same time: each service host has addresses of one family only, so
 // Mozilla's proxy has to reach it over that family, and the service sees
 // the exit address of that family. A dual-stack host would show only the
-// family the proxy prefers (IPv6). ip.sb (the service v2rayNG uses) reports
-// the country, city, and network; Cloudflare's trace, at its IP addresses,
-// is the fallback and reports the country only. Tests replace the lists.
+// family the proxy prefers (IPv6). Cloudflare's trace, at its IP addresses,
+// comes first: its country is the one the many sites behind Cloudflare see,
+// from a database kept current. ip.sb (the service v2rayNG uses) is the
+// fallback, and is also asked alongside for the city and network, which the
+// trace does not report; its country never replaces Cloudflare's. Tests
+// replace the lists.
 var (
-	exitCheckIPv4URLs = []string{"https://api-ipv4.ip.sb/geoip", "https://1.1.1.1/cdn-cgi/trace"}
-	exitCheckIPv6URLs = []string{"https://api-ipv6.ip.sb/geoip", "https://[2606:4700:4700::1111]/cdn-cgi/trace"}
+	exitCheckIPv4URLs = []string{"https://1.1.1.1/cdn-cgi/trace", "https://api-ipv4.ip.sb/geoip"}
+	exitCheckIPv6URLs = []string{"https://[2606:4700:4700::1111]/cdn-cgi/trace", "https://api-ipv6.ip.sb/geoip"}
+	exitDetailsURLs   = []string{"https://api-ipv4.ip.sb/geoip", "https://api-ipv6.ip.sb/geoip"}
 )
 
 // exitProbeRoots replaces the system roots in tests.
@@ -83,21 +87,45 @@ func VerifyExit(opener tunnelOpener, timeout time.Duration) (ExitProbeResult, er
 		result ExitProbeResult
 		err    error
 	}
-	v4, v6 := make(chan answer, 1), make(chan answer, 1)
+	v4, v6, more := make(chan answer, 1), make(chan answer, 1), make(chan answer, 1)
 	go func() { r, err := askFamily(opener, exitCheckIPv4URLs, false, timeout); v4 <- answer{r, err} }()
 	go func() { r, err := askFamily(opener, exitCheckIPv6URLs, true, timeout); v6 <- answer{r, err} }()
-	a4, a6 := <-v4, <-v6
+	go func() { r, err := askDetails(opener, exitDetailsURLs, timeout); more <- answer{r, err} }()
+	a4, a6, details := <-v4, <-v6, <-more
 	if a4.err != nil && a6.err != nil {
 		return ExitProbeResult{}, fmt.Errorf("IPv4: %w; IPv6: %w", a4.err, a6.err)
 	}
-	// The place comes from the answer that names the city, IPv4 first.
+	// The country comes from the IPv4 answer, else the IPv6 one; the city
+	// and network from whichever answer names them.
 	place := a4.result
-	if a4.err != nil || (place.City == "" && a6.err == nil && a6.result.City != "") {
+	if a4.err != nil {
 		place = a6.result
+	}
+	for _, a := range []answer{a4, a6, details} {
+		if place.City == "" && a.err == nil && a.result.City != "" {
+			place.City, place.Network, place.ASN = a.result.City, a.result.Network, a.result.ASN
+		}
 	}
 	place.IPv4, place.IPv6 = a4.result.IPv4, a6.result.IPv6
 	place.Latency = max(a4.result.Latency, a6.result.Latency)
 	return place, nil
+}
+
+// askDetails asks the services in urls, in order, for the exit's city and
+// network; the first that names a city answers.
+func askDetails(opener tunnelOpener, urls []string, timeout time.Duration) (ExitProbeResult, error) {
+	var errs []error
+	for _, u := range urls {
+		result, err := verifyExitAt(opener, u, timeout)
+		if err == nil && result.City == "" {
+			err = errors.New("no city in the answer")
+		}
+		if err == nil {
+			return result, nil
+		}
+		errs = append(errs, fmt.Errorf("%s: %w", ExitProbeHost(u), err))
+	}
+	return ExitProbeResult{}, errors.Join(errs...)
 }
 
 // askFamily asks the services in urls, in order, until one reports an

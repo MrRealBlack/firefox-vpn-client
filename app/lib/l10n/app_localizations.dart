@@ -171,6 +171,12 @@ abstract class AppLocalizations {
   /// **'Add a Firefox Account on the Accounts page to connect.'**
   String get waitingForAccount;
 
+  /// Home hint while the proxy waits: accounts exist, but every one is turned off.
+  ///
+  /// In en, this message translates to:
+  /// **'All accounts are turned off. Turn one on in Accounts.'**
+  String get waitingForEnabledAccount;
+
   /// No description provided for @stateError.
   ///
   /// In en, this message translates to:
@@ -330,7 +336,7 @@ abstract class AppLocalizations {
   /// No description provided for @accountsOrderNote.
   ///
   /// In en, this message translates to:
-  /// **'They are used in the order of this list, each up to {percent}%.'**
+  /// **'In the order of this list: each up to {percent}%, the last one until its data runs out.'**
   String accountsOrderNote(int percent);
 
   /// No description provided for @addAccount.
@@ -441,11 +447,11 @@ abstract class AppLocalizations {
   /// **'Sign in again'**
   String get signInAgain;
 
-  /// No description provided for @reasonQuotaThreshold.
+  /// An account set aside at the switch threshold (percent, the setting) while the next account is used.
   ///
   /// In en, this message translates to:
-  /// **'Reached its switch point; it is used again after the monthly reset.'**
-  String get reasonQuotaThreshold;
+  /// **'Used {percent}% of its data, so the next account took over.'**
+  String reasonQuotaThreshold(int percent);
 
   /// No description provided for @reasonQuotaExhausted.
   ///
@@ -710,6 +716,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Incorrect password.'**
   String get signInWrongPassword;
+
+  /// Sign-in failed: the Firefox Account was made with Google or Apple sign-in and has no password (FxA errno 210).
+  ///
+  /// In en, this message translates to:
+  /// **'This account has no password: it was made with Google or Apple sign-in. Set a password, then sign in here with it.'**
+  String get signInNoPassword;
+
+  /// Button in place of Try again after signInNoPassword; opens Mozilla's page to set a password.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a password'**
+  String get setPasswordButton;
 
   /// No description provided for @signInTooManyAttempts.
   ///
@@ -1251,18 +1269,6 @@ abstract class AppLocalizations {
   /// **'Search'**
   String get search;
 
-  /// No description provided for @locked.
-  ///
-  /// In en, this message translates to:
-  /// **'Locked'**
-  String get locked;
-
-  /// No description provided for @lockedHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Mozilla may not allow your account to use this location.'**
-  String get lockedHint;
-
   /// No description provided for @noAnswer.
   ///
   /// In en, this message translates to:
@@ -1346,12 +1352,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The next account takes over when this share of the quota is used.'**
   String get switchThresholdHint;
-
-  /// No description provided for @quotaInterval.
-  ///
-  /// In en, this message translates to:
-  /// **'Check the quota every'**
-  String get quotaInterval;
 
   /// No description provided for @sectionDns.
   ///
@@ -1659,12 +1659,6 @@ abstract class AppLocalizations {
   /// **'Detailed logs'**
   String get verboseLogs;
 
-  /// No description provided for @allowLocked.
-  ///
-  /// In en, this message translates to:
-  /// **'Allow locked locations'**
-  String get allowLocked;
-
   /// No description provided for @webDashboard.
   ///
   /// In en, this message translates to:
@@ -1682,12 +1676,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Advanced settings and more tools'**
   String get webDashboardHint;
-
-  /// No description provided for @durationInvalid.
-  ///
-  /// In en, this message translates to:
-  /// **'Use a duration like 30s, 15m, or 6h'**
-  String get durationInvalid;
 
   /// No description provided for @numberInvalid.
   ///
@@ -1902,19 +1890,37 @@ abstract class AppLocalizations {
   /// No description provided for @failUnreachable.
   ///
   /// In en, this message translates to:
-  /// **'Mozilla\'s servers are blocked'**
+  /// **'Mozilla\'s servers are blocked on this internet. Try another internet connection.'**
   String get failUnreachable;
 
   /// No description provided for @failRefused.
   ///
   /// In en, this message translates to:
-  /// **'Mozilla\'s server refused the connection'**
+  /// **'Mozilla\'s server refused the connection. Try again in a few minutes.'**
   String get failRefused;
+
+  /// No description provided for @failLocationRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'This country isn\'t open to your account. Choose another country.'**
+  String get failLocationRefused;
+
+  /// No description provided for @useRecommendedLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the recommended location'**
+  String get useRecommendedLocation;
+
+  /// No description provided for @exitMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'You chose {chosen}, but your IP is in {exit}.'**
+  String exitMismatch(String exit, String chosen);
 
   /// No description provided for @failSignIn.
   ///
   /// In en, this message translates to:
-  /// **'The account must sign in again'**
+  /// **'This account\'s sign-in has expired. Sign in again on the Accounts page.'**
   String get failSignIn;
 
   /// No description provided for @failQuota.
@@ -1926,44 +1932,56 @@ abstract class AppLocalizations {
   /// No description provided for @failNotEntitled.
   ///
   /// In en, this message translates to:
-  /// **'This account can\'t use the VPN'**
+  /// **'Mozilla doesn\'t let this account use the VPN. Add another account.'**
   String get failNotEntitled;
 
   /// No description provided for @failRegion.
   ///
   /// In en, this message translates to:
-  /// **'Mozilla refuses connections from your region.'**
+  /// **'Mozilla doesn\'t offer its service in your country.'**
   String get failRegion;
 
   /// No description provided for @failServer.
   ///
   /// In en, this message translates to:
-  /// **'Mozilla\'s service has a problem'**
+  /// **'Mozilla\'s service has a temporary problem. The app tries again by itself.'**
   String get failServer;
 
   /// No description provided for @failNoAccount.
   ///
   /// In en, this message translates to:
-  /// **'No account can connect now: open Accounts.'**
+  /// **'No account is ready. Open the Accounts page.'**
   String get failNoAccount;
 
   /// No description provided for @failTestSite.
   ///
   /// In en, this message translates to:
-  /// **'Connected to the server, but sites don\'t open'**
+  /// **'Connected to the server, but sites don\'t open. Try another country.'**
   String get failTestSite;
 
   /// No description provided for @failOther.
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t connect'**
+  /// **'Couldn\'t connect. Try again.'**
   String get failOther;
 
   /// No description provided for @failNoInternet.
   ///
   /// In en, this message translates to:
-  /// **'No internet'**
+  /// **'No internet. Check Wi-Fi or mobile data.'**
   String get failNoInternet;
+
+  /// The home page while the core waits for a network before connecting (state code waiting_for_network).
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for an internet connection…'**
+  String get waitingForNetwork;
+
+  /// The home page after the proxy failed to start on its port for a reason other than another program holding it, such as a port Windows reserves (state code start_failed), with a Change port button.
+  ///
+  /// In en, this message translates to:
+  /// **'The proxy couldn\'t start on port {port}. Choose another port.'**
+  String proxyStartFailed(String port);
 
   /// No description provided for @connectionSettings.
   ///
@@ -2060,18 +2078,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Locations'**
   String get locationsSection;
-
-  /// No description provided for @hideLocked.
-  ///
-  /// In en, this message translates to:
-  /// **'Hide locked locations'**
-  String get hideLocked;
-
-  /// No description provided for @showLocked.
-  ///
-  /// In en, this message translates to:
-  /// **'Show locked locations ({count})'**
-  String showLocked(int count);
 
   /// No description provided for @dnsSummaryOk.
   ///

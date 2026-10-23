@@ -89,8 +89,8 @@ func TestProxyPortInUseInStatus(t *testing.T) {
 	// Without an account the restarted start ends in "add an account",
 	// which shows it got past the address check well before the retry.
 	waitMessage(t, d, PhaseWaiting, "Add an account in the dashboard to start the proxy")
-	if state := statusState(t, c); state["code"] != nil || state["address"] != nil {
-		t.Fatalf("the code must be cleared with the problem: %v", state)
+	if state := statusState(t, c); state["code"] != CodeNoAccounts || state["address"] != nil {
+		t.Fatalf("the code must give way to the next state's: %v", state)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/url"
 	"os"
@@ -21,19 +22,12 @@ type Candidate struct {
 	CountryCode string
 	CityName    string
 	CityCode    string
-	// Locked mirrors the server-list flag; it is not persisted.
-	Locked bool
 }
 
 // IsRecommended reports whether the candidate belongs to the recommended
 // (anycast) location rather than a specific country.
 func (p Candidate) IsRecommended() bool {
 	return strings.EqualFold(strings.TrimSpace(p.CountryCode), serverlist.RecommendedCountryCode)
-}
-
-// isEligible reports whether automatic selection may use the candidate.
-func (p Candidate) isEligible() bool {
-	return !p.Locked || AllowLockedLocations.Load()
 }
 
 type proxySelectionState struct {
@@ -95,14 +89,14 @@ func ResolveWithStateAndCountry(proxyFlag, countryFilter string, countries []ser
 		persisted, err := loadProxySelection(stateFile)
 		if err == nil {
 			if proxyCandidateMatchesCountry(persisted, countryFilter) {
-				if matched, ok := findProxyCandidate(persisted.Addr, countries); ok && matched.isEligible() {
+				if matched, ok := findProxyCandidate(persisted.Addr, countries); ok {
 					matched.Addr = persisted.Addr
 					return matched, true, nil
 				}
 				if len(countries) == 0 {
 					return persisted, true, nil
 				}
-				logx.Warn("persisted proxy is no longer an eligible server-list entry; selecting a replacement proxy=%s", persisted.Addr)
+				logx.Warn("persisted proxy is no longer a server-list entry; selecting a replacement proxy=%s", persisted.Addr)
 			} else if countryFilter != "" {
 				logx.Info("persisted proxy does not match configured country; selecting a replacement proxy=%s persisted_country_code=%s configured_country=%q",
 					persisted.Addr,
@@ -128,42 +122,23 @@ func selectProxyCandidate(countries []serverlist.Country, countryFilter string) 
 		return Candidate{}, fmt.Errorf("no CONNECT proxies available from server list or persisted state; pass -country CODE or -proxy HOST:PORT")
 	}
 
-	eligible := make([]Candidate, 0, len(proxies))
-	for _, candidate := range proxies {
-		if candidate.isEligible() {
-			eligible = append(eligible, candidate)
-		}
-	}
-
+	// Every location is offered, including those the server list marks
+	// locked: Mozilla's servers accept an ordinary account's pass on them.
 	countryFilter = strings.TrimSpace(countryFilter)
 	if countryFilter != "" {
-		matchedLocked := false
-		for _, candidate := range proxies {
-			if !proxyCandidateMatchesCountry(candidate, countryFilter) {
-				continue
-			}
-			if candidate.isEligible() {
-				return candidate, nil
-			}
-			matchedLocked = true
-		}
-		if matchedLocked {
-			return Candidate{}, fmt.Errorf("location %q is locked in the server list (Firefox offers it only to entitled accounts); pass -allow-locked if this account is entitled, or choose another country (unlocked country codes: %s)", countryFilter, availableCountryCodes(eligible))
-		}
-		return Candidate{}, fmt.Errorf("no CONNECT proxy found for country %q; available country codes: %s", countryFilter, availableCountryCodes(eligible))
-	}
-
-	if len(eligible) == 0 {
-		return Candidate{}, fmt.Errorf("every server-list location is locked; pass -allow-locked if this account is entitled, or -proxy HOST:PORT")
-	}
-	// Without a configured country Firefox uses the recommended location.
-	for _, candidate := range eligible {
-		if candidate.IsRecommended() {
+		if candidate, ok := pickInFirstCity(proxies, func(c Candidate) bool {
+			return proxyCandidateMatchesCountry(c, countryFilter)
+		}); ok {
 			return candidate, nil
 		}
+		return Candidate{}, fmt.Errorf("no CONNECT proxy found for country %q; available country codes: %s", countryFilter, availableCountryCodes(proxies))
 	}
 
-	proxies = eligible
+	// Without a configured country Firefox uses the recommended location.
+	if candidate, ok := pickInFirstCity(proxies, Candidate.IsRecommended); ok {
+		return candidate, nil
+	}
+
 	selectedCountryCode := ""
 	for _, candidate := range proxies {
 		code := strings.ToUpper(strings.TrimSpace(candidate.CountryCode))
@@ -178,7 +153,29 @@ func selectProxyCandidate(countries []serverlist.Country, countryFilter string) 
 			return Candidate{}, fmt.Errorf("multiple VPN countries are available; pass -country CODE or -proxy HOST:PORT instead of selecting a random country (available: %s)", availableCountryCodes(proxies))
 		}
 	}
-	return proxies[0], nil
+	candidate, _ := pickInFirstCity(proxies, func(Candidate) bool { return true })
+	return candidate, nil
+}
+
+// pickInFirstCity picks, as Firefox's server list does, the first city
+// among the candidates that match and one of its servers at random, so
+// the users of a location spread over its servers. ok is false when none
+// matches.
+func pickInFirstCity(candidates []Candidate, match func(Candidate) bool) (pick Candidate, ok bool) {
+	var city []Candidate
+	for _, c := range candidates {
+		if !match(c) {
+			continue
+		}
+		if len(city) > 0 && (c.CountryCode != city[0].CountryCode || c.CityCode != city[0].CityCode || c.CityName != city[0].CityName) {
+			continue
+		}
+		city = append(city, c)
+	}
+	if len(city) == 0 {
+		return Candidate{}, false
+	}
+	return city[rand.IntN(len(city))], true
 }
 
 func proxyCandidateMatchesCountry(candidate Candidate, countryFilter string) bool {
@@ -332,26 +329,18 @@ func findProxyCandidate(proxyFlag string, countries []serverlist.Country) (Candi
 	if err != nil {
 		return Candidate{}, false
 	}
-	// One host can serve several records (e.g. the anycast host); prefer
-	// a record that automatic selection may use.
-	var fallback Candidate
-	found := false
+	// One host can serve several records (e.g. the anycast host); the
+	// first record in server-list order names it.
 	for _, candidate := range ConnectCandidates(countries) {
 		candidateAddr, err := canonicalProxyAddr(candidate.Addr)
 		if err != nil {
 			continue
 		}
-		if !strings.EqualFold(candidateAddr, target) {
-			continue
-		}
-		if candidate.isEligible() {
+		if strings.EqualFold(candidateAddr, target) {
 			return candidate, true
 		}
-		if !found {
-			fallback, found = candidate, true
-		}
 	}
-	return fallback, found
+	return Candidate{}, false
 }
 
 func canonicalProxyAddr(raw string) (string, error) {
@@ -396,7 +385,6 @@ func ConnectCandidates(countries []serverlist.Country) []Candidate {
 						CountryCode: country.Code,
 						CityName:    city.Name,
 						CityCode:    city.Code,
-						Locked:      country.Locked,
 					}
 				}
 				if len(srv.Protocols) == 0 {

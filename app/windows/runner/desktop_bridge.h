@@ -17,7 +17,8 @@
 //
 // Dart to native: setTray {icon, tooltip, rtl, items: [{id, label, enabled,
 // checked, separator, children}]}, notify {title, body}, setAutostart
-// {enabled, command}, show, hide, quit. An item with children is a submenu.
+// {enabled, command}, openUrl (an http or https link, as a string), show,
+// hide, quit. An item with children is a submenu.
 // Native to Dart: closeRequested, trayClicked, trayMenu (the item id),
 // shown (a second launch brought the window up).
 class DesktopBridge {
@@ -57,6 +58,7 @@ class DesktopBridge {
   void ShowMenu();
   void Notify(const std::wstring& title, const std::wstring& body);
   void ShowWindowNow();
+  bool OpenUrl(const std::wstring& url);
   static void SetAutostart(bool enabled, const std::wstring& command);
 
   HWND window_;

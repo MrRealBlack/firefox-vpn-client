@@ -10,10 +10,9 @@ import (
 // touched.
 func TestAppModeIsExclusive(t *testing.T) {
 	for name, opts := range map[string]commandOptions{
-		"tray":    {app: true, tray: true},
-		"service": {app: true, service: true},
-		"install": {app: true, install: true},
-		"list":    {app: true, listAccounts: true},
+		"tray":   {app: true, tray: true},
+		"status": {app: true, status: true},
+		"list":   {app: true, listAccounts: true},
 	} {
 		err := runCommand(opts)
 		if err == nil || !strings.Contains(err.Error(), "-app") {

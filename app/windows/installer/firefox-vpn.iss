@@ -4,11 +4,14 @@
 ;   ISCC /DAppVersion=1.1.9 /DSourceDir=<the app's folder> /DOutputDir=<dir>
 ;        /DOutputName=<file name without .exe> firefox-vpn.iss
 ;
-; It installs for the current user only, without administrator rights, into
-; %LOCALAPPDATA%\Programs\Firefox VPN Client (apart from Mozilla's own
-; client): the app keeps its data (accounts,
-; settings, logs) in user-data beside it, which needs a folder of the user's
-; own. A new version installs over the old one and keeps user-data.
+; It installs for the current user only, without administrator rights, by
+; default into %LOCALAPPDATA%\Programs\Firefox VPN Client (apart from
+; Mozilla's own client). The first install lets the user choose another
+; folder; it must be one the user can write to, because the app keeps its
+; data (accounts, settings, logs) in user-data beside it. A new version
+; installs over the old one, in the same folder, and keeps user-data. An
+; uninstall that keeps the data notes its folder, which the next install
+; offers again.
 
 #define AppName "Firefox VPN"
 #define AppExe "firefox-vpn.exe"
@@ -37,10 +40,11 @@ AppPublisherURL=https://github.com/armanlife/firefox-vpn-client
 AppSupportURL=https://github.com/armanlife/firefox-vpn-client/issues
 AppUpdatesURL=https://github.com/armanlife/firefox-vpn-client/releases
 VersionInfoVersion={#AppVersion}
-DefaultDirName={localappdata}\Programs\{#AppDir}
-DisableDirPage=yes
-; Always that folder, even over a version installed elsewhere.
-UsePreviousAppDir=no
+DefaultDirName={code:DefaultDir}
+; The folder is asked on the first install only; an update goes where the
+; installed version is.
+DisableDirPage=auto
+UsePreviousAppDir=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -81,7 +85,7 @@ DataText=They stay in the user-data folder, so installing the app again brings t
 DataKeep=Keep them (recommended)
 DataDelete=Delete them
 fa.DataQuestion=حساب‌ها و تنظیمات شما نگه داشته شوند؟
-fa.DataText=در پوشهٔ user-data می‌مانند و با نصب دوبارهٔ برنامه برمی‌گردند. فقط اگر دیگر از Firefox VPN استفاده نمی‌کنید پاکشان کنید.
+fa.DataText=در پوشه user-data می‌مانند و با نصب دوباره برنامه برمی‌گردند. فقط اگر دیگر از Firefox VPN استفاده نمی‌کنید پاکشان کنید.
 fa.DataKeep=نگه داشته شوند (پیشنهادی)
 fa.DataDelete=پاک شوند
 ar.DataQuestion=هل تريد الاحتفاظ بحساباتك وإعداداتك؟
@@ -128,6 +132,20 @@ bn.DataQuestion=আপনার অ্যাকাউন্ট ও সেটি�
 bn.DataText=এগুলো user-data ফোল্ডারে থেকে যায়, তাই অ্যাপটি আবার ইনস্টল করলে ফিরে আসে। Firefox VPN আর ব্যবহার না করলে তবেই মুছুন।
 bn.DataKeep=রেখে দিন (প্রস্তাবিত)
 bn.DataDelete=মুছে ফেলুন
+; A chosen folder the user cannot write to (such as Program Files).
+DirNotWritable=Firefox VPN can't write to this folder. It keeps your accounts and settings beside itself, so it needs a folder you can change without administrator rights (not Program Files). Choose another folder.
+fa.DirNotWritable=Firefox VPN نمی‌تواند در این پوشه بنویسد. حساب‌ها و تنظیمات کنار خود برنامه نگه داشته می‌شوند، پس پوشه‌ای لازم است که بدون دسترسی Administrator قابل تغییر باشد (نه Program Files). پوشه دیگری انتخاب کنید.
+ar.DirNotWritable=لا يستطيع Firefox VPN الكتابة في هذا المجلد. فهو يحتفظ بحساباتك وإعداداتك بجانبه، لذا يحتاج إلى مجلد يمكنك تعديله دون صلاحيات المسؤول (وليس Program Files). اختر مجلدًا آخر.
+ru.DirNotWritable=Firefox VPN не может записывать в эту папку. Аккаунты и настройки хранятся рядом с программой, поэтому нужна папка, которую можно менять без прав администратора (не Program Files). Выберите другую папку.
+tr.DirNotWritable=Firefox VPN bu klasöre yazamıyor. Hesaplarınız ve ayarlarınız uygulamanın yanında tutulur; bu yüzden yönetici hakları olmadan değiştirebileceğiniz bir klasör gerekir (Program Files değil). Başka bir klasör seçin.
+az.DirNotWritable=Firefox VPN bu qovluğa yaza bilmir. Hesablarınız və ayarlarınız tətbiqin yanında saxlanılır, ona görə də administrator hüquqları olmadan dəyişə biləcəyiniz qovluq lazımdır (Program Files yox). Başqa qovluq seçin.
+id.DirNotWritable=Firefox VPN tidak dapat menulis ke folder ini. Akun dan pengaturan Anda disimpan di samping aplikasi, jadi diperlukan folder yang dapat Anda ubah tanpa hak administrator (bukan Program Files). Pilih folder lain.
+es.DirNotWritable=Firefox VPN no puede escribir en esta carpeta. Guarda tus cuentas y ajustes junto a sí mismo, así que necesita una carpeta que puedas modificar sin permisos de administrador (no Program Files). Elige otra carpeta.
+fr.DirNotWritable=Firefox VPN ne peut pas écrire dans ce dossier. Il garde vos comptes et paramètres à côté de lui ; il lui faut donc un dossier modifiable sans droits d'administrateur (pas Program Files). Choisissez un autre dossier.
+hu.DirNotWritable=A Firefox VPN nem tud írni ebbe a mappába. A fiókjait és a beállításait maga mellett tárolja, ezért olyan mappa kell, amelyet rendszergazdai jogok nélkül módosíthat (nem a Program Files). Válasszon másik mappát.
+pt.DirNotWritable=O Firefox VPN não consegue gravar nesta pasta. Ele guarda suas contas e configurações ao lado de si, então precisa de uma pasta que você possa alterar sem direitos de administrador (não a Program Files). Escolha outra pasta.
+vi.DirNotWritable=Firefox VPN không thể ghi vào thư mục này. Tài khoản và cài đặt của bạn được lưu ngay cạnh ứng dụng, nên cần một thư mục bạn có thể thay đổi mà không cần quyền quản trị (không phải Program Files). Hãy chọn thư mục khác.
+bn.DirNotWritable=Firefox VPN এই ফোল্ডারে লিখতে পারছে না। আপনার অ্যাকাউন্ট ও সেটিংস অ্যাপের পাশেই রাখা হয়, তাই এমন একটি ফোল্ডার দরকার যা অ্যাডমিনিস্ট্রেটর অনুমতি ছাড়াই বদলানো যায় (Program Files নয়)। অন্য একটি ফোল্ডার বেছে নিন।
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -151,10 +169,80 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
 const
   RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
   InternetKey = 'Software\Microsoft\Windows\CurrentVersion\Internet Settings';
+  // Where an uninstall that kept the data notes the folder it is in.
+  KeptKey = 'Software\{#AppName}';
+  KeptValue = 'KeptDataIn';
+
+// The folder a first install offers: the one an uninstalled copy left its
+// data in, so installing again brings the data back; else the usual one.
+function DefaultDir(Param: String): String;
+begin
+  if not RegQueryStringValue(HKCU, KeptKey, KeptValue, Result) or
+     not DirExists(AddBackslash(Result) + 'user-data') then
+    Result := ExpandConstant('{localappdata}\Programs\{#AppDir}');
+end;
+
+// IsUnder tells whether Dir is Parent or a folder inside it.
+function IsUnder(Dir, Parent: String): Boolean;
+begin
+  Result := Pos(AddBackslash(Lowercase(Parent)), AddBackslash(Lowercase(Dir))) = 1;
+end;
+
+// CanWrite tells whether the user can create files in Dir, which the app's
+// user-data needs; a folder it had to make for the test is removed again.
+// Setup started as administrator can write to the system's folders, which
+// the app, started normally, cannot: those are refused outright.
+function CanWrite(Dir: String): Boolean;
+var
+  Made: Boolean;
+  Probe: String;
+begin
+  if IsAdmin and (IsUnder(Dir, ExpandConstant('{commonpf32}')) or
+     IsUnder(Dir, ExpandConstant('{commonpf64}')) or
+     IsUnder(Dir, ExpandConstant('{commonappdata}')) or
+     IsUnder(Dir, ExpandConstant('{win}'))) then
+  begin
+    Result := False;
+    Exit;
+  end;
+  Made := not DirExists(Dir);
+  Result := ForceDirectories(Dir);
+  if Result then
+  begin
+    Probe := AddBackslash(Dir) + 'write-test.tmp';
+    Result := SaveStringToFile(Probe, '', False);
+    DeleteFile(Probe);
+  end;
+  if Made then
+    RemoveDir(Dir);
+end;
+
+// A chosen folder the user cannot write to is refused before anything is
+// installed (also in a silent install with /DIR).
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CurPageID = wpSelectDir) and not CanWrite(WizardDirValue) then
+  begin
+    SuppressibleMsgBox(CustomMessage('DirNotWritable'), mbError, MB_OK, IDOK);
+    Result := False;
+  end;
+end;
+
+// Installed: the new copy's own uninstall entry knows its folder now.
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    RegDeleteValue(HKCU, KeptKey, KeptValue);
+    RegDeleteKeyIfEmpty(HKCU, KeptKey);
+  end;
+end;
 
 // Uninstalling: the app's autostart entry goes, and so does a Windows
 // proxy setting the app left pointing at its own (now gone) proxy; then
-// the data, if the user wants.
+// the data, if the user wants. Kept data's folder is noted for the next
+// install.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Enabled: Cardinal;
@@ -177,6 +265,13 @@ begin
        (TaskDialogMsgBox(CustomMessage('DataQuestion'), CustomMessage('DataText'), mbConfirmation,
           MB_YESNO, [CustomMessage('DataKeep'), CustomMessage('DataDelete')], 0) = IDNO) then
       DelTree(Data, True, True, True);
+    if DirExists(Data) then
+      RegWriteStringValue(HKCU, KeptKey, KeptValue, ExpandConstant('{app}'))
+    else
+    begin
+      RegDeleteValue(HKCU, KeptKey, KeptValue);
+      RegDeleteKeyIfEmpty(HKCU, KeptKey);
+    end;
     RemoveDir(ExpandConstant('{app}'));
   end;
 end;

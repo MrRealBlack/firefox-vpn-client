@@ -35,6 +35,10 @@ class AppLocalizationsTr extends AppLocalizations {
       'Bağlanmak için Hesaplar sayfasından bir Firefox Account ekleyin.';
 
   @override
+  String get waitingForEnabledAccount =>
+      'Tüm hesaplar kapalı. Hesaplar sayfasından birini açın.';
+
+  @override
   String get stateError => 'Hata';
 
   @override
@@ -147,7 +151,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'Hesaplar bu listedeki sırayla, her biri %$percent oranına kadar kullanılır.';
+    return 'Bu listedeki sırayla: her biri %$percent oranına kadar, sonuncusu verisi bitene kadar.';
   }
 
   @override
@@ -210,8 +214,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get signInAgain => 'Yeniden oturum aç';
 
   @override
-  String get reasonQuotaThreshold =>
-      'Geçiş eşiğine ulaştı; aylık sıfırlamadan sonra yeniden kullanılır.';
+  String reasonQuotaThreshold(int percent) {
+    return 'Bu hesap verisinin %$percent kadarını kullandı; sıradaki hesap devreye girdi.';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -363,6 +368,13 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get signInWrongPassword => 'Parola yanlış.';
+
+  @override
+  String get signInNoPassword =>
+      'Bu hesabın parolası yok: Google veya Apple ile oturum açılarak oluşturulmuş. Bir parola belirleyin, ardından onunla burada oturum açın.';
+
+  @override
+  String get setPasswordButton => 'Parola belirle';
 
   @override
   String get signInTooManyAttempts =>
@@ -666,13 +678,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get search => 'Ara';
 
   @override
-  String get locked => 'Kilitli';
-
-  @override
-  String get lockedHint =>
-      'Mozilla, hesabınızın bu konumu kullanmasına izin vermeyebilir.';
-
-  @override
   String get noAnswer => 'Yanıt yok';
 
   @override
@@ -719,9 +724,6 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'Kotanın bu kadarı dolunca sıradaki hesaba geçilir.';
-
-  @override
-  String get quotaInterval => 'Kota kontrol aralığı';
 
   @override
   String get sectionDns => 'DNS';
@@ -888,9 +890,6 @@ class AppLocalizationsTr extends AppLocalizations {
   String get verboseLogs => 'Ayrıntılı günlükler';
 
   @override
-  String get allowLocked => 'Kilitli konumlara izin ver';
-
-  @override
   String get webDashboard => 'Web paneli';
 
   @override
@@ -898,9 +897,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'Gelişmiş ayarlar ve daha fazla araç';
-
-  @override
-  String get durationInvalid => '30s, 15m veya 6h gibi bir süre kullanın';
 
   @override
   String numberInvalid(int min, int max) {
@@ -1022,38 +1018,64 @@ class AppLocalizationsTr extends AppLocalizations {
   String get connectRetrying => 'Bağlanılamadı. İnternetinizi kontrol edin.';
 
   @override
-  String get failUnreachable => 'Mozilla sunucuları engelli';
+  String get failUnreachable =>
+      'Mozilla sunucuları bu internette engelli. Başka bir internet bağlantısı deneyin.';
 
   @override
-  String get failRefused => 'Mozilla sunucusu bağlantıyı reddetti';
+  String get failRefused =>
+      'Mozilla sunucusu bağlantıyı reddetti. Birkaç dakika sonra tekrar deneyin.';
 
   @override
-  String get failSignIn => 'Hesabın yeniden giriş yapması gerekiyor';
+  String get failLocationRefused =>
+      'Bu ülke hesabınıza açık değil. Başka bir ülke seçin.';
+
+  @override
+  String get useRecommendedLocation => 'Önerilen konumu kullan';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return 'Seçtiğiniz ülke: $chosen; IP adresinizin ülkesi: $exit.';
+  }
+
+  @override
+  String get failSignIn =>
+      'Bu hesabın oturumu sona erdi. Hesaplar sayfasından yeniden giriş yapın.';
 
   @override
   String get failQuota => 'Bu ayın verisi bitti. Başka bir hesap ekleyin.';
 
   @override
-  String get failNotEntitled => 'Bu hesap VPN\'i kullanamaz';
+  String get failNotEntitled =>
+      'Mozilla bu hesabın VPN kullanmasına izin vermiyor. Başka bir hesap ekleyin.';
 
   @override
-  String get failRegion => 'Mozilla bölgenizden gelen bağlantıları reddediyor.';
+  String get failRegion => 'Mozilla ülkenizde hizmet vermiyor.';
 
   @override
-  String get failServer => 'Mozilla hizmetinde bir sorun var';
+  String get failServer =>
+      'Mozilla hizmetinde geçici bir sorun var. Uygulama kendisi tekrar deneyecek.';
 
   @override
-  String get failNoAccount =>
-      'Şu anda hiçbir hesap bağlanamıyor: Hesaplar\'ı açın.';
+  String get failNoAccount => 'Hazır hesap yok. Hesaplar sayfasını açın.';
 
   @override
-  String get failTestSite => 'Sunucuya bağlandı ama siteler açılmıyor';
+  String get failTestSite =>
+      'Sunucuya bağlandı ama siteler açılmıyor. Başka bir ülke deneyin.';
 
   @override
-  String get failOther => 'Bağlanılamadı';
+  String get failOther => 'Bağlanılamadı. Tekrar deneyin.';
 
   @override
-  String get failNoInternet => 'İnternet yok';
+  String get failNoInternet =>
+      'İnternet yok. Wi-Fi\'yi veya mobil veriyi kontrol edin.';
+
+  @override
+  String get waitingForNetwork => 'İnternet bağlantısı bekleniyor…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'Proxy $port portunda başlatılamadı. Başka bir port seçin.';
+  }
 
   @override
   String get connectionSettings => 'Bağlantı ayarları';
@@ -1119,14 +1141,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get locationsSection => 'Konumlar';
-
-  @override
-  String get hideLocked => 'Kilitli konumları gizle';
-
-  @override
-  String showLocked(int count) {
-    return 'Kilitli konumları göster ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'Şifreli DNS çalışıyor';

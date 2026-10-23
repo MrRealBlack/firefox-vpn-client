@@ -57,6 +57,39 @@ type exitView struct {
 	LatencyMS   int64  `json:"latency_ms"`
 }
 
+// exitMismatchView is a public IP in another country than the one the user
+// chose.
+type exitMismatchView struct {
+	// ChosenCountryCode is the chosen location's country code, and
+	// ChosenCountryName the server list's name for it.
+	ChosenCountryCode string `json:"chosen_country_code"`
+	ChosenCountryName string `json:"chosen_country_name,omitempty"`
+	// ExitCountryCode is the public IP's country code from the exit probe,
+	// and ExitCountryName the server list's name for it, if it has one.
+	ExitCountryCode string `json:"exit_country_code"`
+	ExitCountryName string `json:"exit_country_name,omitempty"`
+}
+
+// exitMismatch reports the chosen country and the public IP's country when
+// they differ. Only a country the user chose counts (chosenCountry): the
+// recommended location and the fastest one have no country to match. It is
+// nil while either country is unknown.
+func exitMismatch(p config.Proxy, selected proxy.Candidate, exit *exitView) *exitMismatchView {
+	if exit == nil || !chosenCountry(p) || selected.IsRecommended() {
+		return nil
+	}
+	chosen := strings.ToUpper(strings.TrimSpace(selected.CountryCode))
+	got := strings.ToUpper(strings.TrimSpace(exit.CountryCode))
+	if len(chosen) != 2 || len(got) != 2 || chosen == got {
+		return nil
+	}
+	exitName := exit.CountryName
+	if strings.EqualFold(exitName, got) {
+		exitName = "" // the server list does not name it
+	}
+	return &exitMismatchView{ChosenCountryCode: chosen, ChosenCountryName: selected.CountryName, ExitCountryCode: got, ExitCountryName: exitName}
+}
+
 type AccountView struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -91,24 +124,32 @@ type StatusView struct {
 	NetworkChangedAt time.Time `json:"network_changed_at,omitzero"`
 	// NoNetwork: the phone reported that no network is connected, so the
 	// app says so at once instead of waiting for a test to fail.
-	NoNetwork     bool                        `json:"no_network,omitempty"`
-	SelectionName string                      `json:"selection_name,omitempty"`
-	Pass          *proxy.RuntimeStatus        `json:"pass,omitempty"`
-	ActiveAccount *AccountView                `json:"active_account,omitempty"`
-	Exit          *exitView                   `json:"exit,omitempty"`
-	LastTest      *proxy.ConnectionTestResult `json:"last_test,omitempty"`
-	Accounts      map[string]int              `json:"accounts"`
-	Threshold     float64                     `json:"switch_threshold_percent"`
-	Dashboard     map[string]any              `json:"dashboard"`
-	DataDir       string                      `json:"data_dir"`
-	DNS           string                      `json:"dns"`
-	Version       string                      `json:"version"`
+	NoNetwork     bool                 `json:"no_network,omitempty"`
+	SelectionName string               `json:"selection_name,omitempty"`
+	Pass          *proxy.RuntimeStatus `json:"pass,omitempty"`
+	ActiveAccount *AccountView         `json:"active_account,omitempty"`
+	Exit          *exitView            `json:"exit,omitempty"`
+	// ExitMismatch is set when the user chose a country (not the
+	// recommended location or the fastest one) and the public IP is in
+	// another country (exitMismatch).
+	ExitMismatch *exitMismatchView           `json:"exit_mismatch,omitempty"`
+	LastTest     *proxy.ConnectionTestResult `json:"last_test,omitempty"`
+	Accounts     map[string]int              `json:"accounts"`
+	Threshold    float64                     `json:"switch_threshold_percent"`
+	Dashboard    map[string]any              `json:"dashboard"`
+	DataDir      string                      `json:"data_dir"`
+	DNS          string                      `json:"dns"`
+	Version      string                      `json:"version"`
 	// CanExit is set when POST /app/exit can end the hosting process.
 	CanExit bool `json:"can_exit"`
 	// SystemProxy mirrors system_proxy.mode; SystemProxySupported is set
 	// on Windows, where the tray icon applies it.
 	SystemProxy          string `json:"system_proxy"`
 	SystemProxySupported bool   `json:"system_proxy_supported"`
+	// SystemProxyByHost: the process hosting the service applies
+	// system_proxy.mode itself (the tray, the app mode, the status
+	// screen), so a tray that only controls it leaves the setting alone.
+	SystemProxyByHost bool `json:"system_proxy_by_host"`
 	// AutoConnecting: the app's auto-connect tests the connection, and the
 	// system proxy waits for a passed test (autoconnect.go).
 	AutoConnecting bool `json:"auto_connecting,omitempty"`
@@ -158,6 +199,7 @@ func (d *Daemon) StatusView() (StatusView, error) {
 		view.SelectionName = d.countryNameLocked(code)
 	}
 	view.SystemProxySupported = runtime.GOOS == "windows" || d.SystemProxySupported
+	view.SystemProxyByHost = d.SystemProxySupported
 	view.Notices = d.notices.Since(time.Now().Add(-noticeWindow))
 	engine := d.engine
 	if engine != nil {
@@ -187,6 +229,7 @@ func (d *Daemon) StatusView() (StatusView, error) {
 			StartedAt:       engine.startedAt,
 			LoginRequired:   cfg.Proxy.Username != "",
 		}
+		view.ExitMismatch = exitMismatch(engine.cfg.Proxy, selected, view.Exit)
 		if at, code, err := engine.wakeFailure(); err != nil {
 			view.Proxy.WakeError, view.Proxy.WakeFailedAt = err.Error(), at
 			view.Proxy.WakeErrorCode = code
@@ -410,7 +453,6 @@ type locationView struct {
 	Name        string `json:"name"`
 	City        string `json:"city,omitempty"`
 	Server      string `json:"server,omitempty"`
-	Locked      bool   `json:"locked"`
 	Recommended bool   `json:"recommended"`
 	PingMS      int64  `json:"ping_ms,omitempty"`
 	PingError   string `json:"ping_error,omitempty"`
@@ -431,7 +473,7 @@ func (s *dashboardServer) handleLocations(w http.ResponseWriter, r *http.Request
 			continue
 		}
 		seen[code] = true
-		out = append(out, locationView{Code: code, Name: candidate.CountryName, City: candidate.CityName, Server: candidate.Addr, Locked: candidate.Locked, Recommended: candidate.IsRecommended()})
+		out = append(out, locationView{Code: code, Name: candidate.CountryName, City: candidate.CityName, Server: candidate.Addr, Recommended: candidate.IsRecommended()})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Recommended != out[j].Recommended {
@@ -583,7 +625,7 @@ func (s *dashboardServer) handleAppExit(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if s.d.ExitApp == nil {
-		writeError(w, http.StatusConflict, "this copy runs as the Windows service; remove the service to stop it")
+		writeError(w, http.StatusConflict, "this copy is not hosted by the tray or the desktop app; stop it where it runs (its terminal, or systemd)")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"exiting": true})
@@ -691,15 +733,25 @@ func (s *dashboardServer) handleSetLocation(w http.ResponseWriter, r *http.Reque
 }
 
 // SetLocation stores proxy.country and restarts the engine when it changed.
+// A given-up connect's failure (connect_failure) was about the location
+// before, so another location clears it.
 func (d *Daemon) SetLocation(country string) error {
-	cfg := d.config()
+	prev := d.config()
+	cfg := prev
 	cfg.Proxy.Country = strings.TrimSpace(country)
 	if strings.EqualFold(cfg.Proxy.Country, serverlist.RecommendedCountryCode) {
 		cfg.Proxy.Country = ""
 	}
 	cfg.Proxy.Server = ""
-	_, err := d.updateSettings(cfg, nil)
-	return err
+	if _, err := d.updateSettings(cfg, nil); err != nil {
+		return err
+	}
+	if cfg.Proxy != prev.Proxy {
+		d.mu.Lock()
+		d.connectFailure = ""
+		d.mu.Unlock()
+	}
+	return nil
 }
 
 func (s *dashboardServer) handleProxyRestart(w http.ResponseWriter, r *http.Request) {

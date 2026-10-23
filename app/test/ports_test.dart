@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firefox_vpn/core/core_api.dart';
+import 'package:firefox_vpn/core/core_process.dart';
 import 'package:firefox_vpn/core/ports.dart';
 
 void main() {
@@ -55,5 +56,58 @@ void main() {
       await CoreLocator.setDashboardListen(dir.path, '127.0.0.1:10830');
       expect(await CoreLocator.dashboardListen(dir.path), '127.0.0.1:10830');
     });
+
+    test(
+      'another program on the API port moves the API, the proxy stays',
+      () async {
+        // Something that is not the core answers at the API's address.
+        final other = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() => other.close(force: true));
+        other.listen((req) {
+          req.response.statusCode = 404;
+          req.response.close();
+        });
+        File('${dir.path}/config.json').writeAsStringSync(
+          jsonEncode({
+            'proxy': {'listen': '127.0.0.1:10810'},
+            'dashboard': {'listen': '127.0.0.1:${other.port}'},
+          }),
+        );
+        File('${dir.path}/local-api.token').writeAsStringSync('token');
+        final process = CoreProcess(
+          executable: '${dir.path}/no-core.exe',
+          dataDir: dir.path,
+        );
+
+        await expectLater(
+          process.connect(),
+          throwsA(
+            isA<CoreUnavailable>().having(
+              (e) => e.problem,
+              'problem',
+              CoreProblem.starting,
+            ),
+          ),
+        );
+        final moved = portOf(await CoreLocator.dashboardListen(dir.path))!;
+        expect(moved, greaterThan(other.port));
+        expect(await isFree(moved), isTrue);
+        final config = jsonDecode(
+          File('${dir.path}/config.json').readAsStringSync(),
+        );
+        expect(config['proxy'], {'listen': '127.0.0.1:10810'});
+        // The new port is free: the core is started there (none here).
+        await expectLater(
+          process.connect(),
+          throwsA(
+            isA<CoreUnavailable>().having(
+              (e) => e.problem,
+              'problem',
+              CoreProblem.noCore,
+            ),
+          ),
+        );
+      },
+    );
   });
 }

@@ -1,6 +1,7 @@
 # Builds the Windows app and its core and puts them over the installed copy
-# (the Setup's per-user install, %LOCALAPPDATA%\Programs\Firefox VPN Client),
-# to try a change without making and running an installer:
+# (the Setup's per-user install, in the folder chosen at install time; by
+# default %LOCALAPPDATA%\Programs\Firefox VPN Client), to try a change
+# without making and running an installer:
 # - a running copy is closed first: the app by its process id, after which
 #   its core restores the system proxy and exits, as when the app quits;
 # - user-data in the install folder (accounts, settings, logs) is never
@@ -112,17 +113,31 @@ Set-ItemProperty $uninstallKey -Name DisplayVersion -Value $version
 Write-Host "Installed $version in $dir"
 
 if ($appWasRunning) {
-    Start-Process -FilePath $appExe -WorkingDirectory $dir
-    Write-Host 'Started the app again'
-    if ($wasOn) {
-        # The app's core starts with the proxy off.
-        $deadline = (Get-Date).AddSeconds(30)
-        $done = $false
-        while (-not $done -and (Get-Date) -lt $deadline) {
-            Start-Sleep -Seconds 1
-            try { Invoke-Core POST /power @{ on = $true } | Out-Null; $done = $true } catch {}
+    # Without the proxy variables a build may have needed: the app's core
+    # would inherit them and send its own requests to Mozilla through them.
+    # They come back afterwards, for the terminal this script runs in.
+    $saved = @{}
+    foreach ($name in 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY') {
+        $saved[$name] = [Environment]::GetEnvironmentVariable($name)
+        Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
+    try {
+        Start-Process -FilePath $appExe -WorkingDirectory $dir
+        Write-Host 'Started the app again'
+        if ($wasOn) {
+            # The app's core starts with the proxy off.
+            $deadline = (Get-Date).AddSeconds(30)
+            $done = $false
+            while (-not $done -and (Get-Date) -lt $deadline) {
+                Start-Sleep -Seconds 1
+                try { Invoke-Core POST /power @{ on = $true } | Out-Null; $done = $true } catch {}
+            }
+            if ($done) { Write-Host 'Connected again' } else { Write-Warning 'The app did not answer; connect by hand' }
         }
-        if ($done) { Write-Host 'Connected again' } else { Write-Warning 'The app did not answer; connect by hand' }
+    } finally {
+        foreach ($name in $saved.Keys) {
+            if ($null -ne $saved[$name]) { Set-Item "Env:$name" $saved[$name] }
+        }
     }
 }
 # Not robocopy's code, where 1 means "files copied".

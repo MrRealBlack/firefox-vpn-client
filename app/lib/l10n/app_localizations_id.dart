@@ -35,6 +35,10 @@ class AppLocalizationsId extends AppLocalizations {
       'Tambahkan Firefox Account di halaman Akun untuk terhubung.';
 
   @override
+  String get waitingForEnabledAccount =>
+      'Semua akun dinonaktifkan. Aktifkan salah satu di halaman Akun.';
+
+  @override
   String get stateError => 'Error';
 
   @override
@@ -147,7 +151,7 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'Akun dipakai sesuai urutan daftar ini, masing-masing hingga $percent%.';
+    return 'Sesuai urutan daftar ini: masing-masing sampai $percent%, yang terakhir sampai datanya habis.';
   }
 
   @override
@@ -210,8 +214,9 @@ class AppLocalizationsId extends AppLocalizations {
   String get signInAgain => 'Masuk lagi';
 
   @override
-  String get reasonQuotaThreshold =>
-      'Sudah mencapai batas pergantian; dipakai lagi setelah reset bulanan.';
+  String reasonQuotaThreshold(int percent) {
+    return 'Akun ini telah memakai $percent% datanya, jadi akun berikutnya mengambil alih.';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -362,6 +367,13 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get signInWrongPassword => 'Kata sandi salah.';
+
+  @override
+  String get signInNoPassword =>
+      'Akun ini tidak punya kata sandi: dibuat dengan masuk lewat Google atau Apple. Atur kata sandi, lalu masuk di sini dengannya.';
+
+  @override
+  String get setPasswordButton => 'Atur kata sandi';
 
   @override
   String get signInTooManyAttempts =>
@@ -666,13 +678,6 @@ class AppLocalizationsId extends AppLocalizations {
   String get search => 'Cari';
 
   @override
-  String get locked => 'Terkunci';
-
-  @override
-  String get lockedHint =>
-      'Mozilla mungkin tidak mengizinkan akun Anda menggunakan lokasi ini.';
-
-  @override
   String get noAnswer => 'Tidak merespons';
 
   @override
@@ -719,9 +724,6 @@ class AppLocalizationsId extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'Pindah ke akun berikutnya saat kuota sudah terpakai sebanyak ini.';
-
-  @override
-  String get quotaInterval => 'Periksa kuota setiap';
 
   @override
   String get sectionDns => 'DNS';
@@ -888,9 +890,6 @@ class AppLocalizationsId extends AppLocalizations {
   String get verboseLogs => 'Log terperinci';
 
   @override
-  String get allowLocked => 'Izinkan lokasi terkunci';
-
-  @override
   String get webDashboard => 'Dasbor web';
 
   @override
@@ -898,9 +897,6 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'Pengaturan lanjutan dan alat lainnya';
-
-  @override
-  String get durationInvalid => 'Gunakan durasi seperti 30s, 15m, atau 6h';
 
   @override
   String numberInvalid(int min, int max) {
@@ -1022,38 +1018,65 @@ class AppLocalizationsId extends AppLocalizations {
   String get connectRetrying => 'Tidak dapat terhubung. Periksa internet Anda.';
 
   @override
-  String get failUnreachable => 'Server Mozilla diblokir';
+  String get failUnreachable =>
+      'Server Mozilla diblokir di internet ini. Coba koneksi internet lain.';
 
   @override
-  String get failRefused => 'Server Mozilla menolak koneksi';
+  String get failRefused =>
+      'Server Mozilla menolak koneksi. Coba lagi dalam beberapa menit.';
 
   @override
-  String get failSignIn => 'Akun harus masuk lagi';
+  String get failLocationRefused =>
+      'Negara ini tidak terbuka untuk akun Anda. Pilih negara lain.';
+
+  @override
+  String get useRecommendedLocation => 'Gunakan lokasi yang disarankan';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return 'Anda memilih $chosen, tetapi IP Anda berada di $exit.';
+  }
+
+  @override
+  String get failSignIn =>
+      'Sesi masuk akun ini sudah kedaluwarsa. Masuk lagi di halaman Akun.';
 
   @override
   String get failQuota => 'Kuota bulan ini habis. Tambahkan akun lain.';
 
   @override
-  String get failNotEntitled => 'Akun ini tidak dapat memakai VPN';
+  String get failNotEntitled =>
+      'Mozilla tidak mengizinkan akun ini memakai VPN. Tambahkan akun lain.';
 
   @override
-  String get failRegion => 'Mozilla menolak koneksi dari wilayah Anda.';
+  String get failRegion =>
+      'Mozilla tidak menyediakan layanannya di negara Anda.';
 
   @override
-  String get failServer => 'Layanan Mozilla sedang bermasalah';
+  String get failServer =>
+      'Layanan Mozilla sedang bermasalah sementara. Aplikasi akan mencoba lagi sendiri.';
 
   @override
-  String get failNoAccount =>
-      'Saat ini tidak ada akun yang bisa terhubung: buka Akun.';
+  String get failNoAccount => 'Tidak ada akun yang siap. Buka halaman Akun.';
 
   @override
-  String get failTestSite => 'Terhubung ke server, tetapi situs tidak terbuka';
+  String get failTestSite =>
+      'Terhubung ke server, tetapi situs tidak terbuka. Coba negara lain.';
 
   @override
-  String get failOther => 'Tidak dapat terhubung';
+  String get failOther => 'Tidak dapat terhubung. Coba lagi.';
 
   @override
-  String get failNoInternet => 'Tidak ada internet';
+  String get failNoInternet =>
+      'Tidak ada internet. Periksa Wi-Fi atau data seluler.';
+
+  @override
+  String get waitingForNetwork => 'Menunggu koneksi internet…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'Proxy tidak dapat dimulai di port $port. Pilih port lain.';
+  }
 
   @override
   String get connectionSettings => 'Pengaturan koneksi';
@@ -1119,14 +1142,6 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get locationsSection => 'Lokasi';
-
-  @override
-  String get hideLocked => 'Sembunyikan lokasi terkunci';
-
-  @override
-  String showLocked(int count) {
-    return 'Tampilkan lokasi terkunci ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'DNS terenkripsi berfungsi';

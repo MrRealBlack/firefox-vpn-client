@@ -131,6 +131,7 @@ func (s *signIn) snapshot() signInView {
 const (
 	signInNoAccount       = "no_account"            // no Firefox Account has the email
 	signInWrongPassword   = "wrong_password"        // the password is wrong
+	signInNoPassword      = "no_password"           // the account has none (Google or Apple sign-in)
 	signInThrottled       = "too_many_attempts"     // FxA asks to wait
 	signInUnblockRejected = "unblock_code_rejected" // the unblock code was refused
 	signInWrongCode       = "wrong_code"            // the emailed code was refused
@@ -301,6 +302,8 @@ func signInFailure(err error) signInProblem {
 		return signInProblem{signInWrongPassword, "Incorrect password."}
 	case 114:
 		return signInProblem{signInThrottled, "Too many attempts. Wait a while and try again."}
+	case 210: // UNABLE_TO_LOGIN_NO_PASSWORD_SET: made with Google or Apple sign-in
+		return signInProblem{signInNoPassword, "This account has no password: it was made with Google or Apple sign-in. Set one on accounts.firefox.com (Forgot password), then sign in with it."}
 	case 127:
 		return signInProblem{signInUnblockRejected, "The unblock code was not accepted."}
 	}

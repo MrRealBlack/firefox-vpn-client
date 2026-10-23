@@ -2,13 +2,15 @@ package desktop
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/armanlife/firefox-vpn-client/core/internal/service"
 )
 
 // Code shared by the desktop processes that host the service in-process:
-// the tray icon (-tray) and the desktop app's core process (-app).
+// the tray icon (-tray), the desktop app's core process (-app), and the
+// terminal status screen when the proxy runs in its window.
 
 // statusPollTimeout bounds one status request.
 const statusPollTimeout = 5 * time.Second
@@ -42,16 +44,34 @@ func newHostedDaemon(paths service.DataPaths, verbose bool, exit func()) (*servi
 	return d, nil
 }
 
-// follow applies the system proxy mode from the service status every
-// interval until ctx ends; an unreachable service counts as stopped, so
-// this program's setting is removed. The tray applies the mode from its
-// own polling instead.
-func (s *systemProxySync) follow(ctx context.Context, client *service.Client, interval time.Duration) {
+// daemonTrayStatus reads the status of the daemon in this process as
+// GET /api/status gives it, without the local API (which needs the
+// dashboard).
+func daemonTrayStatus(d *service.Daemon) (service.TrayStatus, error) {
+	view, err := d.StatusView()
+	if err != nil {
+		return service.TrayStatus{}, err
+	}
+	data, err := json.Marshal(view)
+	if err != nil {
+		return service.TrayStatus{}, err
+	}
+	var st service.TrayStatus
+	err = json.Unmarshal(data, &st)
+	return st, err
+}
+
+// follow applies the system proxy mode from the status that poll reads
+// every interval until ctx ends; a poll that fails counts as a stopped
+// service, so this program's setting is removed. The app mode and the
+// status screen's own proxy use it; the tray applies the mode from its own
+// polling instead.
+func (s *systemProxySync) follow(ctx context.Context, poll func() (service.TrayStatus, error), interval time.Duration) {
 	if !systemProxySupported() {
 		return
 	}
 	for {
-		if st, err := pollStatus(client); err != nil {
+		if st, err := poll(); err != nil {
 			s.update(nil)
 		} else {
 			s.update(&st)

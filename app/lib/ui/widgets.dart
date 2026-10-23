@@ -8,9 +8,14 @@ import '../core/ports.dart';
 import '../core/remote_flags.dart';
 import '../l10n/app_localizations.dart';
 import 'country_names.dart';
+import 'local_country_names.dart';
 
 /// Where a Firefox Account is made: Mozilla's site.
 const firefoxAccountSignUpUrl = 'https://accounts.firefox.com/';
+
+/// Where an account made with Google or Apple sign-in gets a password.
+const firefoxAccountSetPasswordUrl =
+    'https://accounts.firefox.com/reset_password/';
 
 /// The program's logo, Mozilla VPN's tile (assets/logo.png, made by
 /// tool/app_icons.py), [size] logical pixels square.
@@ -44,11 +49,12 @@ class PhaseLook {
   final String label;
   final Color color;
 
-  /// The core's message for states that need one; empty otherwise.
+  /// What the state means for states that need it, in the user's words
+  /// where the core gives a code ([stateText]); empty otherwise.
   final String hint;
 
   static PhaseLook of(AppLocalizations l, CoreStatus s) {
-    final message = s.state.message;
+    final message = stateText(l, s.state);
     return switch (s.state.phase) {
       // Connected in either mode on the computer (Proxy or System proxy).
       // Asleep (no traffic yet, or idle) still counts as connected: the
@@ -60,6 +66,12 @@ class PhaseLook {
         l.stateWaiting,
         StatusColors.busy,
         l.waitingForAccount,
+      ),
+      // No enabled account, but some exist: they are all turned off.
+      Phase.waiting when s.state.code == StateCode.noAccounts => PhaseLook(
+        l.stateWaiting,
+        StatusColors.busy,
+        l.waitingForEnabledAccount,
       ),
       Phase.waiting => PhaseLook(l.stateWaiting, StatusColors.busy, message),
       Phase.error when s.state.proxyPortInUse => PhaseLook(
@@ -74,6 +86,18 @@ class PhaseLook {
     };
   }
 }
+
+/// The engine state in the user's words, by its code; the core's own
+/// English for a state without one, or with a code this app does not know.
+String stateText(AppLocalizations l, EngineState s) => switch (s.code) {
+  StateCode.waitingForNetwork => l.waitingForNetwork,
+  StateCode.noAccounts => l.waitingForAccount,
+  StateCode.noUsableAccount => l.failNoAccount,
+  StateCode.startFailed when portOf(s.address) != null => l.proxyStartFailed(
+    '${portOf(s.address)}',
+  ),
+  _ => s.message,
+};
 
 /// Words a [CoreUnavailable] for people.
 String describeProblem(AppLocalizations l, CoreUnavailable e) =>
@@ -101,13 +125,11 @@ Color delayColor(int ms) => ms < 400
 bool isRecommendedPlace(String code) => code.toUpperCase() == 'REC';
 
 /// A location's name for people: the recommended location in the user's
-/// language, otherwise Mozilla's name, or the code.
+/// language, otherwise the country's name ([countryName]).
 String locationName(AppLocalizations l, String code, String name) =>
     isRecommendedPlace(code)
     ? l.recommendedLocation
-    : name.isEmpty
-    ? code
-    : name;
+    : countryName(l, code, name);
 
 /// The phone home's colors: a deep navy night and the state's light.
 abstract final class Midnight {
@@ -145,9 +167,66 @@ ThemeData midnightTheme(ThemeData base) {
   );
 }
 
-/// A country's name: the server list's, else the English name of its code.
-String countryName(String code, [String name = '']) =>
-    name.isNotEmpty ? name : countryNames[code.toUpperCase()] ?? code;
+/// A country's name in the app's language; in English (and for a country
+/// without a translation) the server list's name [name], else the English
+/// name of its code, else the code. A [name] that is only the code (the core
+/// sends the code when the server list does not name the country) counts as
+/// no name.
+String countryName(AppLocalizations l, String code, [String name = '']) {
+  final upper = code.toUpperCase();
+  final local = localCountryNames[l.localeName]?[upper];
+  if (local != null) return local;
+  final named = name.isNotEmpty && name.toUpperCase() != upper;
+  return named ? name : countryNames[upper] ?? code;
+}
+
+/// A key that sorts names the way people of [language] expect, which
+/// String.compareTo (code units) does not: accented Latin letters next to
+/// their base letter; the Persian letters پ چ ژ ک گ in their place in the
+/// alphabet rather than after the Arabic ones; in Arabic, alif with or
+/// without hamza as one letter, and ه before و.
+String nameSortKey(String language, String name) {
+  final lower = name.toLowerCase();
+  final out = StringBuffer();
+  for (final rune in lower.runes) {
+    final ch = String.fromCharCode(rune);
+    final i = switch (language) {
+      'fa' => _persianOrder.indexOf(ch),
+      'ar' => _arabicOrder.indexWhere((letter) => letter.contains(ch)),
+      _ => -1,
+    };
+    // Letters in alphabet order from U+0E00, past every Latin letter.
+    out.write(i >= 0 ? String.fromCharCode(0x0E00 + i) : _latinBase[ch] ?? ch);
+  }
+  return out.toString();
+}
+
+const _persianOrder = 'آاأإبپتثجچحخدذرزژسشصضطظعغفقکكگلمنوؤهةیيئ';
+
+/// The Arabic alphabet; the forms in one entry sort as one letter.
+const _arabicOrder = [
+  'اأإآ', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', //
+  'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'هة', 'وؤ', 'يىئ',
+];
+
+/// Accented Latin letters by their base letter, for sorting.
+const _latinBase = {
+  'à': 'a', 'á': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a', 'ă': 'a', //
+  'ạ': 'a', 'ả': 'a', 'ấ': 'a', 'ầ': 'a', 'ẩ': 'a', 'ẫ': 'a', 'ậ': 'a', //
+  'ắ': 'a', 'ằ': 'a', 'ẳ': 'a', 'ẵ': 'a', 'ặ': 'a', 'ç': 'c', 'đ': 'd', //
+  'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e', 'ẹ': 'e', 'ẻ': 'e', 'ẽ': 'e', //
+  'ế': 'e', 'ề': 'e', 'ể': 'e', 'ễ': 'e', 'ệ': 'e', 'ə': 'e', 'ğ': 'g', //
+  // The dot Dart's toLowerCase leaves after the i of Turkish İ.
+  '̇': '',
+  'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i', 'ı': 'i', 'ỉ': 'i', //
+  'ĩ': 'i', 'ị': 'i', 'ñ': 'n', 'ò': 'o', 'ó': 'o', 'ô': 'o', 'õ': 'o', //
+  'ö': 'o', 'ő': 'o', 'ø': 'o', 'ơ': 'o', 'ọ': 'o', 'ỏ': 'o', 'ố': 'o', //
+  'ồ': 'o', 'ổ': 'o', 'ỗ': 'o', 'ộ': 'o', 'ớ': 'o', 'ờ': 'o', 'ở': 'o', //
+  'ỡ': 'o', 'ợ': 'o', 'ş': 's', 'š': 's', 'ù': 'u', 'ú': 'u', 'û': 'u', //
+  'ü': 'u', 'ű': 'u', 'ư': 'u', 'ụ': 'u', 'ủ': 'u', 'ũ': 'u', 'ứ': 'u', //
+  'ừ': 'u', 'ử': 'u', 'ữ': 'u', 'ự': 'u', 'ý': 'y', 'ỳ': 'y', 'ỷ': 'y', //
+  'ỹ': 'y', 'ỵ': 'y', 'ž': 'z',
+};
 
 /// Why connecting fails, in the user's words, and the core's own text for
 /// the details: from the newer of the last failed wake and the last failed
@@ -178,6 +257,7 @@ String failureCodeText(AppLocalizations l, String code) {
     Failure.noNetwork => l.failNoInternet,
     Failure.unreachable => l.failUnreachable,
     Failure.refused => l.failRefused,
+    Failure.locationRefused => l.failLocationRefused,
     Failure.signIn => l.failSignIn,
     Failure.quota => l.failQuota,
     Failure.notEntitled => l.failNotEntitled,
@@ -190,6 +270,29 @@ String failureCodeText(AppLocalizations l, String code) {
     _ => l.connectRetrying,
   };
 }
+
+/// The soft warning when the public IP is in another country than the
+/// chosen one, with both countries named; null without a mismatch, and
+/// always for the recommended location and the fastest one, which choose
+/// no country.
+String? exitMismatchText(AppLocalizations l, CoreStatus status) {
+  final m = status.exitMismatch;
+  final selection = status.selection.trim().toLowerCase();
+  if (m == null ||
+      selection.isEmpty ||
+      selection == 'fastest' ||
+      isRecommendedPlace(selection)) {
+    return null;
+  }
+  return l.exitMismatch(
+    countryName(l, m.exitCountryCode, m.exitCountryName),
+    countryName(l, m.chosenCountryCode, m.chosenCountryName),
+  );
+}
+
+/// Whether [code] says Mozilla refused the location the user chose, which
+/// the home answers with a button to the recommended location.
+bool isLocationRefused(String code) => code == Failure.locationRefused;
 
 /// Where the phone's traffic goes, for its home page.
 class HomePlace {
@@ -231,7 +334,7 @@ HomePlace homeLocation(
     if (code.isNotEmpty) {
       return HomePlace(
         code,
-        countryName(code, name),
+        countryName(l, code, name),
         auto ?? l.connectedTo,
         auto: auto != null,
       );
@@ -240,7 +343,7 @@ HomePlace homeLocation(
   if (auto != null) return HomePlace('REC', auto, l.homeLocation);
   return HomePlace(
     status.selection.toUpperCase(),
-    countryName(status.selection, status.selectionName),
+    countryName(l, status.selection, status.selectionName),
     l.homeLocation,
   );
 }
@@ -459,35 +562,31 @@ class Panel extends StatelessWidget {
   }
 }
 
-/// A usage bar with the account-switch threshold marked.
-/// The color of a quota by what is left: green, amber for the last 5 GB,
-/// red for the last 1 GB.
-Color quotaColor(int remainingBytes) {
-  const gb = 1024 * 1024 * 1024;
-  return remainingBytes <= gb
+/// The color of a quota by the share used, as the web dashboard shows it:
+/// amber from 10 points before the account-switch threshold, red from the
+/// threshold (where another account takes over, or, with none left, the
+/// last share is being used). Without a threshold, the core's default.
+Color quotaColor(double usedPercent, double thresholdPercent) {
+  final threshold = thresholdPercent > 0 ? thresholdPercent : 95.0;
+  return usedPercent >= threshold
       ? StatusColors.bad
-      : remainingBytes <= 5 * gb
+      : usedPercent >= threshold - 10
       ? StatusColors.busy
       : StatusColors.good;
 }
 
+/// A usage bar with the account-switch threshold marked.
 class QuotaBar extends StatelessWidget {
-  const QuotaBar({
-    super.key,
-    required this.percent,
-    required this.remainingBytes,
-    this.threshold = 0,
-  });
+  const QuotaBar({super.key, required this.percent, this.threshold = 0});
 
   final double percent;
-  final int remainingBytes;
   final double threshold;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final value = (percent / 100).clamp(0.0, 1.0);
-    final color = quotaColor(remainingBytes);
+    final color = quotaColor(percent, threshold);
     return SizedBox(
       height: 8,
       child: LayoutBuilder(

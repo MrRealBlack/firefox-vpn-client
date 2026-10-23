@@ -35,6 +35,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Agregue una Firefox Account en la página Cuentas para conectarse.';
 
   @override
+  String get waitingForEnabledAccount =>
+      'Todas las cuentas están desactivadas. Active una en la página Cuentas.';
+
+  @override
   String get stateError => 'Error';
 
   @override
@@ -148,7 +152,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'Se usan en el orden de esta lista, cada una hasta el $percent %.';
+    return 'En el orden de esta lista: cada una hasta el $percent %, la última hasta agotar sus datos.';
   }
 
   @override
@@ -211,8 +215,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get signInAgain => 'Volver a iniciar sesión';
 
   @override
-  String get reasonQuotaThreshold =>
-      'Llegó a su punto de cambio; se vuelve a usar tras el reinicio mensual.';
+  String reasonQuotaThreshold(int percent) {
+    return 'Esta cuenta usó el $percent % de sus datos, así que la siguiente tomó el relevo.';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -365,6 +370,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get signInWrongPassword => 'Contraseña incorrecta.';
+
+  @override
+  String get signInNoPassword =>
+      'Esta cuenta no tiene contraseña: se creó iniciando sesión con Google o Apple. Establezca una contraseña y luego inicie sesión aquí con ella.';
+
+  @override
+  String get setPasswordButton => 'Establecer contraseña';
 
   @override
   String get signInTooManyAttempts =>
@@ -670,13 +682,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get search => 'Buscar';
 
   @override
-  String get locked => 'Bloqueada';
-
-  @override
-  String get lockedHint =>
-      'Es posible que Mozilla no permita a su cuenta usar esta ubicación.';
-
-  @override
   String get noAnswer => 'Sin respuesta';
 
   @override
@@ -723,9 +728,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'La siguiente cuenta toma el relevo cuando se consume este porcentaje de los datos.';
-
-  @override
-  String get quotaInterval => 'Revisar el uso de datos cada';
 
   @override
   String get sectionDns => 'DNS';
@@ -892,9 +894,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get verboseLogs => 'Registros detallados';
 
   @override
-  String get allowLocked => 'Permitir ubicaciones bloqueadas';
-
-  @override
   String get webDashboard => 'Panel web';
 
   @override
@@ -902,9 +901,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'Ajustes avanzados y más herramientas';
-
-  @override
-  String get durationInvalid => 'Use una duración como 30s, 15m o 6h';
 
   @override
   String numberInvalid(int min, int max) {
@@ -1023,42 +1019,69 @@ class AppLocalizationsEs extends AppLocalizations {
   String get bypassApps => 'Proxy por app';
 
   @override
-  String get connectRetrying => 'No se pudo conectar. Revisa tu internet.';
+  String get connectRetrying => 'No se pudo conectar. Revise su internet.';
 
   @override
-  String get failUnreachable => 'Los servidores de Mozilla están bloqueados';
+  String get failUnreachable =>
+      'Los servidores de Mozilla están bloqueados en esta red. Pruebe otra conexión a internet.';
 
   @override
-  String get failRefused => 'El servidor de Mozilla rechazó la conexión';
+  String get failRefused =>
+      'El servidor de Mozilla rechazó la conexión. Vuelva a intentarlo en unos minutos.';
 
   @override
-  String get failSignIn => 'La cuenta debe iniciar sesión de nuevo';
+  String get failLocationRefused =>
+      'Este país no está disponible para su cuenta. Elija otro país.';
+
+  @override
+  String get useRecommendedLocation => 'Usar la ubicación recomendada';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return 'Eligió $chosen, pero su IP está en $exit.';
+  }
+
+  @override
+  String get failSignIn =>
+      'La sesión de esta cuenta caducó. Vuelva a iniciar sesión en la página Cuentas.';
 
   @override
   String get failQuota =>
-      'Los datos de este mes se agotaron. Añade otra cuenta.';
+      'Los datos de este mes se agotaron. Añada otra cuenta.';
 
   @override
-  String get failNotEntitled => 'Esta cuenta no puede usar la VPN';
+  String get failNotEntitled =>
+      'Mozilla no permite que esta cuenta use la VPN. Añada otra cuenta.';
 
   @override
-  String get failRegion => 'Mozilla rechaza las conexiones desde su región.';
+  String get failRegion => 'Mozilla no ofrece su servicio en su país.';
 
   @override
-  String get failServer => 'El servicio de Mozilla tiene un problema';
+  String get failServer =>
+      'El servicio de Mozilla tiene un problema temporal. La aplicación lo reintentará sola.';
 
   @override
   String get failNoAccount =>
-      'Ahora ninguna cuenta puede conectarse: abra Cuentas.';
+      'Ninguna cuenta está lista. Abra la página Cuentas.';
 
   @override
-  String get failTestSite => 'Conectado al servidor, pero los sitios no abren';
+  String get failTestSite =>
+      'Conectado al servidor, pero los sitios no abren. Pruebe otro país.';
 
   @override
-  String get failOther => 'No se pudo conectar';
+  String get failOther => 'No se pudo conectar. Inténtelo de nuevo.';
 
   @override
-  String get failNoInternet => 'Sin internet';
+  String get failNoInternet =>
+      'Sin internet. Revise el Wi-Fi o los datos móviles.';
+
+  @override
+  String get waitingForNetwork => 'Esperando una conexión a internet…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'El proxy no pudo iniciarse en el puerto $port. Elige otro puerto.';
+  }
 
   @override
   String get connectionSettings => 'Ajustes de conexión';
@@ -1124,14 +1147,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get locationsSection => 'Ubicaciones';
-
-  @override
-  String get hideLocked => 'Ocultar ubicaciones bloqueadas';
-
-  @override
-  String showLocked(int count) {
-    return 'Mostrar ubicaciones bloqueadas ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'El DNS cifrado funciona';

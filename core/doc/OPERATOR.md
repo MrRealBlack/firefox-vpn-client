@@ -6,12 +6,12 @@ How to run, configure, and troubleshoot the service. The [dashboard guide](DASHB
 
 - SOCKS5 CONNECT and an HTTP proxy on the same port, for IPv4, IPv6, and domain targets; no UDP ASSOCIATE, BIND, or TUN.
 - Optional routing: the sites and networks of a region (Iran by default; also China, Russia, Afghanistan, Turkey, Indonesia, Brazil, or none), or any listed destination, directly through your own internet, the rest through Mozilla.
-- Windows: the proxy always runs; the one choice is v2rayN's Set system proxy (the default, while the proxy runs) or Clear system proxy, applied by the tray or by the desktop app's core process.
-- One or more Firefox Accounts; the next account takes over when the active one reaches the switch threshold (default 90% of its quota), keeps open connections, and returns to rotation after the quota reset.
+- Windows: v2rayN's choice of Set system proxy (while the proxy runs) or Clear system proxy (the default), applied by the tray, the desktop app's core process, or the status screen when the proxy runs in its window. The proxy runs from the start, except in the desktop app, which starts it off; the app and `POST /api/power` turn it on and off.
+- One or more Firefox Accounts; the next account takes over when the active one reaches the switch threshold (default 95% of its quota; the last usable account goes on to the end of its quota), keeps open connections, and returns to rotation after the quota reset.
 - Upstream HTTP/2 over TLS (recommended) or experimental HTTP/3 over QUIC to Mozilla's Fastly proxies; one multiplexed session or a small pool.
-- Location selection compatible with Firefox: recommended location by default, version-gated and locked records honored.
+- Location selection compatible with Firefox: recommended location by default, version-gated records honored; every location usable, including those the server list marks locked.
 - Web dashboard for accounts, settings, live logs, and connection tests; all data in a portable `user-data` folder next to the executable.
-- Tray icon (Windows and Linux desktops) with status, notifications, and quick actions; on Windows an optional background service that starts with Windows.
+- Tray icon (Windows and Linux desktops) with status and quick actions; notifications on Linux desktops.
 
 ## Windows
 
@@ -19,11 +19,11 @@ How to run, configure, and troubleshoot the service. The [dashboard guide](DASHB
 2. Double-click it. A window shows the status screen (below) and runs the proxy. The `user-data` folder appears next to the executable, and the log is written to `user-data\logs`, one file per day.
 3. Choose **1 Open the dashboard** (or browse to <http://127.0.0.1:10820/app/>), add an account on the Accounts page, and use `127.0.0.1:10810` as the SOCKS5 proxy in your applications (in a browser: SOCKS v5 with remote DNS).
 
-Closing the window (with ✕ or **0 Quit**) stops the proxy. To keep it running without a window, start it with `-tray` (a tray icon) or install the Windows service. When a copy already serves the data folder (the desktop app's core, the service, or a tray), double-clicking the program opens the status screen for that copy instead: closing the window then leaves it running, and **Exit Firefox VPN completely** stops it. It never starts a second copy. Beside the desktop app (`firefox-vpn.exe` in the same folder) the program uses the app's data folder (`%LOCALAPPDATA%\Firefox VPN`, or `user-data` with a `portable` file), so double-clicking it shows the app's core.
+Closing the window (with ✕ or **0 Quit**) stops the proxy. To keep it running without a window, start it with `-tray` (a tray icon). When a copy already serves the data folder (the desktop app's core or a tray), double-clicking the program opens the status screen for that copy instead: closing the window then leaves it running, and **Exit Firefox VPN completely** stops it. It never starts a second copy. Beside the desktop app (`firefox-vpn.exe` in the same folder, or the bundled core in its `core` folder) the program uses the app's `user-data` folder beside `firefox-vpn.exe`, so double-clicking it shows the app's core.
 
 ### Status screen
 
-Whenever the program runs in an interactive terminal (double-click, PowerShell, cmd, or a Linux terminal) without a command, it shows a status screen instead of the raw log: the state and location, the SOCKS5 and dashboard addresses, the active account with a usage bar, and the Windows service state, followed by a numbered list of actions. Type a number and press Enter:
+Whenever the program runs in an interactive terminal (double-click, PowerShell, cmd, or a Linux terminal) without a command, it shows a status screen instead of the raw log: the state and location, the SOCKS5 and dashboard addresses, the active account with a usage bar, followed by a numbered list of actions. Type a number and press Enter:
 
 ```text
   What would you like to do?
@@ -33,14 +33,14 @@ Whenever the program runs in an interactive terminal (double-click, PowerShell, 
      3  Test the connection
      4  Restart the proxy
      5  Turn on system proxy
-     6  Install as a Windows service (starts with Windows)
+     6  Create a dashboard login (random username and password)
      7  Show the log
      0  Quit (stops the proxy)
 
   Enter a number and press Enter: _
 ```
 
-The list adapts to the situation, so the numbers can shift: **Start Firefox VPN** replaces the proxy actions when nothing runs; with a service installed there is **Remove the Windows service**, and **Update the service to this file** when the service runs another file; **Turn on system proxy** (or **Turn off system proxy**) appears where the system proxy is supported (Windows); **Exit Firefox VPN completely** appears when the window controls a copy running elsewhere (a tray or the desktop app's core), not the Windows service. **0** closes the window: it stops the proxy that runs in the window, and leaves a copy running elsewhere running.
+The list adapts to the situation, so the numbers can shift: **Start Firefox VPN** replaces the proxy actions when nothing runs; **Turn on system proxy** (or **Turn off system proxy**) appears where the system proxy is supported (Windows, macOS, and GNOME on Linux), and the window applies the choice itself while the proxy runs in it; **Exit Firefox VPN completely** appears when the window controls a copy running elsewhere (a tray or the desktop app's core), not a copy in another terminal or under systemd. **0** closes the window: it stops the proxy that runs in the window, and leaves a copy running elsewhere running.
 
 **Reset the dashboard login** (or **Create a dashboard login** when there is none) is the way back in after a forgotten dashboard password: it first shows what will happen, and after 1 it replaces the login with a new random username and password and shows them once; write them down. Every browser signed in is signed out.
 
@@ -48,11 +48,11 @@ The list adapts to the situation, so the numbers can shift: **Start Firefox VPN*
 
 Backspace corrects the number, Esc clears it (or goes back), and Ctrl+C closes the window. Persian and Arabic digits work as well. While a task runs (a measurement can take a minute), other choices wait with a message; exiting never waits.
 
-On Windows the proxy never runs inside this window: the window starts the tray (`-tray`), which hosts the proxy, and keeps the tray icon present while a service or tray serves the folder. On Linux and macOS, where there is no tray from a terminal, the proxy runs in the window and **0** stops it. `-plain` prints the classic log instead, and a terminal that is not interactive (a pipe, systemd, or a redirect) always gets the plain log. The screen needs ANSI colors (Windows 10 1511 or later).
+When nothing else serves the data folder, the proxy runs in the window and **0** stops it, on every system. `-plain` prints the classic log instead, and a terminal that is not interactive (a pipe, systemd, or a redirect) always gets the plain log. The screen needs ANSI colors (Windows 10 1511 or later).
 
 ### Version
 
-The version (`major.minor.patch`, for example `1.1.0`) is shown on the status screen, at the bottom of the dashboard's sidebar, and by `firefox-vpn-core -version`. When a newer copy serves the data folder (after an update), an older tray icon closes itself and the newer one takes its place.
+The version (`major.minor.patch`, for example `1.1.0`) is shown on the status screen, at the bottom of the dashboard's sidebar, and by `firefox-vpn-core -version`. When a newer version serves the data folder (a copy in a terminal, after an update), an older tray icon keeps controlling it and says "served by version …" in its tooltip, but never starts the proxy itself again, so older code does not take over a folder a newer version wrote. When that copy stops, the older icon closes, so the new file's tray or the desktop app can take the folder; start the tray of the new file.
 
 ### Tray icon
 
@@ -62,53 +62,15 @@ The icon is Mozilla VPN's logo; a dot in its lower right corner tells the state:
 | --- | --- |
 | Green dot | Proxy running (faded while asleep) |
 | Blue dot | Proxy running, Windows' system proxy points at it (Set system proxy) |
-| The connecting frame (no dot) | Starting, or waiting (no account yet, or every account waits for its quota reset) |
-| Red dot | Error; the dashboard and the menu show the message |
+| The connecting frame (no dot) | Starting, waiting (no account yet, or every account waits for its quota reset), or turned off (tooltip "Proxy off") |
+| Red dot | Error; the tooltip gives a short reason, the dashboard and the status screen the whole message |
 | No dot | The service is not reachable (stopped, or still starting) |
 
-The menu follows v2rayN's: **Open dashboard**, the system proxy modes (**Clear system proxy**, **Set system proxy**; the current one is checked), **Restart proxy**, and **Exit Firefox VPN (stops the proxy)**, which reads **Close icon (the service keeps running)** when the Windows service runs the proxy. It is the native Windows menu: a menu drawn like v2rayN's (a WPF program) would need a UI framework and make the program much larger. v2rayN's subscription items do not apply here. Hovering over the icon shows the connection state and, when connected, where the traffic leaves: the city and country of the public IP (for example "Firefox VPN: Connected · Amsterdam, Netherlands"), which also names Mozilla's recommended location; details and the Windows service are on the dashboard and the status screen. The dashboard's Help page explains the icon colors and the system proxy modes. A left click opens the dashboard. Notifications report account switches, errors, waiting states, and accounts that must sign in again. They come from "Firefox VPN" with the program's icon: the tray registers that name for the user (`HKCU\Software\Classes\AppUserModelId\FirefoxVPN.Proxy`) and writes the icon to `notification-icon.png` in the data folder. PowerShell still delivers them, hidden, but no longer appears as the sender.
+The menu follows v2rayN's: **Open dashboard**, the system proxy modes (**Clear system proxy**, **Set system proxy**; the current one is checked), **Restart proxy**, and **Exit Firefox VPN (stops the proxy)**, which reads **Close icon (the service keeps running)** when another copy (one in a terminal) runs the proxy. It is the native Windows menu: a menu drawn like v2rayN's (a WPF program) would need a UI framework and make the program much larger. v2rayN's subscription items do not apply here. Hovering over the icon shows the connection state and, when connected, where the traffic leaves: the city and country of the public IP (for example "Firefox VPN: Connected · Amsterdam, Netherlands"), which also names Mozilla's recommended location; while waiting or after an error it gives a short reason ("Waiting: No usable account", "Error: The proxy's port is in use"), and "Proxy off" when the proxy was turned off; details are on the dashboard and the status screen. The dashboard's Help page explains the icon colors and the system proxy modes. A left click opens the dashboard. On Windows the tray shows no notifications: the icon and its tooltip carry the state, the tooltip ends in "sign-in needed" while an account must sign in again, and it shows why the tray's own proxy could not start or stopped ("Could not start: …", until the service answers) and the error of a menu action that failed (for two minutes). Every such error is also written to the log. (A Windows notification would need a hidden script host such as PowerShell, which antivirus heuristics flag.) On a Linux desktop, notifications report account switches, errors, waiting states, and accounts that must sign in again.
 
-When the background service runs, the tray only displays and controls it, and closing the icon leaves the proxy running. Otherwise the tray runs the proxy itself, and **Exit Firefox VPN** stops it. Only one tray runs per data folder; starting another opens the dashboard.
+When another copy already serves the data folder (one in a terminal), the tray only displays and controls it, and closing the icon leaves the proxy running. Otherwise the tray runs the proxy itself, and **Exit Firefox VPN** stops it. Only one tray (or desktop app core) runs per data folder; starting another tray exits quietly.
 
-Start at sign-in comes with the Windows service: installing the service adds the value `FirefoxVPN` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (`"<exe>" -tray -data-dir "<data>"`), and removing the service removes it. At sign-in a console window flashes briefly before the icon appears.
-
-### Start with Windows (background service)
-
-The service is for a core used on its own. Beside the desktop app (`firefox-vpn.exe` in the same folder) the status screen does not offer it and `-install-service` refuses: the app starts and stops that core, a service would keep running the old file after an app update, and a service cannot set the user's Windows proxy. A service installed earlier can still be removed there.
-
-Install with **Install as a Windows service** on the status screen or from a terminal:
-
-```powershell
-.\firefox-vpn-core.exe -install-service      # asks for administrator rights (UAC) when needed
-.\firefox-vpn-core.exe -uninstall-service
-```
-
-| Property | Value |
-| --- | --- |
-| Name / display name | `FirefoxVPN` / Firefox VPN proxy |
-| Start type | Automatic: the proxy runs at boot, before anyone signs in |
-| Account | `NT AUTHORITY\LocalService` (no administrator rights) |
-| Command | `"<exe>" -service -data-dir "<data folder>"` |
-| Recovery | Restart 10 seconds after a failure (also after a non-crash failure such as a busy port) |
-| Log | `data\logs\firefox-vpn-YYYY-MM-DD.log` (the console is not available to a service) |
-
-There is one `FirefoxVPN` service per computer; installing again (from any number of windows or copies) updates it and never creates a second one. A copy of the program in another folder shows the service as serving that other folder and offers **Move the Windows service to this folder** (in yellow) instead of **Install**, so the service is not moved by accident. Only one tray icon runs per data folder; extra copies exit quietly.
-
-Installation grants LocalService modify access to the data folder and read/execute access to the executable (`icacls`), because folders inside a user profile deny other accounts. Installing from the status screen first stops the copy running in the background so the ports are free; removing the service lets the tray run the proxy again. The service belongs to one data folder: a copy of the program in another folder treats it as not installed.
-
-#### Updating the program while the service runs
-
-The service holds its executable open, so the file cannot be overwritten while it runs. To update:
-
-1. Put the new executable in the same folder under another name, for example `firefox-vpn-core-1.1.exe` (same folder, so the same `user-data` folder, accounts, and settings).
-2. Double-click it. The status screen shows the service as running another file and offers **Update the service to this file**. Choose it and confirm the administrator prompt: the service stops, switches to the new file, gets access to it, and starts again.
-3. The old file is no longer used and can be deleted. The old tray icon closes itself when it sees the newer version; sign-in start is pointed at the new file.
-
-To keep the original file name instead: run the old file, choose **Remove the Windows service**, exit, replace the file, run it, and choose **Install as a Windows service**. From a terminal, `-install-service` run from the new file does the same as the update, and `-uninstall-service` removes the service; `sc stop FirefoxVPN` and `sc delete FirefoxVPN` in an administrator terminal work too.
-
-Installing the service also turns on start at sign-in for the user who installs it, so the tray icon shows and controls the service after every sign-in (`-install-service` from an administrator terminal leaves it alone). The tray then connects to the service through the local API token in `user-data\local-api.token` (see [DASHBOARD.md](DASHBOARD.md)).
-
-Anyone who can replace the executable or read the data folder can act as the service. Keep the program folder writable only by you and administrators, and do not install the service from a shared or downloaded-files folder you do not control.
+The program does not add itself to sign-in. To show the tray at sign-in, put a shortcut to `firefox-vpn-core.exe -tray` in the Startup folder (`shell:startup`); a console window flashes briefly before the icon appears. The desktop app has its own start-at-sign-in setting.
 
 ## Linux and systemd
 
@@ -121,7 +83,7 @@ sudo ./scripts/install-systemd.sh status
 sudo ./scripts/install-systemd.sh logs
 ```
 
-On a Linux desktop, `./firefox-vpn-core -tray` shows the tray icon (the desktop needs a StatusNotifierItem/AppIndicator host; GNOME needs the AppIndicator extension). **Show this icon at sign-in** writes `~/.config/autostart/firefox-vpn.desktop` (or under `$XDG_CONFIG_HOME`). Notifications use `notify-send` when it is installed.
+On a Linux desktop, `./firefox-vpn-core -tray` shows the tray icon (the desktop needs a StatusNotifierItem/AppIndicator host; GNOME needs the AppIndicator extension). To show it at sign-in, add `firefox-vpn-core -tray` to the desktop's autostart programs. Notifications use `notify-send` when it is installed.
 
 The program and its data live in `/opt/firefox-vpn/` (`firefox-vpn-core` owned by root, `user-data/` owned by the `firefox-vpn` user). The unit runs with `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `NoNewPrivileges`, and write access only to the data folder, and restarts on failure.
 
@@ -144,11 +106,8 @@ The dashboard has no HTTPS: its traffic, including passwords typed into it, cros
 | `firefox-vpn-core` | Run the service (dashboard + proxy) with the status screen in an interactive terminal, or the plain log otherwise |
 | `-plain` | Print the log instead of the status screen |
 | `-version` | Print the version and exit |
-| `-tray` | Show the tray icon; it runs the proxy itself unless a service already serves the data folder |
+| `-tray` | Show the tray icon; it runs the proxy itself unless another copy already serves the data folder |
 | `-app` | Run the service for the desktop app, which starts the core this way; see [Desktop app mode](#desktop-app-mode) |
-| `-install-service` | Windows: install or update and start the `FirefoxVPN` service (asks for administrator rights) |
-| `-uninstall-service` | Windows: stop and remove the service |
-| `-service` | Used by the installed service only |
 | `-add-account` | Sign in on the terminal and store the account; restart a running service afterwards |
 | `-list-accounts` | Print accounts, status, and usage |
 | `-status` | Print the running service's proxy state, active account (masked), and data left in a few lines (`firefox-vpn status` on a server, under the service's own and autostart lines) |
@@ -164,9 +123,9 @@ Settings live in `config.json` and the dashboard, not in flags.
 The desktop app starts the core as a child process with `-app [-data-dir DIR] [-verbose]` when it opens and talks to it only through the dashboard API with the `X-Local-Token` header (the token in `user-data/local-api.token`). In this mode the process:
 
 - runs the service (dashboard and proxy) in-process, with no tray icon and no status screen; on Windows it closes a console window that was opened for it;
-- starts with the proxy off (`Daemon.Off`), so nothing connects and the system proxy is not set until the user presses the button in the app (`POST /api/power`); the tray, the terminal, and the service start on;
+- starts with the proxy off (`Daemon.Off`), so nothing connects and the system proxy is not set until the user presses the button in the app (`POST /api/power`); the tray and the terminal (also under systemd) start on;
 - logs only to the day's file in `user-data/logs`, because its standard output and error are pipes the app may never read; an error that stops it is also written to the standard error (see [App error line](#app-error-line)) before it exits;
-- is the only desktop host of the data folder: it shares the single-instance lock with the tray icon, and refuses to start when a tray, another `-app` copy, or a service (the Windows service or a terminal copy whose dashboard API answers) already serves the folder;
+- is the only desktop host of the data folder: it shares the single-instance lock with the tray icon, and refuses to start when a tray, another `-app` copy, or a copy whose dashboard API answers (in a terminal or under systemd) already serves the folder;
 - refuses to start when `dashboard.enabled` is false, since the app needs the API;
 - applies `system_proxy.mode` like the tray (it reads the status every two seconds) and restores the previous Windows proxy setting when it stops; during auto-connect (below) it waits for a passed connection test first;
 - reports `can_exit: true` in `GET /api/status`.
@@ -203,7 +162,7 @@ A dashboard address held by another copy of this program that serves the same da
 
 ## Sleeping when unused
 
-The proxy starts asleep: starting the program (the tray, the app mode, the service, or a terminal copy) opens the SOCKS5/HTTP port and the dashboard but sends nothing to Mozilla: no server list, no Firefox version lookup, no proxy pass, no session, no connection test or public IP check, no quota check, and no device registration. The first connection through Mozilla, a connection test, or a real-delay test connects it and waits for that: the server list and a pass (fetched together), the "fastest" measurement when that location is chosen, and the session, then the automatic connection test with the public IP check and the device registration, as a start used to do. The connection that woke it then goes through; it is delayed by that time (a few seconds, longer with "fastest"). Until then the status shows the persisted location for the configured choice, if any. If connecting fails, the proxy stays asleep, `GET /api/status` reports `proxy.wake_error` and `proxy.wake_failed_at`, and connections fail with that error for a while instead of asking Mozilla again: 10 seconds after the first failure, doubling with each further one up to 2 minutes, and 15 minutes (or until the announced time) for a failure retrying cannot fix soon, such as an account that must sign in again, a spent quota, or a refused region. A connection test retries at once, except after such a lasting failure. A network that comes back, a change of accounts, or the app coming to the front (`POST /api/retry`) ends the wait. A connect from the app that does not reach Mozilla within a minute is given up: the proxy goes off again (the phone's VPN too) and the app says why under its button. When the session to Mozilla breaks while the proxy is awake, the proxy reconnects with the pass it has; it asks Mozilla for a new pass only when Mozilla refuses the pass, and then less and less often while refusals go on. When every account turns out to be unusable, the proxy restarts and waits like a start without a usable account.
+The proxy starts asleep: starting the program (the tray, the app mode, a terminal copy, or systemd) opens the SOCKS5/HTTP port and the dashboard but sends nothing to Mozilla: no server list, no Firefox version lookup, no proxy pass, no session, no connection test or public IP check, no quota check, and no device registration. The first connection through Mozilla, a connection test, or a real-delay test connects it and waits for that: the server list and a pass (fetched together), the "fastest" measurement when that location is chosen, and the session, then the automatic connection test with the public IP check and the device registration, as a start used to do. The connection that woke it then goes through; it is delayed by that time (a few seconds, longer with "fastest"). Until then the status shows the persisted location for the configured choice, if any. If connecting fails, the proxy stays asleep, `GET /api/status` reports `proxy.wake_error` and `proxy.wake_failed_at`, and connections fail with that error for a while instead of asking Mozilla again: 10 seconds after the first failure, doubling with each further one up to 2 minutes, and 15 minutes (or until the announced time) for a failure retrying cannot fix soon, such as an account that must sign in again, a spent quota, or a refused region. A connection test retries at once, except after such a lasting failure. A network that comes back, a change of accounts, or the app coming to the front (`POST /api/retry`) ends the wait. A connect from the app that does not reach Mozilla within a minute is given up: the proxy goes off again (the phone's VPN too) and the app says why under its button. When the session to Mozilla breaks while the proxy is awake, the proxy reconnects with the pass it has; it asks Mozilla for a new pass only when Mozilla refuses the pass, and then less and less often while refusals go on. When every account turns out to be unusable, the proxy restarts and waits like a start without a usable account.
 
 Settings, Proxy, **Sleep when unused** (`proxy.idle_sleep`: never, 15 minutes (the default), 30 minutes, or 1 hour) saves the accounts when the proxy is not used. After that long without a connection through Mozilla, the proxy closes its session to Mozilla: no proxy pass is renewed and no quota is checked, so the account is not in use. The SOCKS5/HTTP port stays open. The next connection that needs Mozilla wakes it: a new pass and session for the same server (no new selection or delay test), which delays that first connection by a few seconds; a connection test or a real-delay test wakes it too. Direct connections (routing) do not wake it, and a connection that stays open keeps it awake. Meanwhile it does not look connected: Overview's badge, sidebar, and status dot turn indigo and say "Sleeping", the Uptime card becomes **Asleep for** (with the total uptime below), the tray icon is faded, and the tray tooltip and the status screen say "Sleeping".
 
@@ -216,7 +175,7 @@ The app's setting "Connect on startup" (off by default; only with "Start on boot
 
 ## HTTP proxy and the Windows system proxy
 
-The SOCKS5 address also serves HTTP proxy clients (HTTPS through CONNECT, plain `http://` requests forwarded), with the same SOCKS5 username and password (Basic login). The tray, the terminal, and the service run the proxy from their start; the desktop app starts it off, until the user presses its button. On Windows the other choice, as in v2rayN, is what happens to Windows' proxy setting: **Set system proxy** points it at the proxy, so browsers and programs that follow that setting go through the VPN without their own setup; **Clear system proxy** (the default, "Proxy only" in the app) turns Windows' system proxy off once, leaving the VPN to applications set up by hand. The choice is saved (`system_proxy.mode`), so the next start uses it. The tray and the app mode apply Set only while the proxy runs and restore the previous setting when the proxy stops, the program ends, or the tray icon is closed. The same choice is in the tray menu, Settings, Proxy, the desktop app, and on the status screen.
+The SOCKS5 address also serves HTTP proxy clients (HTTPS through CONNECT, plain `http://` requests forwarded), with the same SOCKS5 username and password (Basic login). The tray and the terminal (also under systemd) run the proxy from their start; the desktop app starts it off, until the user presses its button. On Windows the other choice, as in v2rayN, is what happens to Windows' proxy setting: **Set system proxy** points it at the proxy, so browsers and programs that follow that setting go through the VPN without their own setup; **Clear system proxy** (the default, "Proxy only" in the app) turns Windows' system proxy off once, leaving the VPN to applications set up by hand. The choice is saved (`system_proxy.mode`), so the next start uses it. The tray, the app mode, and the status screen while the proxy runs in its window apply Set only while the proxy runs and restore the previous setting when the proxy stops, the program ends, the tray icon is closed (unless the copy it controls applies the setting itself and keeps running), or the window is closed. The same choice is in the tray menu, Settings, Proxy, the desktop app, and on the status screen.
 
 ## Routing (your region's sites directly)
 
@@ -238,9 +197,9 @@ On a filtered network the system DNS may return wrong addresses for Mozilla's na
 
 ### Choosing a location by real delay
 
-**Test real delay** on the dashboard's Servers page tests the locations of the open tab (**Available** or **All servers**); **Choose a location** on the status screen tests every location. Results of a tab are merged into the earlier ones. For each location the test it opens a session with the active account's proxy pass and times a CONNECT to `www.google.com:443` (the better of two). Every location's server is on Mozilla/Fastly's anycast network, so the connection to the server reaches the same nearby Fastly edge for every location; only a request that travels on to the exit shows the real difference. The proxy must be running. A test takes a few seconds on a normal network and up to two minutes on a slow or filtered one; locked locations the account may not use show "not allowed for this account".
+**Test real delay** on the dashboard's Servers page and **Choose a location** on the status screen test every location. Results are merged into the earlier ones. For each location the test it opens a session with the active account's proxy pass and times a CONNECT to `www.google.com:443` (the better of two). Every location's server is on Mozilla/Fastly's anycast network, so the connection to the server reaches the same nearby Fastly edge for every location; only a request that travels on to the exit shows the real difference. The proxy must be running. A test takes a few seconds on a normal network and up to two minutes on a slow or filtered one; a location that refuses the account shows "not allowed for this account".
 
-Results are sorted lowest first. **Use** sets that server (Manual); **Auto (fastest)** sets `proxy.country` to `fastest`, which measures at each proxy start (reusing a measurement younger than 30 minutes) and picks the fastest location the policy allows (locked ones only with `proxy.allow_locked`). If nothing answers, it falls back to the recommended location.
+Results are sorted lowest first. **Use** sets that server (Manual); **Auto (fastest)** sets `proxy.country` to `fastest`, which measures at each proxy start (reusing a measurement younger than 30 minutes) and picks the fastest of all locations, including those the server list marks locked; a location that failed the test is not picked. If nothing answers, it falls back to the recommended location.
 
 
 The configured location comes from Mozilla's server list. Without a country the recommended (anycast) location is used. The **Exit** on the Overview page and the connection test report the address websites actually see, which may be IPv4 or IPv6 and can differ between destinations. Hostname persistence does not pin a physical server or exit IP.
@@ -259,7 +218,7 @@ The connection test's **total** includes opening a CONNECT stream, the TLS hands
 
 ### Waiting: add an account / no usable account
 
-The proxy starts when at least one enabled account can supply a pass. With accounts present, the Accounts tab shows why each one is not usable: threshold reached (until the reset date), needs sign-in, unavailable (rejected, retried after 15 minutes), or disabled.
+The proxy starts when at least one enabled account can supply a pass. With accounts present, the Accounts tab shows why each one is not usable: threshold reached or quota used up (until the reset date), needs sign-in, unavailable (rejected, retried after 15 minutes), or disabled.
 
 ### Needs sign-in (`reauth_required`)
 
@@ -280,9 +239,11 @@ The URL must be `https://`: the sign-in and the account tokens cross the relay, 
 
 Mozilla's account API is behind a Fastly anti-bot check. Proof-of-work challenges are solved automatically; image CAPTCHAs appear in the dashboard sign-in dialog. Background token refreshes cannot show a CAPTCHA; if one blocks them, the account eventually needs a new sign-in.
 
-### Location is locked
+### A chosen location is refused, or the public IP is in another country
 
-Locations marked locked in Mozilla's list are offered by Firefox only to entitled accounts. Choose another location, use the recommended one, or enable **Allow locations marked as locked** if the account is entitled. A persistent CONNECT 403 on a location usually has the same cause.
+Mozilla's server list marks some locations locked (Firefox shows them only under preconditions), but its proxy servers accept every account on all of them, so the program offers every location. If Mozilla starts refusing a location the user chose, its server answers the CONNECT with 403 or 407 even with a new proxy pass; the connection test then fails with `location_refused` ("Mozilla does not let this account use this location"), and the app offers a button to switch to the recommended location. Choose another location or the recommended one.
+
+When the public IP's country (from the exit probe) is not the country chosen, `GET /status` reports `exit_mismatch` and the app shows a soft warning; the connection still works. Not reported for the recommended location or Auto (fastest).
 
 ### A site on an unusual port does not open
 
@@ -292,17 +253,13 @@ Mozilla's proxy connects only to the web ports **80, 443, 8080, and 8443**; for 
 
 The proxy or dashboard address is taken by another program (or another copy of this one). Change `proxy.listen` or `dashboard.listen`, or stop the other program. Do not stop unrelated software to free a port. While the proxy address is taken, the status shows the error with the address (`state.code` `proxy_port_in_use` in `GET /api/status`) and the start is retried every 30 seconds; a new `proxy.listen` saved in Settings applies at once. The desktop app's core process exits with status 4 and an `app-error: dashboard_port_in_use` line when the dashboard address is taken ([App error line](#app-error-line)).
 
-### The Windows service stops right after starting
-
-Usually another copy (a console window or a tray started before the service) holds the proxy or dashboard port; the service retries every 10 seconds. Close the other copy, or quit its tray. The reason is in the day's log in `user-data\logs`. If the log shows access errors, the folder or executable moved: run `-install-service` again.
-
 ### Log files
 
-The log is written to `user-data/logs`, one file per day (`firefox-vpn-2026-10-10.log`, by local date). The last seven days are kept: when the eighth day starts, the oldest file is deleted. Ordinary logging writes a few kilobytes a day; as a safety limit a day's file stops at 10 MB (only verbose logging under heavy traffic gets there) with a note, and logging continues in the next day's file. Several processes (the service and a tray or status screen) can write the same file. When the day's file is deleted while the program runs, it is created again within ten seconds.
+The log is written to `user-data/logs`, one file per day (`firefox-vpn-2026-10-10.log`, by local date). The last seven days are kept: when the eighth day starts, the oldest file is deleted. Ordinary logging writes a few kilobytes a day; as a safety limit a day's file stops at 10 MB (only verbose logging under heavy traffic gets there) with a note, and logging continues in the next day's file. Several processes (a tray and a status screen) can write the same file. When the day's file is deleted while the program runs, it is created again within ten seconds.
 
 ### The tray icon is grey
 
-The tray cannot reach the service: the service is stopped or still starting, the dashboard is disabled in `config.json` (`dashboard.enabled`), or `user-data\local-api.token` is unreadable. The menu names the service state.
+The tray cannot reach the service: it is stopped or still starting, the dashboard is disabled in `config.json` (`dashboard.enabled`), or `user-data\local-api.token` is unreadable. The tooltip reads "Service not reachable" or "Starting…". When the tray's own proxy cannot start, for example because a value in `config.json` is invalid or another program holds `dashboard.listen`, the tooltip adds "Could not start: …" (or "Stopped: …") with the error, the day's log in `user-data\logs` has the whole message, and the tray tries again about once a minute. An older tray that saw a newer version serve the folder never starts the proxy itself; it closes when that copy stops (see [Version](#version)).
 
 ### HTTP/3 times out
 

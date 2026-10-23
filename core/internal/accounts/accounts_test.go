@@ -147,7 +147,8 @@ func TestManagerReportsEarliestRetryWhenAllReserved(t *testing.T) {
 	mgr, accs := newTestManager(t, "a@example.com", "b@example.com", "c@example.com")
 	now := time.Now()
 	early, late := now.Add(5*time.Hour), now.Add(48*time.Hour)
-	if _, err := mgr.ObserveUsage(accs[0].ID, usage(45, late)); err != nil {
+	// Spent, so no share is left to use as a last resort.
+	if _, err := mgr.ObserveUsage(accs[0].ID, usage(50, late)); err != nil {
 		t.Fatal(err)
 	}
 	if err := mgr.Reserve(accs[1].ID, Why{Code: ReasonQuotaExhausted, Text: "quota exhausted"}, early); err != nil {
@@ -164,6 +165,89 @@ func TestManagerReportsEarliestRetryWhenAllReserved(t *testing.T) {
 	}
 	if !noAccount.RetryAt.Equal(early) {
 		t.Fatalf("expected earliest retry %s, got %s", early, noAccount.RetryAt)
+	}
+}
+
+// The threshold switches to another account in time; with none to switch
+// to, the active account goes on to the end of its quota.
+func TestManagerUsesTheLastShareWithoutAnotherAccount(t *testing.T) {
+	reset := time.Now().Add(48 * time.Hour)
+
+	single, one := newTestManager(t, "a@example.com")
+	if err := single.Activate(one[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if reached, err := single.ObserveUsage(one[0].ID, usage(47, reset)); err != nil || reached {
+		t.Fatalf("a single account must not stop at the threshold: reached=%v err=%v", reached, err)
+	}
+	if reached, _ := single.ObserveUsage(one[0].ID, usage(50, reset)); !reached {
+		t.Fatal("a spent quota must hand over")
+	}
+	// Spent, not set aside at the threshold: no other account took over.
+	if a := single.Accounts()[0]; a.ReasonCode != ReasonQuotaExhausted || !a.RetryAt.Equal(reset) {
+		t.Fatalf("expected a spent quota until the reset, got %+v", a)
+	}
+
+	mgr, accs := newTestManager(t, "a@example.com", "b@example.com")
+	if err := mgr.Activate(accs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if reached, _ := mgr.ObserveUsage(accs[0].ID, usage(46, reset)); !reached {
+		t.Fatal("with another account, the threshold must hand over")
+	}
+	if a := mgr.Accounts()[0]; a.ReasonCode != ReasonQuotaThreshold || !a.RetryAt.Equal(reset) {
+		t.Fatalf("expected a set aside at the threshold until the reset, got %+v", a)
+	}
+	if err := mgr.Activate(accs[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	if reached, _ := mgr.ObserveUsage(accs[1].ID, usage(50, reset)); !reached {
+		t.Fatal("a spent quota must hand over")
+	}
+	if b := mgr.Accounts()[1]; b.ReasonCode != ReasonQuotaExhausted {
+		t.Fatalf("expected b's quota to be spent, got %+v", b)
+	}
+	// b is spent: a's last 4 GiB are used rather than nothing.
+	got, err := mgr.Candidate(nil)
+	if err != nil || got.ID != accs[0].ID {
+		t.Fatalf("expected the rest of a, got %+v %v", got, err)
+	}
+}
+
+// An account set aside at the threshold goes back in use when no other
+// account takes over after all; a spent or signed-out one never does.
+func TestManagerResumesOnlyAnAccountSetAsideAtTheThreshold(t *testing.T) {
+	mgr, accs := newTestManager(t, "a@example.com", "b@example.com", "c@example.com")
+	reset := time.Now().Add(48 * time.Hour)
+	if err := mgr.Activate(accs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if reached, _ := mgr.ObserveUsage(accs[0].ID, usage(46, reset)); !reached {
+		t.Fatal("expected a to be set aside at the threshold")
+	}
+	if _, err := mgr.ObserveUsage(accs[1].ID, usage(50, reset)); err != nil {
+		t.Fatal(err)
+	}
+	if err := mgr.MarkReauthRequired(accs[2].ID, Why{Code: ReasonSignInRequired, Text: "revoked"}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, id := range []string{accs[1].ID, accs[2].ID} {
+		if resumed, err := mgr.Resume(id); resumed || err != nil {
+			t.Fatalf("only an account set aside at the threshold may resume, got %v %v", resumed, err)
+		}
+	}
+	if resumed, err := mgr.Resume(accs[0].ID); !resumed || err != nil {
+		t.Fatalf("expected a to resume, got %v %v", resumed, err)
+	}
+	if active, ok := mgr.Active(); !ok || active.ID != accs[0].ID || active.Status != StatusReady || active.ReasonCode != "" {
+		t.Fatalf("expected a to be active and ready, got %+v", active)
+	}
+	if stored, err := mgr.store.Get(accs[0].ID); err != nil || stored.Status != StatusReady {
+		t.Fatalf("expected the ready status to be saved, got %+v %v", stored, err)
+	}
+	if b, c := mgr.Accounts()[1], mgr.Accounts()[2]; b.ReasonCode != ReasonQuotaExhausted || c.Status != StatusReauthRequired {
+		t.Fatalf("the other accounts must stay as they were, got %+v and %+v", b, c)
 	}
 }
 

@@ -79,7 +79,8 @@ class CoreProcess {
       // Nothing answers: start the core below.
     } on CoreApiException {
       // Something else answers at the address: another program, or another
-      // copy's core.
+      // copy's core. The API moves; failing that, the user is asked.
+      if (await _moveApi()) throw const CoreUnavailable(CoreProblem.starting);
       throw CoreUnavailable(
         CoreProblem.refused,
         await CoreLocator.dashboardListen(dataDir),
@@ -92,6 +93,14 @@ class CoreProcess {
     if (_failedFast) {
       // It stopped right after starting: report why instead of looping.
       final error = _appError;
+      // Its API's port is held, or Windows keeps it for itself (WSL and
+      // Docker reserve ranges); nothing of ours answers there.
+      if (error?.code == 'dashboard_port_in_use' ||
+          (port != null && !await isFree(port))) {
+        if (await _moveApi()) {
+          throw const CoreUnavailable(CoreProblem.starting);
+        }
+      }
       if (error != null && error.code == 'dashboard_port_in_use') {
         throw CoreUnavailable(CoreProblem.portInUse, error.detail);
       }
@@ -110,6 +119,24 @@ class CoreProcess {
   /// Lets the next [connect] start the core at once, after the user fixed
   /// what stopped it (such as its port).
   void retryNow() => _failedFast = false;
+
+  /// Times the API was moved this run: a few, so a lasting problem ends in
+  /// the "can't reach the core" page instead of a loop.
+  int _apiMoves = 0;
+
+  /// Moves the core's API to a free port above its own, in config.json,
+  /// for the core to start there. Unlike the proxy's port, which the user
+  /// may have set up in other programs, only this app uses it, and it finds
+  /// the port in that file. False when it was moved enough already.
+  Future<bool> _moveApi() async {
+    if (_apiMoves >= 3) return false;
+    _apiMoves++;
+    final listen = await CoreLocator.dashboardListen(dataDir);
+    final port = await findFreePort(portOf(listen) ?? 10820);
+    await CoreLocator.setDashboardListen(dataDir, withPort(listen, port));
+    _failedFast = false;
+    return true;
+  }
 
   Future<void> _start() async {
     _stderr.clear();

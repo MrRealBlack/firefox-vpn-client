@@ -41,8 +41,8 @@ func DayFile(dir string, t time.Time) string {
 
 // dailyFile writes to the current day's log file and moves to the next
 // file when the day changes. Several processes may append to the same file
-// (the Windows service and a tray or status screen); openLogAppend lets one
-// of them delete an old file while another still holds it open.
+// (a tray and a status screen); openLogAppend lets one of them delete an
+// old file while another still holds it open.
 type dailyFile struct {
 	mu      sync.Mutex
 	dir     string

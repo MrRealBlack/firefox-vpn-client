@@ -34,6 +34,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get waitingForAccount => '在“账户”页添加 Firefox 账户后即可连接。';
 
   @override
+  String get waitingForEnabledAccount => '所有账户都已关闭。请在“账户”页启用一个。';
+
+  @override
   String get stateError => '错误';
 
   @override
@@ -146,7 +149,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return '账户按此列表的顺序使用，每个最多用到 $percent%。';
+    return '按此列表顺序使用：每个账户用到 $percent%，最后一个用到流量耗尽。';
   }
 
   @override
@@ -209,7 +212,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get signInAgain => '重新登录';
 
   @override
-  String get reasonQuotaThreshold => '已达到切换点；每月重置后会再次使用。';
+  String reasonQuotaThreshold(int percent) {
+    return '此账户已用掉 $percent% 的流量，已切换到下一个账户。';
+  }
 
   @override
   String get reasonQuotaExhausted => '本月流量已用完；每月重置后会再次使用。';
@@ -357,6 +362,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get signInWrongPassword => '密码错误。';
+
+  @override
+  String get signInNoPassword =>
+      '此账户没有密码：它是通过 Google 或 Apple 登录创建的。请先设置密码，然后在此用该密码登录。';
+
+  @override
+  String get setPasswordButton => '设置密码';
 
   @override
   String get signInTooManyAttempts => '尝试次数过多。请稍候再试。';
@@ -649,12 +661,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get search => '搜索';
 
   @override
-  String get locked => '已锁定';
-
-  @override
-  String get lockedHint => 'Mozilla 可能不允许你的账户使用此节点。';
-
-  @override
   String get noAnswer => '无响应';
 
   @override
@@ -699,9 +705,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get switchThresholdHint => '流量用到此比例时，自动切换到下一个账户。';
-
-  @override
-  String get quotaInterval => '流量检查间隔';
 
   @override
   String get sectionDns => 'DNS';
@@ -865,9 +868,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get verboseLogs => '详细日志';
 
   @override
-  String get allowLocked => '允许使用锁定节点';
-
-  @override
   String get webDashboard => '网页控制面板';
 
   @override
@@ -875,9 +875,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get webDashboardHint => '高级设置和更多工具';
-
-  @override
-  String get durationInvalid => '请输入时长，例如 30s、15m 或 6h';
 
   @override
   String numberInvalid(int min, int max) {
@@ -997,37 +994,56 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectRetrying => '无法连接。请检查网络。';
 
   @override
-  String get failUnreachable => 'Mozilla 服务器被屏蔽';
+  String get failUnreachable => 'Mozilla 服务器在此网络上被屏蔽。请换一个网络连接试试。';
 
   @override
-  String get failRefused => 'Mozilla 服务器拒绝了连接';
+  String get failRefused => 'Mozilla 服务器拒绝了连接。请几分钟后再试。';
 
   @override
-  String get failSignIn => '账户需要重新登录';
+  String get failLocationRefused => '这个国家不对你的账户开放。请选择其他国家。';
+
+  @override
+  String get useRecommendedLocation => '使用推荐节点';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return '你选择了$chosen，但你的 IP 在$exit。';
+  }
+
+  @override
+  String get failSignIn => '此账户的登录已过期。请在“账户”页重新登录。';
 
   @override
   String get failQuota => '本月流量已用完。请添加另一个账户。';
 
   @override
-  String get failNotEntitled => '此账户无法使用 VPN';
+  String get failNotEntitled => 'Mozilla 不允许此账户使用 VPN。请添加另一个账户。';
 
   @override
-  String get failRegion => 'Mozilla 拒绝来自你所在地区的连接。';
+  String get failRegion => 'Mozilla 不在你所在的国家提供服务。';
 
   @override
-  String get failServer => 'Mozilla 服务出现问题';
+  String get failServer => 'Mozilla 服务暂时出现问题。应用会自动重试。';
 
   @override
-  String get failNoAccount => '目前没有可连接的账户：请打开“账户”。';
+  String get failNoAccount => '没有可用的账户。请打开“账户”页。';
 
   @override
-  String get failTestSite => '已连接服务器，但网站打不开';
+  String get failTestSite => '已连接服务器，但网站打不开。请换一个国家试试。';
 
   @override
-  String get failOther => '无法连接';
+  String get failOther => '无法连接。请重试。';
 
   @override
-  String get failNoInternet => '无网络连接';
+  String get failNoInternet => '无网络连接。请检查 Wi-Fi 或移动数据。';
+
+  @override
+  String get waitingForNetwork => '正在等待网络连接…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return '代理无法在端口 $port 上启动。请选择其他端口。';
+  }
 
   @override
   String get connectionSettings => '连接设置';
@@ -1086,14 +1102,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get locationsSection => '节点';
-
-  @override
-  String get hideLocked => '隐藏锁定节点';
-
-  @override
-  String showLocked(int count) {
-    return '显示锁定节点（$count）';
-  }
 
   @override
   String get dnsSummaryOk => '加密 DNS 工作正常';
@@ -1193,6 +1201,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get waitingForAccount => '請在「帳號」頁面新增 Firefox Account 以連線。';
+
+  @override
+  String get waitingForEnabledAccount => '所有帳號都已關閉。請在「帳號」頁面啟用一個。';
 
   @override
   String get stateError => '錯誤';
@@ -1307,7 +1318,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String accountsOrderNote(int percent) {
-    return '帳號依此清單的順序使用，每個最多用到 $percent%。';
+    return '依此清單順序使用：每個帳戶用到 $percent%，最後一個用到流量用完。';
   }
 
   @override
@@ -1369,7 +1380,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get signInAgain => '重新登入';
 
   @override
-  String get reasonQuotaThreshold => '已達到切換點；每月重設後會再次使用。';
+  String reasonQuotaThreshold(int percent) {
+    return '此帳號已用掉 $percent% 的流量，已切換到下一個帳號。';
+  }
 
   @override
   String get reasonQuotaExhausted => '本月流量已用完；每月重設後會再次使用。';
@@ -1517,6 +1530,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get signInWrongPassword => '密碼錯誤。';
+
+  @override
+  String get signInNoPassword =>
+      '此帳號沒有密碼：它是透過 Google 或 Apple 登入建立的。請先設定密碼，再於此用該密碼登入。';
+
+  @override
+  String get setPasswordButton => '設定密碼';
 
   @override
   String get signInTooManyAttempts => '嘗試次數過多。請稍候再試。';
@@ -1809,12 +1829,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get search => '搜尋';
 
   @override
-  String get locked => '已鎖定';
-
-  @override
-  String get lockedHint => 'Mozilla 可能不允許您的帳號使用此位置。';
-
-  @override
   String get noAnswer => '無回應';
 
   @override
@@ -1859,9 +1873,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get switchThresholdHint => '流量用到此比例時，自動換下一個帳號。';
-
-  @override
-  String get quotaInterval => '流量檢查間隔';
 
   @override
   String get sectionDns => 'DNS';
@@ -2024,9 +2035,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get verboseLogs => '詳細記錄';
 
   @override
-  String get allowLocked => '允許已鎖定的位置';
-
-  @override
   String get webDashboard => '網頁控制台';
 
   @override
@@ -2034,9 +2042,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get webDashboardHint => '進階設定和更多工具';
-
-  @override
-  String get durationInvalid => '請輸入時長，例如 30s、15m 或 6h';
 
   @override
   String numberInvalid(int min, int max) {
@@ -2156,37 +2161,56 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get connectRetrying => '無法連線。請檢查網路。';
 
   @override
-  String get failUnreachable => 'Mozilla 伺服器遭封鎖';
+  String get failUnreachable => 'Mozilla 伺服器在此網路上遭封鎖。請改用其他網路連線。';
 
   @override
-  String get failRefused => 'Mozilla 伺服器拒絕了連線';
+  String get failRefused => 'Mozilla 伺服器拒絕了連線。請幾分鐘後再試。';
 
   @override
-  String get failSignIn => '帳戶需要重新登入';
+  String get failLocationRefused => '這個國家未對您的帳號開放。請選擇其他國家。';
 
   @override
-  String get failQuota => '本月流量已用完。請新增另一個帳戶。';
+  String get useRecommendedLocation => '使用推薦位置';
 
   @override
-  String get failNotEntitled => '此帳戶無法使用 VPN';
+  String exitMismatch(String exit, String chosen) {
+    return '您選擇了$chosen，但您的 IP 位於$exit。';
+  }
 
   @override
-  String get failRegion => 'Mozilla 拒絕來自您所在地區的連線。';
+  String get failSignIn => '此帳號的登入已過期。請在「帳號」頁面重新登入。';
 
   @override
-  String get failServer => 'Mozilla 服務發生問題';
+  String get failQuota => '本月流量已用完。請新增另一個帳號。';
 
   @override
-  String get failNoAccount => '目前沒有可連線的帳號：請開啟「帳號」。';
+  String get failNotEntitled => 'Mozilla 不允許此帳號使用 VPN。請新增另一個帳號。';
 
   @override
-  String get failTestSite => '已連線伺服器，但網站打不開';
+  String get failRegion => 'Mozilla 不在您所在的國家提供服務。';
 
   @override
-  String get failOther => '無法連線';
+  String get failServer => 'Mozilla 服務暫時發生問題。應用程式會自動重試。';
 
   @override
-  String get failNoInternet => '無網路連線';
+  String get failNoAccount => '沒有可用的帳號。請開啟「帳號」頁面。';
+
+  @override
+  String get failTestSite => '已連線伺服器，但網站打不開。請換個國家試試。';
+
+  @override
+  String get failOther => '無法連線。請再試一次。';
+
+  @override
+  String get failNoInternet => '無網路連線。請檢查 Wi-Fi 或行動數據。';
+
+  @override
+  String get waitingForNetwork => '正在等待網路連線…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return '代理無法在連接埠 $port 上啟動。請選擇其他連接埠。';
+  }
 
   @override
   String get connectionSettings => '連線設定';
@@ -2246,14 +2270,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get locationsSection => '位置';
-
-  @override
-  String get hideLocked => '隱藏已鎖定的位置';
-
-  @override
-  String showLocked(int count) {
-    return '顯示已鎖定的位置（$count）';
-  }
 
   @override
   String get dnsSummaryOk => '加密 DNS 運作正常';

@@ -94,6 +94,102 @@ class _ConnectionSettingsButton extends StatelessWidget {
   );
 }
 
+/// Under "This location isn't available for your account": switches to
+/// Mozilla's recommended location (an empty `proxy.country`).
+class _RecommendedLocationButton extends StatelessWidget {
+  const _RecommendedLocationButton({required this.core});
+
+  final CoreController core;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: Center(
+      child: TextButton.icon(
+        onPressed: () => runShowingErrors(context, () => core.setLocation('')),
+        icon: const Icon(Icons.public_rounded, size: 18),
+        label: Text(AppLocalizations.of(context).useRecommendedLocation),
+      ),
+    ),
+  );
+}
+
+/// An amber box when the public IP is in another country than the chosen
+/// one: a hint, not an error; the connection works.
+class _ExitMismatchNote extends StatelessWidget {
+  const _ExitMismatchNote({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 10),
+    child: _ProblemBox(
+      text: text,
+      color: StatusColors.busy,
+      icon: Icons.warning_amber_rounded,
+    ),
+  );
+}
+
+/// The widest a [_ProblemBox] grows.
+const _problemBoxWidth = 460.0;
+
+/// A home-page problem in a tinted box, so it stands out from the ordinary
+/// hints: red for an error, amber for a warning. The text is darkened (or,
+/// at night, lightened) toward the page's text for contrast on the tint.
+class _ProblemBox extends StatelessWidget {
+  const _ProblemBox({
+    required this.text,
+    required this.color,
+    required this.icon,
+    this.tooltip = '',
+  });
+
+  final String text;
+  final Color color;
+  final IconData icon;
+
+  /// The core's own words, on hover or a long press.
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final ink = Color.lerp(color, dark ? Colors.white : Colors.black, 0.25)!;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _problemBoxWidth),
+        child: Tooltip(
+          message: tooltip,
+          child: Container(
+            padding: const EdgeInsetsDirectional.fromSTEB(12, 9, 14, 9),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: dark ? 0.18 : 0.11),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 18, color: color),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    text,
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: ink, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The accounts page, from the power button without an account; the
 /// sign-in form when no page is given.
 void _openAccounts(
@@ -243,6 +339,7 @@ class _DesktopHome extends StatelessWidget {
         ? status.exit!.ipv4
         : status.exit?.ipv6 ?? '';
     final place = homeLocation(l, status, connected: connected);
+    final mismatch = exitMismatchText(l, status);
     final cards = [
       _PlaceCard(
         palette: p,
@@ -305,34 +402,38 @@ class _DesktopHome extends StatelessWidget {
                 ),
             ],
           )
+        else if (failing || (status.noNetwork && on) || gaveUp)
+          // Not connecting stands out from the ordinary hints.
+          _ProblemBox(
+            text: status.noNetwork && on
+                ? l.noNetwork
+                : failure != null
+                ? failure.text
+                : failureCodeText(l, status.connectFailure),
+            color: p.error,
+            icon: Icons.error_outline_rounded,
+            tooltip: status.noNetwork ? '' : failure?.detail ?? '',
+          )
         else
+          // A start failure's hint is general; the core's reason is on
+          // hover or a long press.
           Tooltip(
-            message: status.noNetwork ? '' : failure?.detail ?? '',
+            message: status.state.phase == Phase.error
+                ? status.state.message
+                : '',
             child: Text(
-              status.noNetwork && on
-                  ? l.noNetwork
-                  : failure != null
-                  ? failure.text
-                  : !on && status.connectFailure.isNotEmpty
-                  ? failureCodeText(l, status.connectFailure)
-                  : !on
-                  ? l.tapToConnect
-                  : look.hint,
+              !on ? l.tapToConnect : look.hint,
               textAlign: TextAlign.center,
-              // Not connecting stands out from the ordinary hints.
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: failing || (status.noNetwork && on) || gaveUp
-                    ? p.error
-                    : p.muted,
-                fontWeight: failing || (status.noNetwork && on) || gaveUp
-                    ? FontWeight.w600
-                    : null,
-              ),
+              style: theme.textTheme.bodyMedium?.copyWith(color: p.muted),
             ),
           ),
         if (failure?.code == Failure.unreachable && onOpenConnection != null)
           _ConnectionSettingsButton(onPressed: onOpenConnection!),
-        if (status.state.proxyPortInUse) ...[
+        if (isLocationRefused(failure?.code ?? '') ||
+            (gaveUp && isLocationRefused(status.connectFailure)))
+          _RecommendedLocationButton(core: core),
+        if (connected && mismatch != null) _ExitMismatchNote(text: mismatch),
+        if (status.state.proxyPortBlocked) ...[
           const SizedBox(height: 12),
           Center(
             child: FilledButton.tonalIcon(
@@ -675,7 +776,7 @@ class _PhoneHome extends StatelessWidget {
           builder: (context, box) => SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: box.maxHeight),
-              child: IntrinsicHeight(child: _content(context, p)),
+              child: IntrinsicHeight(child: _content(context, p, box.maxWidth)),
             ),
           ),
         ),
@@ -684,12 +785,22 @@ class _PhoneHome extends StatelessWidget {
     return p.dark ? Theme(data: midnightTheme(base), child: page) : page;
   }
 
-  Widget _content(BuildContext context, _HomePalette p) {
+  Widget _content(BuildContext context, _HomePalette p, double width) {
     final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final look = PhaseLook.of(l, status);
     final running = status.state.phase == Phase.running;
     final canSwitch = status.systemProxySupported;
+    // On a tablet the content keeps about a phone's width in the middle (the
+    // colors still reach the edges), and the problem boxes their own limit.
+    // Both as padding, since IntrinsicHeight measures through padding but
+    // not through a width limit.
+    final side = math.max(20.0, (width - 560) / 2);
+    final boxSide = math.max(0.0, (width - 2 * side - _problemBoxWidth) / 2);
+    Widget problem(Widget box) => Padding(
+      padding: EdgeInsets.symmetric(horizontal: boxSide),
+      child: box,
+    );
     final on = canSwitch
         ? status.systemProxySet
         : status.state.phase != Phase.off;
@@ -725,6 +836,7 @@ class _PhoneHome extends StatelessWidget {
           };
     final label = confirming ? l.stateConnecting : look.label;
     final place = homeLocation(l, status, connected: connected);
+    final mismatch = exitMismatchText(l, status);
     final top = MediaQuery.paddingOf(context).top;
     return Stack(
       children: [
@@ -745,7 +857,7 @@ class _PhoneHome extends StatelessWidget {
           child: _Glow(color: p.third, size: 300, alpha: p.dark ? 0.10 : 0.12),
         ),
         Padding(
-          padding: EdgeInsets.fromLTRB(20, top + 14, 20, 20),
+          padding: EdgeInsets.fromLTRB(side, top + 14, side, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -817,36 +929,46 @@ class _PhoneHome extends StatelessWidget {
                       ),
                   ],
                 )
-              else
-                Tooltip(
-                  message: status.noNetwork ? '' : failure?.detail ?? '',
-                  child: Text(
-                    status.noNetwork && on
+              else if (failing || (status.noNetwork && on) || gaveUp)
+                // Not connecting stands out from the ordinary hints.
+                problem(
+                  _ProblemBox(
+                    text: status.noNetwork && on
                         ? l.noNetwork
                         : failure != null
                         ? failure.text
-                        : gaveUp
-                        ? failureCodeText(l, status.connectFailure)
-                        : look.hint.isNotEmpty
+                        : failureCodeText(l, status.connectFailure),
+                    color: p.error,
+                    icon: Icons.error_outline_rounded,
+                    tooltip: status.noNetwork ? '' : failure?.detail ?? '',
+                  ),
+                )
+              else
+                // A start failure's hint is general; the core's reason is
+                // on a long press.
+                Tooltip(
+                  message: status.state.phase == Phase.error
+                      ? status.state.message
+                      : '',
+                  child: Text(
+                    look.hint.isNotEmpty
                         ? look.hint
                         : on
                         ? l.tapToDisconnectPhone
                         : l.tapToConnectPhone,
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: failing || (status.noNetwork && on) || gaveUp
-                          ? p.error
-                          : p.muted,
-                      fontWeight: failing || (status.noNetwork && on) || gaveUp
-                          ? FontWeight.w600
-                          : null,
-                    ),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: p.muted),
                   ),
                 ),
               if (failure?.code == Failure.unreachable &&
                   onOpenConnection != null)
                 _ConnectionSettingsButton(onPressed: onOpenConnection!),
-              if (status.state.proxyPortInUse) ...[
+              if (isLocationRefused(failure?.code ?? '') ||
+                  (gaveUp && isLocationRefused(status.connectFailure)))
+                _RecommendedLocationButton(core: core),
+              if (connected && mismatch != null)
+                problem(_ExitMismatchNote(text: mismatch)),
+              if (status.state.proxyPortBlocked) ...[
                 const SizedBox(height: 12),
                 Center(
                   child: FilledButton.tonalIcon(
@@ -1037,8 +1159,10 @@ class _HomeDelay extends StatelessWidget {
 }
 
 /// The switch: an orb in the state's color with a glow and a thin ring,
-/// over wavy contour lines that drift while connected.
-class _PowerOrb extends StatefulWidget {
+/// over wavy contour lines. It stays still: an endless animation redraws the
+/// window every frame, and kept a CPU core busy even with the window hidden
+/// in the tray.
+class _PowerOrb extends StatelessWidget {
   const _PowerOrb({
     required this.palette,
     required this.on,
@@ -1056,180 +1180,121 @@ class _PowerOrb extends StatefulWidget {
   final VoidCallback onPressed;
 
   @override
-  State<_PowerOrb> createState() => _PowerOrbState();
-}
-
-class _PowerOrbState extends State<_PowerOrb> with TickerProviderStateMixin {
-  late final _breath = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2600),
-  );
-  late final _drift = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 14),
-  );
-  bool _still = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _still = MediaQuery.disableAnimationsOf(context);
-    _sync();
-  }
-
-  @override
-  void didUpdateWidget(_PowerOrb old) {
-    super.didUpdateWidget(old);
-    _sync();
-  }
-
-  void _sync() {
-    final move = widget.on && !_still;
-    if (move && !_breath.isAnimating) {
-      _breath.repeat(reverse: true);
-      _drift.repeat();
-    } else if (!move && _breath.isAnimating) {
-      _breath.stop();
-      _drift.stop();
-      _breath.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _breath.dispose();
-    _drift.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final p = widget.palette;
-    final on = widget.on;
-    final accent = widget.accent;
+    final p = palette;
     const area = 250.0;
     const ring = 186.0;
     const disc = 148.0;
     return Tooltip(
-      message: widget.tooltip,
+      message: tooltip,
       child: SizedBox.square(
         dimension: area,
-        child: AnimatedBuilder(
-          animation: Listenable.merge([_breath, _drift]),
-          builder: (context, child) {
-            final t = Curves.easeInOut.transform(_breath.value);
-            return Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                // Contour lines reaching past the button's area.
-                Positioned(
-                  left: -70,
-                  top: -70,
-                  right: -70,
-                  bottom: -70,
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      painter: _Contours(
-                        color: accent,
-                        alpha: p.dark ? 0.16 : 0.22,
-                        phase: _drift.value * 2 * math.pi,
-                      ),
-                    ),
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            // Contour lines reaching past the button's area.
+            Positioned(
+              left: -70,
+              top: -70,
+              right: -70,
+              bottom: -70,
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _Contours(
+                    color: accent,
+                    alpha: p.dark ? 0.16 : 0.22,
                   ),
                 ),
-                Container(
-                  width: area,
-                  height: area,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        accent.withValues(alpha: on ? 0.30 + 0.10 * t : 0.10),
-                        accent.withValues(alpha: 0),
-                      ],
-                    ),
-                  ),
-                ),
-                Container(
-                  width: ring + 6 * t,
-                  height: ring + 6 * t,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: accent.withValues(alpha: on ? 0.55 : 0.28),
-                      width: 1.5,
-                    ),
-                  ),
-                ),
-                if (widget.busy)
-                  SizedBox.square(
-                    dimension: ring,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: accent,
-                    ),
-                  ),
-                child!,
-              ],
-            );
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 400),
-            width: disc,
-            height: disc,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: on
-                    ? [Color.lerp(accent, Colors.white, 0.28)!, accent]
-                    : p.discOff,
               ),
-              border: Border.all(
-                color: on ? Colors.white.withValues(alpha: 0.4) : p.discOffEdge,
-                width: 1.5,
+            ),
+            Container(
+              width: area,
+              height: area,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    accent.withValues(alpha: on ? 0.30 : 0.10),
+                    accent.withValues(alpha: 0),
+                  ],
+                ),
               ),
-              boxShadow: [
-                BoxShadow(
+            ),
+            Container(
+              width: ring,
+              height: ring,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: accent.withValues(alpha: on ? 0.55 : 0.28),
+                  width: 1.5,
+                ),
+              ),
+            ),
+            if (busy)
+              SizedBox.square(
+                dimension: ring,
+                child: CircularProgressIndicator(strokeWidth: 2, color: accent),
+              ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 400),
+              width: disc,
+              height: disc,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: on
+                      ? [Color.lerp(accent, Colors.white, 0.28)!, accent]
+                      : p.discOff,
+                ),
+                border: Border.all(
                   color: on
-                      ? accent.withValues(alpha: 0.5)
-                      : (p.dark ? Colors.black : const Color(0xFF2A3375))
-                            .withValues(alpha: p.dark ? 0.45 : 0.14),
-                  blurRadius: on ? 36 : 26,
-                  offset: const Offset(0, 10),
+                      ? Colors.white.withValues(alpha: 0.4)
+                      : p.discOffEdge,
+                  width: 1.5,
                 ),
-              ],
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              shape: const CircleBorder(),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: widget.busy ? null : widget.onPressed,
-                child: Icon(
-                  Icons.power_settings_new_rounded,
-                  size: 58,
-                  color: on ? Colors.white : (p.dark ? p.muted : p.idle),
+                boxShadow: [
+                  BoxShadow(
+                    color: on
+                        ? accent.withValues(alpha: 0.5)
+                        : (p.dark ? Colors.black : const Color(0xFF2A3375))
+                              .withValues(alpha: p.dark ? 0.45 : 0.14),
+                    blurRadius: on ? 36 : 26,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: busy ? null : onPressed,
+                  child: Icon(
+                    Icons.power_settings_new_rounded,
+                    size: 58,
+                    color: on ? Colors.white : (p.dark ? p.muted : p.idle),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Wavy closed lines around the center, like the contours of a map; they
-/// fade outwards and drift with [phase].
+/// Wavy closed lines around the center, like the contours of a map, fading
+/// outwards.
 class _Contours extends CustomPainter {
-  _Contours({required this.color, required this.alpha, required this.phase});
+  _Contours({required this.color, required this.alpha});
 
   final Color color;
   final double alpha;
-  final double phase;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1246,8 +1311,8 @@ class _Contours extends CustomPainter {
         final a = k / 120 * 2 * math.pi;
         final r =
             base +
-            amp * math.sin(3 * a + i * 0.8 + phase) +
-            amp * 0.5 * math.sin(5 * a - i * 0.5 - phase * 0.6);
+            amp * math.sin(3 * a + i * 0.8) +
+            amp * 0.5 * math.sin(5 * a - i * 0.5);
         final point = center + Offset(math.cos(a) * r, math.sin(a) * r);
         k == 0
             ? path.moveTo(point.dx, point.dy)
@@ -1260,8 +1325,7 @@ class _Contours extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_Contours old) =>
-      old.color != color || old.alpha != alpha || old.phase != phase;
+  bool shouldRepaint(_Contours old) => old.color != color || old.alpha != alpha;
 }
 
 /// The data used of the active account: a ring that fills as it is used,
@@ -1313,7 +1377,7 @@ class _HomeData extends StatelessWidget {
     } else {
       final used = usage.usedBytes.clamp(0, usage.limitBytes);
       final fraction = usage.limitBytes == 0 ? 0.0 : used / usage.limitBytes;
-      final color = quotaColor(usage.limitBytes - used);
+      final color = quotaColor(fraction * 100, status.thresholdPercent);
       body = Row(
         children: [
           SizedBox.square(

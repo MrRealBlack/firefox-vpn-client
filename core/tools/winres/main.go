@@ -1,12 +1,12 @@
-// Command winres writes the Windows resources of the executable (its icon
-// and version information) as .syso objects that go build links into
-// ./cmd/firefox-vpn-core. scripts/build-windows.ps1 runs it before each
-// build with the release version in APP_VERSION (else version.Current):
+// Command winres writes the Windows resources of the executable (its icon,
+// version information, and application manifest) as .syso objects that go
+// build links into ./cmd/firefox-vpn-core. scripts/build-windows.ps1 runs
+// it before each build with the release version in APP_VERSION (else version.Current):
 //
 //	APP_VERSION=1.1.0 go generate ./cmd/firefox-vpn-core
 //
 // The objects are build output, not kept in Git; a build without them has
-// no icon or version information.
+// no icon, version information, or manifest.
 package main
 
 import (
@@ -51,12 +51,24 @@ func run() error {
 		winversion.FileDescription:  "Firefox VPN Core",
 		winversion.OriginalFilename: "firefox-vpn-core.exe",
 		winversion.InternalName:     "firefox-vpn-core",
+		// The publisher, as in the installer (AppPublisher) and the app.
+		winversion.CompanyName:    "Arman",
+		winversion.LegalCopyright: "Copyright (c) 2026 Arman",
 	} {
 		if err := vi.Set(winversion.LangDefault, key, value); err != nil {
 			return err
 		}
 	}
 	rs.SetVersionInfo(vi)
+
+	// Runs with the user's rights (no elevation prompt), declares Windows
+	// 10 and 11 like the app's manifest, and is per-monitor DPI aware for
+	// the tray icon and its menu.
+	rs.SetManifest(winres.AppManifest{
+		ExecutionLevel: winres.AsInvoker,
+		Compatibility:  winres.Win10AndAbove,
+		DPIAwareness:   winres.DPIPerMonitorV2,
+	})
 
 	for _, arch := range []winres.Arch{winres.ArchAMD64, winres.ArchARM64, winres.ArchI386} {
 		if err := writeObject(&rs, arch); err != nil {

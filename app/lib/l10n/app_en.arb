@@ -8,6 +8,10 @@
   "stateConnecting": "Connecting…",
   "stateWaiting": "Waiting",
   "waitingForAccount": "Add a Firefox Account on the Accounts page to connect.",
+  "waitingForEnabledAccount": "All accounts are turned off. Turn one on in Accounts.",
+  "@waitingForEnabledAccount": {
+    "description": "Home hint while the proxy waits: accounts exist, but every one is turned off."
+  },
   "stateError": "Error",
   "stateUnknown": "Unknown",
   "restartProxy": "Restart the proxy",
@@ -137,7 +141,7 @@
     }
   },
   "accountsGuide": "Each Firefox Account has {size} of data a month. You can add several: when one runs out, the app moves to the next one by itself.",
-  "accountsOrderNote": "They are used in the order of this list, each up to {percent}%.",
+  "accountsOrderNote": "In the order of this list: each up to {percent}%, the last one until its data runs out.",
   "@accountsGuide": {
     "placeholders": {
       "size": {
@@ -187,7 +191,11 @@
   "statusEnabled": "Enabled",
   "useNow": "Use now",
   "signInAgain": "Sign in again",
-  "reasonQuotaThreshold": "Reached its switch point; it is used again after the monthly reset.",
+  "reasonQuotaThreshold": "Used {percent}% of its data, so the next account took over.",
+  "@reasonQuotaThreshold": {
+    "description": "An account set aside at the switch threshold (percent, the setting) while the next account is used.",
+    "placeholders": {"percent": {"type": "int"}}
+  },
   "reasonQuotaExhausted": "This month's data is used up; it is used again after the monthly reset.",
   "reasonSignInRequired": "Sign in again to use this account.",
   "reasonSignInConfirm": "Mozilla asks to confirm the sign-in: press Sign in again (only the code is needed).",
@@ -284,6 +292,14 @@
   "signInNoAccountHint": "Check the email, or create a free Firefox Account with it on Mozilla's site, confirm it from your inbox, then add it here.",
   "createAccountButton": "Create a Firefox Account",
   "signInWrongPassword": "Incorrect password.",
+  "signInNoPassword": "This account has no password: it was made with Google or Apple sign-in. Set a password, then sign in here with it.",
+  "@signInNoPassword": {
+    "description": "Sign-in failed: the Firefox Account was made with Google or Apple sign-in and has no password (FxA errno 210)."
+  },
+  "setPasswordButton": "Set a password",
+  "@setPasswordButton": {
+    "description": "Button in place of Try again after signInNoPassword; opens Mozilla's page to set a password."
+  },
   "signInTooManyAttempts": "Too many attempts. Wait a while and try again.",
   "signInUnblockRejected": "The unblock code was not accepted. Use the code from the latest email from Mozilla.",
   "signInWrongCode": "Wrong or expired code. Use the code from the latest email from Mozilla; an older code stops working when a new one is sent.",
@@ -440,8 +456,6 @@
   "testDelay": "Test real delay",
   "testingDelay": "Testing… this can take a minute",
   "search": "Search",
-  "locked": "Locked",
-  "lockedHint": "Mozilla may not allow your account to use this location.",
   "noAnswer": "No answer",
   "testedAgo": "Tested {ago}",
   "@testedAgo": {
@@ -473,7 +487,6 @@
   "sectionAccounts": "Account switching",
   "switchThreshold": "Switch account at",
   "switchThresholdHint": "The next account takes over when this share of the quota is used.",
-  "quotaInterval": "Check the quota every",
   "sectionDns": "DNS",
   "dnsPreset": "DNS servers",
   "dnsSystem": "System",
@@ -546,11 +559,9 @@
   "liveTraffic": "Live traffic",
   "totalTraffic": "Total traffic",
   "verboseLogs": "Detailed logs",
-  "allowLocked": "Allow locked locations",
   "webDashboard": "Web dashboard",
   "webDashboardOpen": "Open",
   "webDashboardHint": "Advanced settings and more tools",
-  "durationInvalid": "Use a duration like 30s, 15m, or 6h",
   "numberInvalid": "Enter a number from {min} to {max}",
   "@numberInvalid": {
     "placeholders": {
@@ -631,17 +642,43 @@
   "dataUsedTitle": "Data used",
   "bypassApps": "Per-app proxy",
   "connectRetrying": "Couldn't connect. Check your internet.",
-  "failUnreachable": "Mozilla's servers are blocked",
-  "failRefused": "Mozilla's server refused the connection",
-  "failSignIn": "The account must sign in again",
+  "failUnreachable": "Mozilla's servers are blocked on this internet. Try another internet connection.",
+  "failRefused": "Mozilla's server refused the connection. Try again in a few minutes.",
+  "failLocationRefused": "This country isn't open to your account. Choose another country.",
+  "useRecommendedLocation": "Use the recommended location",
+  "exitMismatch": "You chose {chosen}, but your IP is in {exit}.",
+  "@exitMismatch": {
+    "placeholders": {
+      "exit": {
+        "type": "String"
+      },
+      "chosen": {
+        "type": "String"
+      }
+    }
+  },
+  "failSignIn": "This account's sign-in has expired. Sign in again on the Accounts page.",
   "failQuota": "This month's data is used up. Add another account.",
-  "failNotEntitled": "This account can't use the VPN",
-  "failRegion": "Mozilla refuses connections from your region.",
-  "failServer": "Mozilla's service has a problem",
-  "failNoAccount": "No account can connect now: open Accounts.",
-  "failTestSite": "Connected to the server, but sites don't open",
-  "failOther": "Couldn't connect",
-  "failNoInternet": "No internet",
+  "failNotEntitled": "Mozilla doesn't let this account use the VPN. Add another account.",
+  "failRegion": "Mozilla doesn't offer its service in your country.",
+  "failServer": "Mozilla's service has a temporary problem. The app tries again by itself.",
+  "failNoAccount": "No account is ready. Open the Accounts page.",
+  "failTestSite": "Connected to the server, but sites don't open. Try another country.",
+  "failOther": "Couldn't connect. Try again.",
+  "failNoInternet": "No internet. Check Wi-Fi or mobile data.",
+  "waitingForNetwork": "Waiting for an internet connection…",
+  "@waitingForNetwork": {
+    "description": "The home page while the core waits for a network before connecting (state code waiting_for_network)."
+  },
+  "proxyStartFailed": "The proxy couldn't start on port {port}. Choose another port.",
+  "@proxyStartFailed": {
+    "description": "The home page after the proxy failed to start on its port for a reason other than another program holding it, such as a port Windows reserves (state code start_failed), with a Change port button.",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
   "connectionSettings": "Connection settings",
   "appModeExclude": "Bypass selected apps",
   "appModeInclude": "Proxy selected apps",
@@ -672,15 +709,6 @@
   },
   "autoSection": "Automatic",
   "locationsSection": "Locations",
-  "hideLocked": "Hide locked locations",
-  "showLocked": "Show locked locations ({count})",
-  "@showLocked": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "dnsSummaryOk": "Encrypted DNS works",
   "dnsSummaryFailed": "{count, plural, =1{1 name did not resolve} other{{count} names did not resolve}}",
   "dnsVia": "via {server}",

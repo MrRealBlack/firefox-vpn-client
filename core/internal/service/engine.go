@@ -39,9 +39,8 @@ type proxyEngine struct {
 	upstream  proxy.ControllerConfig
 	connected bool
 	// statusFile is the status.json path (fixed for the engine's life).
-	statusFile    string
-	quotaInterval time.Duration
-	idle          idleState
+	statusFile string
+	idle       idleState
 	// routed is what clients connect through: the controller, or directly
 	// for destinations the routing rules send there.
 	routed    *proxy.RoutedOpener
@@ -95,11 +94,10 @@ func (d *Daemon) startEngine() (*proxyEngine, error) {
 			StatusFile: d.paths.Status,
 			Accounts:   d.pool,
 		},
-		statusFile:    d.paths.Status,
-		quotaInterval: cfg.Accounts.QuotaCheckInterval.Duration(),
-		listener:      ln,
-		transport:     cfg.Proxy.Transport,
-		startedAt:     time.Now(),
+		statusFile: d.paths.Status,
+		listener:   ln,
+		transport:  cfg.Proxy.Transport,
+		startedAt:  time.Now(),
 	}
 	engine.selected, engine.selectionSource = d.expectedSelection(cfg)
 	engine.idle.lastUsed, engine.idle.sleeping = engine.startedAt, engine.startedAt
@@ -118,6 +116,14 @@ func (d *Daemon) startEngine() (*proxyEngine, error) {
 	}
 	logx.Info("SOCKS5 proxy started listen=%s transport=%s; it connects to Mozilla when a connection needs it", ln.Addr().String(), cfg.Proxy.Transport)
 	return engine, nil
+}
+
+// chosenCountry reports whether the user chose a country: not the
+// recommended location (an empty country), not the fastest one, and no
+// server set by hand.
+func chosenCountry(p config.Proxy) bool {
+	country := strings.TrimSpace(p.Country)
+	return strings.TrimSpace(p.Server) == "" && country != "" && !strings.EqualFold(country, proxy.FastestCountry)
 }
 
 // expectedSelection is the location the status shows before the first
@@ -201,6 +207,7 @@ func (d *Daemon) connectEngine(e *proxyEngine) (*proxy.Controller, error) {
 	sessionStart := time.Now()
 	upstream := e.upstream
 	upstream.ProxyURL = proxyURL
+	upstream.ChosenLocation = chosenCountry(cfg.Proxy)
 	withPass := upstream
 	withPass.Auth, withPass.Pass = auth, pass
 	controller, err := proxy.NewController(withPass)
@@ -276,7 +283,7 @@ func (d *Daemon) runController(engine *proxyEngine, controller *proxy.Controller
 	engine.idle.wakeRetryAt, engine.idle.wakeFailures, engine.idle.wakeLasting = time.Time{}, 0, false
 	engine.idle.mu.Unlock()
 	go controller.RunRenewalLoop()
-	go controller.RunQuotaMonitorLoop(engine.quotaInterval)
+	go controller.RunQuotaMonitorLoop()
 	return true
 }
 

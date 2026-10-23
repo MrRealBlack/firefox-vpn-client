@@ -1,9 +1,6 @@
 package proxy
 
-import (
-	"sync/atomic"
-	"time"
-)
+import "time"
 
 const (
 	defaultUpstreamConnections = 1
@@ -14,7 +11,3 @@ const (
 	// anti-bot challenge.
 	APIRequestTimeout = 15 * time.Second
 )
-
-// AllowLockedLocations permits automatic selection of locked locations; the
-// dashboard can change it at runtime.
-var AllowLockedLocations atomic.Bool

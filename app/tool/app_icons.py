@@ -16,7 +16,7 @@ connecting, logo-animated1.png to logo-animated4.png (80 px):
   Explorer and the taskbar use; the small sizes sharpened, since the
   taskbar shows 24 or 32 px.
 - The core (core/internal/desktop): appicon.ico, the same for its
-  executable (tools/winres), and appicon.png for its notifications.
+  executable (tools/winres).
 - The web dashboard (core/internal/service/web/icon.png): the tile, for
   the page icon and the logo.
 - The app's logo (assets/logo.png): the tile, beside its name.
@@ -159,7 +159,6 @@ def windows(tile_art):
 def core(tile_art):
     desktop = os.path.join(CORE, 'internal', 'desktop')
     write_ico(os.path.join(desktop, 'appicon.ico'), tile_art)
-    art_layer(tile_art, 256, 1.0).save(os.path.join(desktop, 'appicon.png'), optimize=True)
     art_layer(tile_art, 192, 1.0).save(os.path.join(CORE, 'internal', 'service', 'web', 'icon.png'), optimize=True)
 
 

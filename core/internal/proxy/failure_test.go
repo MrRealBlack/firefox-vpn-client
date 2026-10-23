@@ -41,6 +41,7 @@ func TestFailureCode(t *testing.T) {
 		{"guardian 502", &guardian.HTTPError{Operation: "pass", StatusCode: 502}, FailureServer},
 		{"no account", &accounts.NoUsableAccountError{Summary: "1 used up"}, FailureNoAccount},
 		{"connect 403", &proxyConnectHTTPError{statusCode: 403, status: "403 Forbidden"}, FailureRefused},
+		{"chosen location refused", fmt.Errorf("tunnel: %w", &LocationRefusedError{Err: &proxyConnectHTTPError{statusCode: 403, status: "403 Forbidden"}}), FailureLocationRefused},
 		{"rebuild cooling after a refusal", fmt.Errorf("%w for 9s: %w", errRebuildCoolingDown, &proxyConnectHTTPError{statusCode: 401, status: "401"}), FailureRefused},
 		{"rebuild cooling after a timeout", fmt.Errorf("%w for 9s: %w", errRebuildCoolingDown, &tunnelOpenTimeoutError{timeout: time.Second}), FailureUnreachable},
 		{"dns", fmt.Errorf("pass: %w", &net.DNSError{Err: "no such host", Name: "vpn.mozilla.org", IsNotFound: true}), FailureNoNetwork},

@@ -45,7 +45,6 @@ type LocationPing struct {
 	Name        string `json:"name"`
 	City        string `json:"city,omitempty"`
 	Server      string `json:"server"`
-	Locked      bool   `json:"locked"`
 	Recommended bool   `json:"recommended"`
 	PingMS      int64  `json:"ping_ms,omitempty"`
 	Error       string `json:"error,omitempty"`
@@ -132,7 +131,6 @@ func PingLocations(ctx context.Context, targets []Candidate, meter pingMeter) []
 			Name:        target.CountryName,
 			City:        target.CityName,
 			Server:      target.Addr,
-			Locked:      target.Locked,
 			Recommended: target.IsRecommended(),
 		}
 		wg.Add(1)
@@ -231,14 +229,14 @@ func MergePings(old, measured []LocationPing) []LocationPing {
 	return merged
 }
 
-// FastestLocation picks the reachable location with the lowest latency that
-// the current policy allows (locked locations only with allow_locked).
+// FastestLocation picks the reachable location with the lowest latency,
+// from every location in the server list, including those it marks locked.
+// A location that failed the measurement is never picked.
 func FastestLocation(results []LocationPing) (LocationPing, bool) {
 	for _, r := range results {
-		if !r.OK() || (r.Locked && !AllowLockedLocations.Load()) {
-			continue
+		if r.OK() {
+			return r, true
 		}
-		return r, true
 	}
 	return LocationPing{}, false
 }

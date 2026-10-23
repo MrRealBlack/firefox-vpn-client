@@ -189,7 +189,33 @@ func (m *Manager) Candidate(tried map[string]bool) (Account, error) {
 			return *acc, nil
 		}
 	}
+	// None is ready: the last share of an account set aside at the switch
+	// threshold, so no quota is left unused.
+	for _, id := range m.order {
+		acc := m.accounts[id]
+		if !tried[id] && leftAtThreshold(acc) {
+			return *acc, nil
+		}
+	}
 	return Account{}, m.noUsableLocked()
+}
+
+// otherUsableLocked reports whether an account other than id can take
+// over now.
+func (m *Manager) otherUsableLocked(id string, now time.Time) bool {
+	for _, other := range m.order {
+		if other != id && m.usableLocked(m.accounts[other], now) {
+			return true
+		}
+	}
+	return false
+}
+
+// leftAtThreshold reports whether acc was set aside at the switch
+// threshold with quota still left.
+func leftAtThreshold(acc *Account) bool {
+	return acc.Status == StatusReserved && acc.ReasonCode == ReasonQuotaThreshold &&
+		acc.Usage != nil && !acc.Usage.Unlimited && acc.Usage.RemainingBytes > 0
 }
 
 // Activate makes id the active account and marks it ready.
@@ -200,6 +226,24 @@ func (m *Manager) Activate(id string) error {
 	if !ok {
 		return fmt.Errorf("unknown account %s", id)
 	}
+	return m.activateLocked(id, acc)
+}
+
+// Resume makes id the active account again after it was set aside at the
+// switch threshold with quota left, for when no other account could take
+// over after all. Any other account is left as it is and resumed is false,
+// so a spent or failing account never looks usable.
+func (m *Manager) Resume(id string) (resumed bool, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	acc, ok := m.accounts[id]
+	if !ok || !leftAtThreshold(acc) {
+		return false, nil
+	}
+	return true, m.activateLocked(id, acc)
+}
+
+func (m *Manager) activateLocked(id string, acc *Account) error {
 	if acc.Status != StatusReady || acc.Reason != "" || !acc.RetryAt.IsZero() {
 		acc.Status, acc.Reason, acc.RetryAt = StatusReady, "", time.Time{}
 		acc.ReasonCode, acc.ReasonDetail = "", ""
@@ -218,9 +262,12 @@ func (m *Manager) Activate(id string) error {
 	return securefile.WritePrivate(m.statePath, append(data, '\n'))
 }
 
-// ObserveUsage records the quota state of id. When the usage reached the
-// switch threshold the account is reserved until its quota reset and
-// reached is true.
+// ObserveUsage records the quota state of id. When the quota is spent
+// (ReasonQuotaExhausted), or the usage reached the switch threshold and
+// another account can take over (ReasonQuotaThreshold), the account is
+// reserved until its quota reset and reached is true. With no other
+// account to switch to, it keeps going to the end of its quota: the
+// threshold is there to switch in time, not to stop early.
 func (m *Manager) ObserveUsage(id string, usage Usage) (reached bool, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -232,9 +279,13 @@ func (m *Manager) ObserveUsage(id string, usage Usage) (reached bool, err error)
 		usage.CheckedAt = m.now()
 	}
 	acc.Usage = &usage
-	reached = m.policy.ThresholdReached(&usage) || (!usage.Unlimited && usage.LimitBytes > 0 && usage.RemainingBytes <= 0)
-	if reached {
+	switch {
+	case !usage.Unlimited && usage.LimitBytes > 0 && usage.RemainingBytes <= 0:
+		m.reserveLocked(acc, Why{Code: ReasonQuotaExhausted, Text: "monthly quota exhausted"}, usage.ResetAt)
+		reached = true
+	case m.policy.ThresholdReached(&usage) && m.otherUsableLocked(id, m.now()):
 		m.reserveLocked(acc, Why{Code: ReasonQuotaThreshold, Text: fmt.Sprintf("used %s of %s (switch threshold %g%%)", formatBytes(usage.UsedBytes()), formatBytes(usage.LimitBytes), m.policy.ThresholdPercent)}, usage.ResetAt)
+		reached = true
 	}
 	return reached, m.store.SaveState(*acc)
 }
@@ -290,9 +341,11 @@ type Why struct{ Code, Text, Detail string }
 
 // Reason codes (Account.ReasonCode).
 const (
-	// ReasonQuotaThreshold: the account reached the switch threshold.
+	// ReasonQuotaThreshold: the account reached the switch threshold, with
+	// quota left, while another account could take over.
 	ReasonQuotaThreshold = "quota_threshold"
-	// ReasonQuotaExhausted: Mozilla says the month's data is used up.
+	// ReasonQuotaExhausted: Mozilla says the month's data is used up (no
+	// quota left, or HTTP 429).
 	ReasonQuotaExhausted = "quota_exhausted"
 	// ReasonSignInRequired: the account must be signed in again.
 	ReasonSignInRequired = "signin_required"

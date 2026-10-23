@@ -36,20 +36,3 @@ func TestTrayIcons(t *testing.T) {
 		}
 	}
 }
-
-// The executable's icon, the fox shield, comes at each size it holds:
-// transparent around the shield, opaque in the middle.
-func TestAppIconSizes(t *testing.T) {
-	for _, size := range []int{16, 48, 256} {
-		img := AppIcon(size)
-		if b := img.Bounds(); b.Dx() != size || b.Dy() != size {
-			t.Fatalf("size %d: bounds %v", size, b)
-		}
-		if _, _, _, a := img.At(0, 0).RGBA(); a != 0 {
-			t.Fatalf("size %d: corner should be transparent", size)
-		}
-		if _, _, _, a := img.At(size/2, size/2).RGBA(); a>>8 < 0xf0 {
-			t.Fatalf("size %d: the middle should be the opaque fox shield", size)
-		}
-	}
-}

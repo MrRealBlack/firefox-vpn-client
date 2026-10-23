@@ -33,6 +33,27 @@ const engineStartRetry = 30 * time.Second
 // waits for a network.
 const MessageWaitingForNetwork = "Waiting for a network connection"
 
+// State codes (state.code in /api/status) name the waiting and error
+// states, so that apps word them in their own language; the message stays
+// the core's English, for the dashboard and for codes an app does not know.
+// CodeProxyPortInUse is another.
+const (
+	// CodeWaitingForNetwork: the start waits for a network to connect.
+	CodeWaitingForNetwork = "waiting_for_network"
+	// CodeNoAccounts: the start waits for an enabled account (none added, or
+	// every one turned off).
+	CodeNoAccounts = "no_accounts"
+	// CodeNoUsableAccount: there are accounts, but none can be used now
+	// (each waits for a quota reset or a new sign-in); the message counts
+	// them by status.
+	CodeNoUsableAccount = "no_usable_account"
+	// CodeStartFailed: the start failed for another reason and is retried
+	// at retry_at; the message says why. A start sends nothing to Mozilla,
+	// so this is a local problem, such as a listen address that cannot be
+	// used; then address is that address.
+	CodeStartFailed = "start_failed"
+)
+
 // networkConnected reports a connected network; tests replace it.
 var networkConnected = netstate.Connected
 
@@ -57,8 +78,9 @@ const (
 type engineState struct {
 	Phase   string `json:"phase"`
 	Message string `json:"message"`
-	// Code names a problem a client can act on (CodeProxyPortInUse); it is
-	// empty otherwise and cleared by the next state.
+	// Code names the state for clients that word it themselves (the State
+	// codes, CodeProxyPortInUse); it is empty for the ordinary states and
+	// cleared by the next state. Message stays the core's English.
 	Code string `json:"code,omitempty"`
 	// Address is the listen address the code is about.
 	Address string    `json:"address,omitempty"`
@@ -101,14 +123,15 @@ type Daemon struct {
 	localToken string
 	// ExitApp ends the process that hosts this daemon (the tray or the
 	// desktop app's core process); nil when the host cannot be ended that
-	// way (the Windows service).
+	// way (a terminal copy: the status screen, or the plain log mode as
+	// under systemd).
 	ExitApp func()
 	// RequireDashboard makes Run fail when the dashboard is disabled in
 	// config.json: the desktop app reaches the service only through its API.
 	RequireDashboard bool
 	// OpenFolder, when set, shows a folder in the desktop's file manager;
 	// the tray and the status screen set it when the service runs in their
-	// process. A Windows service cannot reach the desktop, so it asks the
+	// process. The plain log mode has no desktop of its own, so it asks the
 	// tray instead (folderRequests).
 	OpenFolder func(dir string) error
 
@@ -326,17 +349,17 @@ func (d *Daemon) superviseEngine() {
 		var inUse *AddressInUseError
 		switch {
 		case errors.Is(err, errNoAccounts):
-			d.setState(PhaseWaiting, "Add an account in the dashboard to start the proxy", time.Time{})
+			d.setStateCode(engineState{Phase: PhaseWaiting, Message: "Add an account in the dashboard to start the proxy", Code: CodeNoAccounts})
 			wait = 24 * time.Hour
 		case errors.As(err, &noAccount):
 			wait = proxy.RenewalRetryDelay(err, time.Now())
-			d.setState(PhaseWaiting, "No usable account: "+noAccount.Summary, time.Now().Add(wait))
+			d.setStateCode(engineState{Phase: PhaseWaiting, Message: "No usable account: " + noAccount.Summary, Code: CodeNoUsableAccount, RetryAt: time.Now().Add(wait)})
 			logx.Warn("no usable account; proxy waits wait=%s err=%s", wait, logx.Err(err))
 		case errors.As(err, &inUse):
 			// Retried like other errors, in case the other program lets
 			// the port go; a new proxy.listen restarts at once.
 			wait = engineStartRetry
-			d.setStateCode(PhaseError, err.Error()+". Choose another SOCKS5 listen address in Settings", CodeProxyPortInUse, inUse.Address, time.Now().Add(wait))
+			d.setStateCode(engineState{Phase: PhaseError, Message: err.Error() + ". Choose another SOCKS5 listen address in Settings", Code: CodeProxyPortInUse, Address: inUse.Address, RetryAt: time.Now().Add(wait)})
 			logx.Error("starting the proxy failed: its address is in use; retrying retry_in=%s listen=%s", wait, inUse.Address)
 		default:
 			wait = engineStartRetry
@@ -347,7 +370,14 @@ func (d *Daemon) superviseEngine() {
 			if hint := proxy.GuardianFailureHint(err); hint != "" {
 				message += ". " + hint
 			}
-			d.setState(PhaseError, message, time.Now().Add(wait))
+			// The address when the proxy's port cannot be used, so that apps
+			// can name it and offer another.
+			address := ""
+			var listenErr *ListenError
+			if errors.As(err, &listenErr) && listenErr.Listener == ListenerProxy {
+				address = listenErr.Address
+			}
+			d.setStateCode(engineState{Phase: PhaseError, Message: message, Code: CodeStartFailed, Address: address, RetryAt: time.Now().Add(wait)})
 			logx.Error("starting the proxy failed; retrying retry_in=%s err=%s", wait, logx.Err(err))
 		}
 		timer := time.NewTimer(wait)
@@ -373,7 +403,7 @@ func (d *Daemon) mustWaitForNetwork() bool {
 // restart is requested (a settings change may turn the wait off); false
 // means the service stops.
 func (d *Daemon) waitForNetwork() bool {
-	d.setState(PhaseWaiting, MessageWaitingForNetwork, time.Time{})
+	d.setStateCode(engineState{Phase: PhaseWaiting, Message: MessageWaitingForNetwork, Code: CodeWaitingForNetwork})
 	logx.Info("no network connected; the proxy starts when one connects")
 	ticker := time.NewTicker(networkPoll)
 	defer ticker.Stop()
@@ -617,19 +647,20 @@ func (d *Daemon) RequestRestart() {
 }
 
 func (d *Daemon) setState(phase, message string, retryAt time.Time) {
-	d.setStateCode(phase, message, "", "", retryAt)
+	d.setStateCode(engineState{Phase: phase, Message: message, RetryAt: retryAt})
 }
 
-// setStateCode sets the state with a machine-readable problem code and the
-// address it concerns.
-func (d *Daemon) setStateCode(phase, message, code, address string, retryAt time.Time) {
+// setStateCode sets the state with its machine-readable code and the
+// address the code is about; Since is kept while the phase and the message
+// stay.
+func (d *Daemon) setStateCode(s engineState) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.state.Phase != phase || d.state.Message != message {
-		d.state.Since = time.Now()
+	s.Since = d.state.Since
+	if d.state.Phase != s.Phase || d.state.Message != s.Message {
+		s.Since = time.Now()
 	}
-	d.state.Phase, d.state.Message, d.state.RetryAt = phase, message, retryAt
-	d.state.Code, d.state.Address = code, address
+	d.state = s
 }
 
 func (d *Daemon) config() config.Config {
@@ -863,6 +894,7 @@ func (d *Daemon) updateSettings(next config.Config, newPassword *string) (settin
 	d.mu.Unlock()
 
 	next.Version = config.CurrentVersion
+	next.Proxy.AllowLocked = false // ignored; see config.Proxy
 	next.Accounts.Order = prev.Accounts.Order
 	next.Dashboard.Enabled = prev.Dashboard.Enabled
 	next.Dashboard.Username = strings.TrimSpace(next.Dashboard.Username)
@@ -915,12 +947,10 @@ func (d *Daemon) updateSettings(next config.Config, newPassword *string) (settin
 	d.mu.Unlock()
 
 	logx.Verbose.Store(next.Logging.Verbose || d.forceVerbose)
-	proxy.AllowLockedLocations.Store(next.Proxy.AllowLocked)
 	d.mgr.SetPolicy(accounts.Policy{ThresholdPercent: next.Accounts.SwitchThresholdPercent})
 	change := settingsChange{
 		restartEngine: next.Proxy != prev.Proxy || next.Network.APIRelay != prev.Network.APIRelay ||
-			next.Network.GuardianEndpoint != prev.Network.GuardianEndpoint ||
-			next.Accounts.QuotaCheckInterval != prev.Accounts.QuotaCheckInterval,
+			next.Network.GuardianEndpoint != prev.Network.GuardianEndpoint,
 		restartDashboard: next.Dashboard.Listen != prev.Dashboard.Listen,
 	}
 	logx.Info("settings saved restart_proxy=%v restart_dashboard=%v", change.restartEngine, change.restartDashboard)

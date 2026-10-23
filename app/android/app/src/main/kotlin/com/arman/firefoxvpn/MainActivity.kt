@@ -3,9 +3,12 @@ package com.arman.firefoxvpn
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import java.io.ByteArrayOutputStream
@@ -26,6 +29,31 @@ import io.flutter.plugin.common.MethodChannel.Result
 class MainActivity : FlutterActivity() {
     /** Waits for the user's answer to the VPN permission. */
     private var pendingOn: Result? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        holdPhoneUpright(resources.configuration)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        holdPhoneUpright(newConfig)
+    }
+
+    /**
+     * A phone stays upright (its layout is made for it); a tablet, whose
+     * shorter side is 600 dp or more, turns freely. Asked again when the
+     * screen changes, so a foldable follows its folding.
+     */
+    private fun holdPhoneUpright(config: Configuration) {
+        val wanted = if (config.smallestScreenWidthDp < 600) {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        if (requestedOrientation != wanted) requestedOrientation = wanted
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app/android").setMethodCallHandler { call, result ->

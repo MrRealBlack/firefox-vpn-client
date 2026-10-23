@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestLoadCreatesDefaultConfig(t *testing.T) {
@@ -17,7 +16,7 @@ func TestLoadCreatesDefaultConfig(t *testing.T) {
 	if cfg.Proxy.Listen != DefaultProxyListen || cfg.Dashboard.Listen != DefaultDashboardListen || !cfg.Dashboard.Enabled {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
-	if cfg.Accounts.SwitchThresholdPercent != 90 || cfg.Accounts.QuotaCheckInterval.Duration() != 30*time.Minute {
+	if cfg.Accounts.SwitchThresholdPercent != 95 {
 		t.Fatalf("unexpected account defaults: %+v", cfg.Accounts)
 	}
 
@@ -42,7 +41,7 @@ func TestLoadKeepsDefaultsForOmittedFields(t *testing.T) {
 	if cfg.Proxy.Listen != "127.0.0.1:2080" || cfg.Proxy.Country != "DE" || cfg.Accounts.SwitchThresholdPercent != 80 {
 		t.Fatalf("explicit values not applied: %+v", cfg)
 	}
-	if cfg.Proxy.Transport != "h2" || cfg.Accounts.QuotaCheckInterval.Duration() != DefaultQuotaCheckInterval {
+	if cfg.Proxy.Transport != "h2" {
 		t.Fatalf("defaults not kept for omitted fields: %+v", cfg)
 	}
 	if cfg.SystemProxy.Mode != SystemProxyClear {
@@ -61,7 +60,6 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 		"country and server":     `{"proxy":{"country":"US","server":"us.example:443"}}`,
 		"bad transport":          `{"proxy":{"transport":"h1"}}`,
 		"threshold too high":     `{"accounts":{"switch_threshold_percent":120}}`,
-		"interval too short":     `{"accounts":{"quota_check_interval":"5s"}}`,
 		"duration as number":     `{"proxy":{"idle_sleep":20}}`,
 		"duplicate account":      `{"accounts":{"order":[{"id":"a","enabled":true},{"id":"a","enabled":true}]}}`,
 		"user without hash":      `{"dashboard":{"username":"admin"}}`,
@@ -137,6 +135,29 @@ func TestLoadDropsRemovedSettingsAndNormalizesRecommended(t *testing.T) {
 	}
 	if _, _, err := Load(path); err != nil || len(warnings) != 1 {
 		t.Fatalf("a clean file loads without warnings: %v %v", err, warnings)
+	}
+}
+
+// allow_locked is ignored: a file that carries it loads without a warning
+// and is rewritten without it.
+func TestLoadIgnoresAllowLocked(t *testing.T) {
+	path := filepath.Join(t.TempDir(), FileName)
+	if err := os.WriteFile(path, []byte(`{"proxy":{"country":"GB","allow_locked":true}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var warnings []string
+	Warn = func(m string) { warnings = append(warnings, m) }
+	defer func() { Warn = nil }()
+	cfg, _, err := Load(path)
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("allow_locked must still load: %v %v", err, warnings)
+	}
+	if cfg.Proxy.AllowLocked || cfg.Proxy.Country != "GB" {
+		t.Fatalf("proxy = %+v", cfg.Proxy)
+	}
+	data, _ := os.ReadFile(path)
+	if strings.Contains(string(data), "allow_locked") {
+		t.Fatalf("the file must be rewritten without allow_locked: %s", data)
 	}
 }
 

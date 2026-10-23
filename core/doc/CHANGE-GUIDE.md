@@ -85,14 +85,14 @@ Server code in `internal/service`: `dashboard.go` (routes and `guard`), `dashboa
 - Add or extend `internal/service/dashboard_test.go`; check the page in a browser against an isolated data folder.
 - Update [DASHBOARD.md](DASHBOARD.md).
 
-## Change the tray, the Windows service, or autostart
+## Change the tray, the status screen, or notifications
 
-Sources: `tray.go` (menu, polling, notifications), `localclient.go` (API calls with the local token), `service_windows.go` (service handler, install, elevation), `platform_windows.go` / `platform_other.go` (autostart, console, notifications, single instance), `trayicon.go`.
+Sources: `internal/desktop`: `tray.go` (menu, polling, notifications), `console_ui.go` (status screen), `platform_windows.go` / `platform_other.go` (console, notifications, single instance), `trayicon.go`; `internal/service/client.go` (API calls with the local token).
 
 - The tray talks to the daemon only through the dashboard API with `X-Local-Token`; add an API endpoint rather than reaching into the daemon.
-- Anything that runs before a user signs in (the service) must not depend on a desktop, a console, or the user's profile; pass paths explicitly (`-data-dir`).
-- The service runs as LocalService. Do not switch it to LocalSystem; anything new it must read or write has to be inside the data folder.
-- Keep notification text out of command lines and scripts (environment variables), and never include tokens or account secrets. Windows notifications use the app ID `notificationAppID`, registered by `registerNotificationApp`; tests replace its registry key.
+- The plain log mode (the systemd service on Linux) runs without a desktop, a console, or a user profile; code it runs must not depend on them.
+- On Windows, do not start a script host or system tool (PowerShell, `icacls`, `sc`), ask for elevation, or install a service: antivirus heuristics flag the program for them. `notify` does nothing on Windows for that reason; the tray icon and its tooltip show the state.
+- Pass notification text as separate arguments, never through a shell or script (`notify-send` takes it after `--`), and never include tokens or account secrets.
 - Keep Linux and macOS builds CGO-free: check `GOOS=linux CGO_ENABLED=0 go vet ./...` and `GOOS=darwin CGO_ENABLED=0 go vet ./cmd/...`.
 - Update [OPERATOR.md](OPERATOR.md) and, for files in the data folder, [CONFIGURATION.md](CONFIGURATION.md).
 
@@ -102,7 +102,7 @@ During development there is no backward compatibility: change file formats, sett
 
 ## Release a new version
 
-The version is `version` in `app/pubspec.yaml`, `major.minor.patch`: the patch number for fixes, the minor number for new features, the major number for large changes; the number after `+` (the Android build number) only rises. The build scripts pass it to the app and the core (`version.Current`). Trays compare versions to hand over to a newer copy, and the status screen and dashboard show it, so every build given to users needs a new number.
+The version is `version` in `app/pubspec.yaml`, `major.minor.patch`: the patch number for fixes, the minor number for new features, the major number for large changes; the number after `+` (the Android build number) only rises. The build scripts pass it to the app and the core (`version.Current`). A tray stops starting the service itself once a newer version served its data folder (and quits when that copy stops), and the status screen and dashboard show the version, so every build given to users needs a new number.
 
 ## Change the status screen or location latency
 
@@ -134,10 +134,10 @@ Find the writer and every reader before changing a field: `status.json` is read 
 | Credential flow, sign-in, timing, API recovery | [AUTHENTICATION.md](AUTHENTICATION.md) |
 | Accounts, failover, config fields | [MULTI-ACCOUNT.md](MULTI-ACCOUNT.md) |
 | Dashboard pages, API, security | [DASHBOARD.md](DASHBOARD.md) |
-| Tray icon, Windows service, autostart | [OPERATOR.md](OPERATOR.md) |
+| Tray icon, status screen | [OPERATOR.md](OPERATOR.md) |
 | Locks, admission/draining, transport/pool behavior | [SESSIONS.md](SESSIONS.md) |
 | Data-folder files, selection rules, status contract | [CONFIGURATION.md](CONFIGURATION.md) |
-| Running, service install, troubleshooting | [OPERATOR.md](OPERATOR.md) |
+| Running, systemd install, troubleshooting | [OPERATOR.md](OPERATOR.md) |
 | Toolchain or build procedure | [DEVELOPMENT.md](DEVELOPMENT.md) |
 | Test names, commands, isolation, side effects | [TESTING.md](TESTING.md) |
 

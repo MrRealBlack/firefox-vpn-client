@@ -47,15 +47,24 @@ func TestPingLocationsSortsByLatencyAndReportsFailures(t *testing.T) {
 		t.Fatalf("unexpected results %+v", results)
 	}
 
-	AllowLockedLocations.Store(false)
+	// JP is marked locked in the server list and is still the fastest.
 	best, ok := FastestLocation(results)
-	if !ok || best.Code != "DE" {
-		t.Fatalf("fastest unlocked = %+v, %v", best, ok)
+	if !ok || best.Code != "JP" {
+		t.Fatalf("fastest = %+v, %v", best, ok)
 	}
-	AllowLockedLocations.Store(true)
-	defer AllowLockedLocations.Store(false)
-	if best, _ := FastestLocation(results); best.Code != "JP" {
-		t.Fatalf("fastest with locked allowed = %s", best.Code)
+}
+
+func TestFastestLocationSkipsFailedLocations(t *testing.T) {
+	results := []LocationPing{
+		{Code: "JP", Error: "not allowed for this account"},
+		{Code: "GB", Error: "timeout"},
+		{Code: "DE", PingMS: 90},
+	}
+	if best, ok := FastestLocation(results); !ok || best.Code != "DE" {
+		t.Fatalf("fastest = %+v, %v", best, ok)
+	}
+	if _, ok := FastestLocation(results[:2]); ok {
+		t.Fatal("expected no pick when every location failed")
 	}
 }
 

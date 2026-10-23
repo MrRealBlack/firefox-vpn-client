@@ -3,6 +3,7 @@ package desktop
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -21,7 +22,6 @@ import (
 	"github.com/armanlife/firefox-vpn-client/core/internal/proxy"
 	"github.com/armanlife/firefox-vpn-client/core/internal/service"
 	"github.com/armanlife/firefox-vpn-client/core/internal/version"
-	"github.com/armanlife/firefox-vpn-client/core/internal/winsvc"
 
 	"golang.org/x/term"
 )
@@ -31,10 +31,10 @@ import (
 // an interactive terminal. It deliberately offers only the basics;
 // everything else is in the dashboard.
 //
-// On Windows the proxy never runs in this window: the screen starts the
-// tray icon, which hosts the proxy in the background, and only controls it.
-// Closing the window therefore never stops the proxy; "Exit completely"
-// (here or in the tray menu) does. Elsewhere the proxy runs in the window.
+// When another copy already serves the data folder (the desktop app's
+// core, a tray, or a systemd service), the screen only controls it, and
+// closing the window leaves it running. Otherwise the proxy runs in this
+// window, on every system, and closing the window stops it.
 
 // consoleBackend is what the screen shows and controls: the daemon in this
 // process, or a service in another process through the local API.
@@ -131,7 +131,6 @@ const (
 	ansiRed    = "\x1b[38;5;203m"
 	ansiCyan   = "\x1b[38;5;117m"
 	ansiGrey   = "\x1b[38;5;245m"
-	ansiKey    = "\x1b[1;38;5;16;48;5;208m"
 )
 
 type screenMode int
@@ -164,14 +163,14 @@ type consoleUI struct {
 	// screen is left.
 	newLogin *dashboardLogin
 	lastLog  uint64
-	svc      winsvc.State
-	// besideApp: this core sits beside the desktop app, which starts and
-	// stops it; the menu offers no Windows service for it.
-	besideApp bool
-	quitting  bool
-	input     string // the number typed at the prompt
+	quitting bool
+	input    string // the number typed at the prompt
 
-	lastTraySpawn time.Time
+	// sysproxy applies system_proxy.mode for the daemon in this process,
+	// as the tray and the app mode do; stopSync ends that and restores the
+	// previous setting.
+	sysproxy systemProxySync
+	stopSync func()
 }
 
 // RunConsole shows the terminal screen until the user quits. It returns
@@ -187,7 +186,7 @@ func RunConsole(paths service.DataPaths, verbose bool) (bool, error) {
 	if !logx.EnableFile(paths.LogDir, false) {
 		logx.SetOutput(io.Discard)
 	}
-	ui := &consoleUI{paths: paths, verbose: verbose, out: os.Stdout, besideApp: config.BesideApp()}
+	ui := &consoleUI{paths: paths, verbose: verbose, out: os.Stdout}
 	if err := ui.connect(); err != nil {
 		return true, err
 	}
@@ -216,8 +215,11 @@ func RunConsole(paths service.DataPaths, verbose bool) (bool, error) {
 			keys <- r
 		}
 	}()
+	// Closing the terminal window sends SIGHUP on Linux and macOS (SIGTERM
+	// on Windows); caught, it stops the proxy and restores the system proxy
+	// like 0 does.
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer signal.Stop(signals)
 
 	ui.poll()
@@ -248,71 +250,73 @@ func RunConsole(paths service.DataPaths, verbose bool) (bool, error) {
 }
 
 // connect uses the copy that already serves the data folder (the desktop
-// app's core, the Windows service, or a tray). Otherwise it runs the proxy
-// in this window.
+// app's core, a tray, or a systemd service on Linux). Otherwise it runs the
+// proxy in this window.
 func (ui *consoleUI) connect() error {
 	client := service.NewClient(ui.paths)
 	ui.backend = apiBackend{c: client}
-	st, _ := winsvc.QueryFor(ui.paths)
-	ui.svc = st
-	if reachable(client, 2*time.Second) || st.Running() {
+	if reachable(client, 2*time.Second) {
 		return nil
-	}
-	if trayFromConsoleSupported {
-		fmt.Println("Starting Firefox VPN in the background…")
-		if err := ui.spawnTray(); err == nil {
-			deadline := time.Now().Add(20 * time.Second)
-			for time.Now().Before(deadline) {
-				if reachable(client, time.Second) {
-					return nil
-				}
-				time.Sleep(500 * time.Millisecond)
-			}
-		}
-		logx.Warn("the background copy did not answer; running the proxy in this window")
 	}
 	return ui.startOwn()
 }
 
-// spawnTray starts the tray icon unless one runs or was just started.
-func (ui *consoleUI) spawnTray() error {
-	ui.mu.Lock()
-	if time.Since(ui.lastTraySpawn) < 20*time.Second || trayRunning(ui.paths) {
-		ui.mu.Unlock()
-		return nil
-	}
-	ui.lastTraySpawn = time.Now()
-	ui.mu.Unlock()
-	return startDetachedTray(ui.paths)
-}
-
+// startOwn runs the proxy in this process. Like the app mode, it applies
+// system_proxy.mode while the proxy runs; stopOwn restores the previous
+// setting before the proxy stops.
 func (ui *consoleUI) startOwn() error {
 	d, err := service.NewDaemon(ui.paths, ui.verbose)
-	if err == nil {
-		d.OpenFolder = openBrowser
-	}
 	if err != nil {
 		return err
 	}
+	d.OpenFolder = openBrowser
+	d.SystemProxySupported = systemProxySupported()
+	runDone := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	syncDone := make(chan struct{})
 	ui.mu.Lock()
 	ui.own = d
 	ui.backend = daemonBackend{d: d}
 	ui.status = nil
+	ui.stopSync = func() {
+		cancel()
+		<-syncDone
+		ui.sysproxy.clear()
+	}
 	ui.mu.Unlock()
 	go func() {
+		defer close(runDone)
 		if err := d.Run(); err != nil {
 			logx.Error("%s", logx.Err(err))
 			ui.setMessage(err.Error(), ansiRed)
 		}
+	}()
+	go func() {
+		defer close(syncDone)
+		ui.sysproxy.follow(ctx, func() (service.TrayStatus, error) {
+			select {
+			case <-runDone:
+				// A daemon that stopped counts as unreachable, so the
+				// setting is removed.
+				return service.TrayStatus{}, errors.New("the proxy stopped")
+			default:
+				return daemonTrayStatus(d)
+			}
+		}, appPollInterval)
 	}()
 	return nil
 }
 
 func (ui *consoleUI) stopOwn() {
 	ui.mu.Lock()
-	d := ui.own
-	ui.own = nil
+	d, stopSync := ui.own, ui.stopSync
+	ui.own, ui.stopSync = nil, nil
 	ui.mu.Unlock()
+	// The system proxy goes back first, so applications are never left
+	// pointed at a closed port.
+	if stopSync != nil {
+		stopSync()
+	}
 	if d != nil {
 		d.Shutdown()
 	}
@@ -342,7 +346,7 @@ func (ui *consoleUI) setMessage(text, color string) {
 	ui.mu.Unlock()
 }
 
-// poll refreshes the status, the service state, and new log lines.
+// poll refreshes the status and new log lines.
 func (ui *consoleUI) poll() {
 	ui.mu.Lock()
 	backend, after := ui.backend, ui.lastLog
@@ -351,16 +355,9 @@ func (ui *consoleUI) poll() {
 	defer cancel()
 	view, err := backend.status(ctx)
 	entries, _ := backend.logsSince(ctx, after)
-	st, _ := winsvc.QueryFor(ui.paths)
-
-	// Keep the tray icon present while a service or tray serves the folder.
-	if trayFromConsoleSupported && !ui.ownsDaemon() && (err == nil || st.Running()) && !trayRunning(ui.paths) {
-		_ = ui.spawnTray()
-	}
 
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
-	ui.svc = st
 	if err != nil {
 		ui.lastErr = err.Error()
 	} else {
@@ -460,9 +457,6 @@ const (
 	actTest      = "test"
 	actRestart   = "restart"
 	actStart     = "start"
-	actInstall   = "install"
-	actUpdate    = "update"
-	actUninstall = "uninstall"
 	actLog       = "log"
 	actSysProxy  = "system-proxy"
 	actReset     = "reset-login"
@@ -536,7 +530,7 @@ func (ui *consoleUI) submitLocation(n int) {
 // do runs a main-menu action.
 func (ui *consoleUI) do(action string) {
 	ui.mu.Lock()
-	backend, svc, own, status, pings := ui.backend, ui.svc, ui.own != nil, ui.status, ui.pings
+	backend, own, status, pings := ui.backend, ui.own != nil, ui.status, ui.pings
 	ui.mu.Unlock()
 	switch action {
 	case actDashboard:
@@ -583,18 +577,8 @@ func (ui *consoleUI) do(action string) {
 		})
 	case actStart:
 		ui.run("Starting the proxy…", func(context.Context) (string, error) {
-			ui.mu.Lock()
-			ui.lastTraySpawn = time.Time{}
-			ui.mu.Unlock()
-			if !trayFromConsoleSupported {
-				return "Started", ui.startOwn()
-			}
-			return "Started; the tray icon appears in a moment", ui.spawnTray()
+			return "Started", ui.startOwn()
 		})
-	case actInstall, actUpdate:
-		ui.installService(svc.Installed, status)
-	case actUninstall:
-		ui.uninstallService()
 	case actLog:
 		ui.setMode(screenLogs)
 	case actReset:
@@ -612,15 +596,16 @@ func (ui *consoleUI) do(action string) {
 	}
 }
 
-// exitCompletely stops the proxy and closes the window. A Windows service
-// keeps running; it has to be removed to stop.
+// exitCompletely stops the proxy and closes the window. A copy that no
+// tray or desktop app hosts (another terminal, systemd) cannot be ended
+// from here.
 func (ui *consoleUI) exitCompletely(own bool, status *service.StatusView) {
 	if own {
 		ui.quit()
 		return
 	}
 	if status == nil || !status.CanExit {
-		ui.setMessage("The Windows service keeps running; remove the service to stop it.", ansiYellow)
+		ui.setMessage("This copy cannot be exited from here; stop it where it runs (its terminal, or systemd).", ansiYellow)
 		return
 	}
 	// Exiting never waits for another task (such as a latency measurement).
@@ -707,75 +692,6 @@ func (ui *consoleUI) chooseLocation(backend consoleBackend, country, label strin
 	})
 }
 
-// Install installs the Windows service for this file, or moves an
-// installed service to it (an update). The background copy in the tray is
-// stopped first so the service can use the ports.
-func (ui *consoleUI) installService(update bool, status *service.StatusView) {
-	busy := "Installing the service (confirm the administrator prompt)…"
-	if update {
-		busy = "Updating the service to this file (confirm the administrator prompt)…"
-	}
-	ui.run(busy, func(ctx context.Context) (string, error) {
-		client := service.NewClient(ui.paths)
-		hadOwn := ui.ownsDaemon()
-		ui.stopOwn()
-		trayHosted := status != nil && status.CanExit
-		if trayHosted {
-			_ = client.ExitApp(ctx)
-			deadline := time.Now().Add(15 * time.Second)
-			for time.Now().Before(deadline) && reachable(client, time.Second) {
-				time.Sleep(500 * time.Millisecond)
-			}
-		}
-		if err := winsvc.Install(ui.paths); err != nil {
-			ui.mu.Lock()
-			ui.lastTraySpawn = time.Time{}
-			ui.mu.Unlock()
-			switch {
-			case hadOwn:
-				_ = ui.startOwn()
-			case trayHosted:
-				_ = ui.spawnTray()
-			}
-			return "", err
-		}
-		// The service runs the proxy; the tray icon at sign-in shows and
-		// controls it, so installing turns sign-in start on (for this file).
-		autostartNote := ""
-		if err := SetAutostart(ui.paths, true); err != nil {
-			autostartNote = "; the tray icon could not be added to sign-in: " + err.Error()
-		}
-		ui.mu.Lock()
-		ui.backend = apiBackend{c: client}
-		ui.status = nil
-		ui.mu.Unlock()
-		if update {
-			return "Service updated to this file (version " + version.Current + ")" + autostartNote, nil
-		}
-		return "Service installed; Firefox VPN now starts with Windows and its icon appears at sign-in" + autostartNote, nil
-	})
-}
-
-// Uninstall removes the service; the proxy continues in the
-// background with the tray icon (or in this window where there is none).
-func (ui *consoleUI) uninstallService() {
-	ui.run("Removing the service (confirm the administrator prompt)…", func(context.Context) (string, error) {
-		if err := winsvc.Uninstall(ui.paths); err != nil {
-			return "", err
-		}
-		// Start at sign-in came with the service.
-		_ = SetAutostart(ui.paths, false)
-		if !trayFromConsoleSupported {
-			return "Service removed; the proxy now runs in this window", ui.startOwn()
-		}
-		// A running tray takes the proxy over by itself; otherwise start one.
-		ui.mu.Lock()
-		ui.lastTraySpawn = time.Time{}
-		ui.mu.Unlock()
-		return "Service removed; Firefox VPN now runs in the background with the tray icon", ui.spawnTray()
-	})
-}
-
 // ---------------------------------------------------------------- render
 
 func (ui *consoleUI) render() {
@@ -829,8 +745,6 @@ func (ui *consoleUI) homeScreen(width, height int) []string {
 	// State line.
 	label, text, color := "connecting", "Connecting…", ansiGrey
 	switch {
-	case st == nil && ui.lastErr != "" && ui.svc.Installed:
-		label, text = "waiting", "The Windows service is "+ui.svc.String()
 	case st == nil && ui.lastErr != "":
 		label, text, color = "stopped", "Firefox VPN is not running", ansiRed
 	case st != nil && ui.lastErr != "":
@@ -873,20 +787,10 @@ func (ui *consoleUI) homeScreen(width, height int) []string {
 			row("Account", ansiYellow+"none yet: add one in the dashboard (D)"+ansiReset)
 		}
 	}
-	if winsvc.Supported {
-		row("Service", ui.serviceText())
-	}
 
 	lines = append(lines, "", ansiBold+"  What would you like to do?"+ansiReset, "")
 	for i, item := range ui.menuItems() {
-		label := item.label
-		if item.highlight {
-			label = ansiGreen + ansiBold + label + ansiReset + "  " + ansiKey + " NEW VERSION " + ansiReset
-		}
-		if item.warn {
-			label = ansiYellow + label + ansiReset
-		}
-		lines = append(lines, menuLine(i+1, label))
+		lines = append(lines, menuLine(i+1, item.label))
 	}
 	closeLabel := "Close this window (Firefox VPN keeps running)"
 	if ui.own != nil {
@@ -906,9 +810,6 @@ func (ui *consoleUI) promptLine() string {
 
 type menuItem struct {
 	action, label string
-	// highlight marks an update to a newer version; warn an action with a
-	// side effect elsewhere.
-	highlight, warn bool
 }
 
 // menuItems lists the main-menu actions numbered from 1; 0 always closes
@@ -933,37 +834,8 @@ func (ui *consoleUI) menuItems() []menuItem {
 			}
 			items = append(items, menuItem{action: actSysProxy, label: label})
 		}
-	} else if !own && !ui.svc.Installed {
+	} else if !own {
 		items = append(items, menuItem{action: actStart, label: "Start Firefox VPN"})
-	}
-	if winsvc.Supported {
-		switch {
-		case ui.besideApp:
-			// A service would keep running this file after the app is
-			// updated, and could not set the user's Windows proxy. A
-			// service installed earlier can still be removed below.
-		case !ui.svc.Installed && ui.svc.OtherDataDir != "":
-			items = append(items, menuItem{action: actInstall, label: "Move the Windows service to this folder (it now serves " + ui.svc.OtherDataDir + ")", warn: true})
-		case !ui.svc.Installed:
-			items = append(items, menuItem{action: actInstall, label: "Install as a Windows service (starts with Windows)"})
-		case !ui.svc.RunsThisExecutable():
-			running := ""
-			if st != nil {
-				running = st.Version
-			}
-			if running == "" || version.Newer(version.Current, running) {
-				from := running
-				if from == "" {
-					from = "older"
-				}
-				items = append(items, menuItem{action: actUpdate, label: "Update the service to version " + version.Current + " (now " + from + ")", highlight: true})
-			} else {
-				items = append(items, menuItem{action: actUpdate, label: "Move the service to this file (version " + version.Current + ")"})
-			}
-		}
-		if ui.svc.Installed {
-			items = append(items, menuItem{action: actUninstall, label: "Remove the Windows service"})
-		}
 	}
 	if online {
 		label := "Reset the dashboard login (forgotten password: new random username and password)"
@@ -977,33 +849,6 @@ func (ui *consoleUI) menuItems() []menuItem {
 		items = append(items, menuItem{action: actExit, label: "Exit Firefox VPN completely"})
 	}
 	return items
-}
-
-func (ui *consoleUI) serviceText() string {
-	switch {
-	case ui.svc.Installed:
-		text := ui.svc.String()
-		color := ansiGreen
-		if !ui.svc.Running() {
-			color = ansiYellow
-		}
-		extra := " · starts with Windows"
-		if ui.svc.ExePath != "" && !ui.svc.RunsThisExecutable() {
-			version := "an older version"
-			if ui.status != nil && ui.status.Version != "" {
-				version = "version " + ui.status.Version
-			}
-			extra = " · runs another file (" + version + "): " + ui.svc.ExePath
-		}
-		return color + "installed, " + text + ansiReset + ansiGrey + extra + ansiReset
-	case ui.svc.OtherDataDir != "":
-		return ansiYellow + "serves another folder: " + ui.svc.OtherDataDir + ansiReset + ansiGrey + " · this copy runs in the app or in this window" + ansiReset
-	case ui.besideApp:
-		return ansiGrey + "not used · the app beside this file runs the proxy" + ansiReset
-	case ui.own != nil:
-		return ansiGrey + "not installed · the proxy runs in this window" + ansiReset
-	}
-	return ansiGrey + "not installed · the proxy runs in the app or in this window" + ansiReset
 }
 
 func (ui *consoleUI) messageLine() string {
@@ -1094,10 +939,6 @@ func (ui *consoleUI) pingScreen(width, height int) []string {
 		if p.Code == current {
 			marker = ansiGreen + "● " + ansiReset
 		}
-		tags := ""
-		if p.Locked {
-			tags = ansiYellow + " locked" + ansiReset
-		}
 		value := ansiRed + padRight(p.Error, 22) + ansiReset
 		if p.OK() {
 			color := ansiGreen
@@ -1111,7 +952,7 @@ func (ui *consoleUI) pingScreen(width, height int) []string {
 			value = color + padLeft(strconv.FormatInt(p.PingMS, 10)+" ms", 8) + "  " + strings.Repeat("▇", barLen) + ansiReset
 		}
 		number := "    " + ansiOrange + ansiBold + padLeft(strconv.Itoa(locFirst+i), 2) + ansiReset + "  "
-		lines = append(lines, number+marker+ansiBold+padRight(p.Code, 4)+ansiReset+padRight(truncateRunes(name, 24), 25)+value+tags)
+		lines = append(lines, number+marker+ansiBold+padRight(p.Code, 4)+ansiReset+padRight(truncateRunes(name, 24), 25)+value)
 	}
 	return append(lines, "", menuLine(0, "Back"), "", ui.promptLine(), "  "+ui.messageLine())
 }

@@ -68,7 +68,7 @@ func TestLogsKeptForOneWeek(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"firefox-vpn.log", "firefox-vpn.log.3", "service-command.txt"} {
+	for _, name := range []string{"firefox-vpn.log", "firefox-vpn.log.3", "notes.txt"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +84,7 @@ func TestLogsKeptForOneWeek(t *testing.T) {
 	}
 	defer f.Close()
 	want := []string{"firefox-vpn-2026-03-04.log", "firefox-vpn-2026-03-05.log", "firefox-vpn-2026-03-06.log", "firefox-vpn-2026-03-07.log",
-		"firefox-vpn-2026-03-08.log", "firefox-vpn-2026-03-09.log", "firefox-vpn-2026-03-10.log", "service-command.txt"}
+		"firefox-vpn-2026-03-08.log", "firefox-vpn-2026-03-09.log", "firefox-vpn-2026-03-10.log", "notes.txt"}
 	if got := logNames(t, dir); strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("files = %v", got)
 	}

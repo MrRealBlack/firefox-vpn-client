@@ -48,9 +48,19 @@ class FakeApi implements CoreApi {
   /// The phone reported no network (no Wi-Fi, no mobile data).
   bool noNetwork = false;
 
+  /// The failure code of a failed connection test.
+  String testErrorCode = '';
+
+  /// Why the last connect was given up (`connect_failure`).
+  String connectFailure = '';
+
+  /// The status's `exit_mismatch`, as the core would send it.
+  Map<String, Object?>? exitMismatch;
+
   Map<String, Object?> get _lastTest => {
     'at': DateTime.now().toUtc().toIso8601String(),
     'ok': online,
+    if (!online && testErrorCode.isNotEmpty) 'error_code': testErrorCode,
     'http_status': online ? 204 : 0,
     'tunnel_ms': 120,
     'tls_ms': 90,
@@ -91,6 +101,9 @@ class FakeApi implements CoreApi {
         : {'phase': 'off', 'message': 'Proxy off'},
     'system_proxy': systemProxySupported ? mode : 'clear',
     'system_proxy_supported': systemProxySupported,
+    'selection': location,
+    if (connectFailure.isNotEmpty) 'connect_failure': connectFailure,
+    if (exitMismatch != null) 'exit_mismatch': exitMismatch,
     if (noNetwork) 'no_network': true,
     'proxy': recommended
         ? {
@@ -158,7 +171,8 @@ class FakeApi implements CoreApi {
         'ping_ms': 180,
       },
       {'code': 'DE', 'name': 'Germany', 'city': 'Frankfurt', 'ping_ms': 650},
-      {'code': 'JP', 'name': 'Japan', 'locked': true},
+      // Marked locked in Mozilla's list; listed like any other.
+      {'code': 'JP', 'name': 'Japan', 'locked': true, 'ping_error': 'timeout'},
     ],
   });
 
@@ -527,6 +541,53 @@ void main() {
     core.dispose();
   });
 
+  testWidgets('an account without a password offers to set one', (
+    tester,
+  ) async {
+    stillMotion(tester);
+    final api = FakeApi()
+      ..signInOutcome = {
+        'step': SignInStep.failed,
+        'message': 'The account was not added.',
+        'error': 'This account has no password.',
+        'error_code': SignInError.noPassword,
+      };
+    final core = CoreController(
+      () async => api,
+      pollInterval: const Duration(hours: 1),
+    );
+    core.start();
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('fa'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showSignInDialog(context, core),
+            child: const Text('add'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('add'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'google@example.com');
+    await tester.enterText(find.byType(TextField).at(1), 'pw');
+    await tester.tap(find.byType(FilledButton));
+    await tester.pumpAndSettle();
+
+    final l = lookupAppLocalizations(const Locale('fa'));
+    // Its own text, and the button to set a password instead of Try again.
+    expect(find.text(l.signInNoPassword), findsOneWidget);
+    expect(find.text(l.setPasswordButton), findsOneWidget);
+    expect(find.text(l.tryAgain), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    core.dispose();
+  });
+
   testWidgets('a wrong password keeps the form and what was typed', (
     tester,
   ) async {
@@ -806,8 +867,11 @@ void main() {
     expect(find.text('Netherlands'), findsOneWidget);
     expect(find.text('Germany'), findsOneWidget);
     expect(find.text('180 ms'), findsOneWidget);
-    // A locked location that never answered is behind "Show locked".
-    expect(find.text('Japan'), findsNothing);
+    // Every location is in the one list, also one Mozilla marks locked
+    // that did not answer; there is nothing to show or hide.
+    expect(find.text('Japan'), findsOneWidget);
+    expect(find.textContaining('locked'), findsNothing);
+    expect(find.byIcon(Icons.lock_outline_rounded), findsNothing);
 
     // A tap on a row chooses it.
     await tester.tap(find.text('Germany'));
@@ -816,14 +880,116 @@ void main() {
     await tester.tap(find.text('Recommended'));
     await tester.pumpAndSettle();
     expect(api.location, '');
-
-    await tester.tap(find.text('Show locked locations (1)'));
+    await tester.tap(find.text('Japan'));
     await tester.pumpAndSettle();
-    expect(find.text('Japan'), findsOneWidget);
+    expect(api.location, 'JP');
 
     await tester.pumpWidget(const SizedBox());
     core.dispose();
   });
+
+  testWidgets('a refused location offers the recommended one', (tester) async {
+    stillMotion(tester);
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    // The chosen location's server refuses the account: the test fails.
+    final api = FakeApi()
+      ..location = 'JP'
+      ..online = false
+      ..testErrorCode = Failure.locationRefused;
+    final core = CoreController(
+      () async => api,
+      pollInterval: const Duration(hours: 1),
+    );
+    await tester.pumpWidget(VpnApp(core: core, settings: AppSettings()));
+    core.start();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        "This country isn't open to your account. Choose another country.",
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Use the recommended location'));
+    await tester.pumpAndSettle();
+    expect(api.location, '');
+
+    // A connect given up for the same reason offers it too.
+    api
+      ..on = false
+      ..online = true
+      ..location = 'JP'
+      ..connectFailure = Failure.locationRefused;
+    await core.refresh();
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        "This country isn't open to your account. Choose another country.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Use the recommended location'), findsOneWidget);
+
+    // Other failures do not.
+    api.connectFailure = Failure.unreachable;
+    await core.refresh();
+    await tester.pumpAndSettle();
+    expect(find.text('Use the recommended location'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    core.dispose();
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+  testWidgets('warns when the public IP is in another country', (tester) async {
+    stillMotion(tester);
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final api = FakeApi()
+      ..location = 'GB'
+      ..exitMismatch = {
+        'chosen_country_code': 'GB',
+        'chosen_country_name': 'United Kingdom',
+        'exit_country_code': 'DE',
+      };
+    final core = CoreController(
+      () async => api,
+      pollInterval: const Duration(hours: 1),
+    );
+    await tester.pumpWidget(VpnApp(core: core, settings: AppSettings()));
+    core.start();
+    await tester.pumpAndSettle();
+
+    // A soft warning: still connected.
+    expect(find.text('Connected'), findsOneWidget);
+    expect(
+      find.text('You chose United Kingdom, but your IP is in Germany.'),
+      findsOneWidget,
+    );
+
+    // Never for the recommended location or the fastest one.
+    for (final selection in ['', 'fastest']) {
+      api.location = selection;
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('but your IP is in'), findsNothing);
+    }
+
+    // Nor without a mismatch.
+    api
+      ..location = 'GB'
+      ..exitMismatch = null;
+    await core.refresh();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('but your IP is in'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    core.dispose();
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   testWidgets('opens settings sections and the About tab', (tester) async {
     stillMotion(tester);
@@ -890,10 +1056,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Listen on'), findsOneWidget);
     expect(find.text('127.0.0.1 · this device only'), findsOneWidget);
-    // The app's port is under Advanced, not here; locked locations and
-    // sleep are connection settings.
+    // The app's port is under Advanced, not here; sleep is a connection
+    // setting. Every location is usable: no switch for locked ones.
     expect(find.text('App port'), findsNothing);
-    expect(find.text('Allow locked locations'), findsOneWidget);
+    expect(find.text('Allow locked locations'), findsNothing);
     expect(find.text('Sleep when idle after'), findsOneWidget);
 
     // Changing the proxy port starts from the current one, not from "taken".
@@ -1116,13 +1282,17 @@ void main() {
     core.dispose();
   });
 
-  test('the quota turns amber for the last 5 GB and red for the last 1 GB', () {
-    const gb = 1024 * 1024 * 1024;
-    expect(quotaColor(20 * gb), StatusColors.good);
-    expect(quotaColor(5 * gb), StatusColors.busy);
-    expect(quotaColor(2 * gb), StatusColors.busy);
-    expect(quotaColor(gb), StatusColors.bad);
-    expect(quotaColor(0), StatusColors.bad);
+  test('the quota turns amber 10 points before the switch and red at it', () {
+    expect(quotaColor(50, 95), StatusColors.good);
+    expect(quotaColor(84.9, 95), StatusColors.good);
+    expect(quotaColor(85, 95), StatusColors.busy);
+    expect(quotaColor(95, 95), StatusColors.bad);
+    expect(quotaColor(100, 95), StatusColors.bad);
+    // The user's own threshold moves both.
+    expect(quotaColor(72, 80), StatusColors.busy);
+    expect(quotaColor(80, 80), StatusColors.bad);
+    // Unknown threshold: the core's default, 95%.
+    expect(quotaColor(90, 0), StatusColors.busy);
   });
 
   testWidgets('a phone says connecting until a test passes', (tester) async {
@@ -1276,6 +1446,50 @@ void main() {
     settings.update(showPublicIp: true);
     await tester.pumpAndSettle();
     expect(find.textContaining('192.0.2.7'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    core.dispose();
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+  testWidgets('the smallest windows keep everything inside', (tester) async {
+    stillMotion(tester);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    // The computer layout at the window's smallest inside: the side menu's
+    // traffic stays in view, and its pages scroll above it.
+    tester.view.physicalSize = const Size(800, 441);
+    final api = FakeApi();
+    final core = CoreController(
+      () async => api,
+      pollInterval: const Duration(hours: 1),
+    );
+    await tester.pumpWidget(VpnApp(core: core, settings: AppSettings()));
+    core.start();
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(
+      tester.getBottomLeft(find.text('Total traffic')).dy,
+      lessThanOrEqualTo(441),
+    );
+
+    // Just under the computer layout's width, the phone's, with a problem
+    // box and a notice: nothing runs past the bottom.
+    api
+      ..systemProxySupported = false
+      ..online = false
+      ..location = 'JP'
+      ..testErrorCode = Failure.locationRefused;
+    tester.view.physicalSize = const Size(624, 441);
+    await core.refresh();
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(
+      find.text(
+        "This country isn't open to your account. Choose another country.",
+      ),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox());
     core.dispose();

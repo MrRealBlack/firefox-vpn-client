@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/net/http2"
 
+	"github.com/armanlife/firefox-vpn-client/core/internal/controlplane"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 	"github.com/armanlife/firefox-vpn-client/core/internal/resolver"
 )
@@ -202,6 +203,8 @@ func (s *h2ProxySession) OpenTunnel(authority string) (net.Conn, error) {
 		req.Host = authority
 		req.URL.Host = s.proxyHost
 		req.Header.Set("Proxy-Authorization", "Bearer "+s.bearerToken())
+		// As Firefox's CONNECT; Go would otherwise name itself.
+		req.Header.Set("User-Agent", controlplane.FirefoxUserAgent())
 		return s.cc.RoundTrip(req)
 	})
 	if err != nil {

@@ -148,6 +148,55 @@ func TestRefusalAfterANewPassPassesThrough(t *testing.T) {
 	}
 }
 
+// refusingController has a session that refuses every CONNECT with status;
+// each new pass gets a session that refuses it too.
+func refusingController(status int, chosen bool) (*Controller, *atomic.Int32) {
+	refused := &proxyConnectHTTPError{statusCode: status, status: http.StatusText(status)}
+	c := &Controller{
+		chosenLocation: chosen,
+		current: &managedSession{
+			session:   &fakeProxySession{openErr: refused},
+			rawToken:  "pass-1",
+			expiresAt: time.Now().Add(time.Hour),
+			accepting: true,
+		},
+	}
+	var passes atomic.Int32
+	c.refreshSession = func() error {
+		passes.Add(1)
+		c.swapSession(&fakeProxySession{openErr: refused}, "pass-2", time.Now().Add(time.Hour))
+		return nil
+	}
+	return c, &passes
+}
+
+// A location the user chose whose server refuses the CONNECT (403 or 407)
+// again with a new pass is reported as location_refused; the recommended
+// or the fastest location keeps the plain refusal.
+func TestRefusedChosenLocationIsLocationRefused(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusProxyAuthRequired} {
+		c, passes := refusingController(status, true)
+		_, err := c.OpenTunnel("www.google.com:443")
+		var locationErr *LocationRefusedError
+		var connectErr *proxyConnectHTTPError
+		if !errors.As(err, &locationErr) || !errors.As(err, &connectErr) || connectErr.statusCode != status {
+			t.Fatalf("HTTP %d: want a LocationRefusedError carrying the refusal, got %v", status, err)
+		}
+		if FailureCode(err) != FailureLocationRefused || !strings.Contains(err.Error(), "does not let this account use this location") {
+			t.Fatalf("HTTP %d: code %q, text %q", status, FailureCode(err), err)
+		}
+		if n := passes.Load(); n != 1 {
+			t.Fatalf("HTTP %d: %d new passes, want 1", status, n)
+		}
+
+		c, _ = refusingController(status, false)
+		_, err = c.OpenTunnel("www.google.com:443")
+		if errors.As(err, &locationErr) || FailureCode(err) != FailureRefused {
+			t.Fatalf("HTTP %d, not a chosen location: want refused, got %q (%v)", status, FailureCode(err), err)
+		}
+	}
+}
+
 // While the renewal loop waits after a failure, client tunnels do not ask
 // Guardian for a pass either.
 func TestNewPassWaitsForTheRenewalLoop(t *testing.T) {

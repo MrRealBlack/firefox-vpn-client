@@ -19,7 +19,7 @@ import (
 
 // Client calls a running service's dashboard API with the local token
 // from the data folder. The tray uses it whether the service runs in its own
-// process or as a Windows service.
+// process or in another one.
 type Client struct {
 	paths DataPaths
 	http  *http.Client
@@ -37,6 +37,7 @@ type TrayStatus struct {
 	State struct {
 		Phase   string `json:"phase"`
 		Message string `json:"message"`
+		Code    string `json:"code"`
 	} `json:"state"`
 	Proxy         *TrayProxy     `json:"proxy"`
 	ActiveAccount *AccountView   `json:"active_account"`
@@ -51,6 +52,9 @@ type TrayStatus struct {
 	} `json:"exit"`
 	// SystemProxy is the system_proxy.mode setting.
 	SystemProxy string `json:"system_proxy"`
+	// SystemProxyByHost: the process serving the folder applies the mode
+	// itself.
+	SystemProxyByHost bool `json:"system_proxy_by_host"`
 	// AutoConnecting: the system proxy waits for auto-connect's test.
 	AutoConnecting bool `json:"auto_connecting"`
 	// OpenFolderRequest rises when the dashboard asks to open the data
@@ -186,22 +190,64 @@ type TrayProxy struct {
 	SleepingSince time.Time `json:"sleeping_since"`
 }
 
-// Summary is the tray icon's hover text: the connection state and, when
-// connected, the country.
+// Summary is the tray icon's hover text: the connection state with, when
+// connected, the country, and while waiting or failing, a short reason.
 func (st TrayStatus) Summary() string {
-	status, ok := map[string]string{"running": "Connected", "starting": "Starting…", "waiting": "Waiting", "error": "Error"}[st.State.Phase]
-	if !ok {
-		status = "Unknown state"
-	}
-	if st.State.Phase == "running" && st.Proxy != nil && !st.Proxy.SleepingSince.IsZero() {
-		status = "Sleeping (wakes on the next connection)"
-	}
-	if st.State.Phase == "running" {
+	switch st.State.Phase {
+	case PhaseRunning:
+		status := "Connected"
+		if st.Proxy != nil && !st.Proxy.SleepingSince.IsZero() {
+			status = "Sleeping (wakes on the next connection)"
+		}
 		if place := st.place(); place != "" {
 			status += " · " + place
 		}
+		return status
+	case PhaseStarting:
+		return "Starting…"
+	case PhaseOff:
+		return "Proxy off"
+	case PhaseWaiting:
+		if st.State.Code == CodeWaitingForNetwork {
+			return MessageWaitingForNetwork
+		}
+		return withReason("Waiting", st.reason())
+	case PhaseError:
+		return withReason("Error", st.reason())
 	}
-	return status
+	return "Unknown state"
+}
+
+// summaryReasonRunes caps the reason in Summary; the full message is on
+// the dashboard and the status screen.
+const summaryReasonRunes = 60
+
+// reason is the state's message in a few words: a fixed text for the
+// known codes, else the message's first sentence, shortened.
+func (st TrayStatus) reason() string {
+	switch st.State.Code {
+	case CodeNoAccounts:
+		return "Add an account"
+	case CodeNoUsableAccount:
+		return "No usable account"
+	case CodeProxyPortInUse:
+		return "The proxy's port is in use"
+	}
+	text := strings.TrimSpace(st.State.Message)
+	if i := strings.Index(text, ". "); i > 0 {
+		text = text[:i]
+	}
+	if r := []rune(text); len(r) > summaryReasonRunes {
+		text = strings.TrimSpace(string(r[:summaryReasonRunes-1])) + "…"
+	}
+	return text
+}
+
+func withReason(status, reason string) string {
+	if reason == "" {
+		return status
+	}
+	return status + ": " + reason
 }
 
 // place is where the traffic leaves: the city and country of the public

@@ -35,6 +35,10 @@ class AppLocalizationsHu extends AppLocalizations {
       'A csatlakozáshoz adjon hozzá egy Firefox Accountot a Fiókok oldalon.';
 
   @override
+  String get waitingForEnabledAccount =>
+      'Minden fiók ki van kapcsolva. Kapcsoljon be egyet a Fiókok oldalon.';
+
+  @override
   String get stateError => 'Hiba';
 
   @override
@@ -147,7 +151,7 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'A fiókok ennek a listának a sorrendjében, egyenként $percent%-ig használódnak.';
+    return 'A lista sorrendjében: mindegyik $percent%-ig, az utolsó az adatkerete elfogyásáig.';
   }
 
   @override
@@ -211,8 +215,9 @@ class AppLocalizationsHu extends AppLocalizations {
   String get signInAgain => 'Újbóli bejelentkezés';
 
   @override
-  String get reasonQuotaThreshold =>
-      'Elérte a váltási küszöböt; a havi nullázás után újra használatba kerül.';
+  String reasonQuotaThreshold(int percent) {
+    return 'Ez a fiók elérte adatkerete $percent%-át, ezért a következő fiók vette át.';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -365,6 +370,13 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get signInWrongPassword => 'Hibás jelszó.';
+
+  @override
+  String get signInNoPassword =>
+      'Ennek a fióknak nincs jelszava: Google- vagy Apple-bejelentkezéssel jött létre. Állítson be jelszót, majd jelentkezzen be vele itt.';
+
+  @override
+  String get setPasswordButton => 'Jelszó beállítása';
 
   @override
   String get signInTooManyAttempts =>
@@ -671,13 +683,6 @@ class AppLocalizationsHu extends AppLocalizations {
   String get search => 'Keresés';
 
   @override
-  String get locked => 'Zárolt';
-
-  @override
-  String get lockedHint =>
-      'Lehet, hogy a Mozilla nem engedi, hogy a fiókja ezt a helyszínt használja.';
-
-  @override
   String get noAnswer => 'Nincs válasz';
 
   @override
@@ -724,9 +729,6 @@ class AppLocalizationsHu extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'A következő fiók akkor veszi át, amikor az adatkeret ekkora része elfogyott.';
-
-  @override
-  String get quotaInterval => 'Adatkeret-ellenőrzés gyakorisága';
 
   @override
   String get sectionDns => 'DNS';
@@ -894,9 +896,6 @@ class AppLocalizationsHu extends AppLocalizations {
   String get verboseLogs => 'Részletes naplók';
 
   @override
-  String get allowLocked => 'Zárolt helyszínek engedélyezése';
-
-  @override
   String get webDashboard => 'Webes vezérlőpult';
 
   @override
@@ -904,10 +903,6 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'Speciális beállítások és további eszközök';
-
-  @override
-  String get durationInvalid =>
-      'Adjon meg időtartamot, például 30s, 15m vagy 6h';
 
   @override
   String numberInvalid(int min, int max) {
@@ -1027,44 +1022,70 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get connectRetrying =>
-      'Nem sikerült csatlakozni. Ellenőrizd az internetet.';
+      'Nem sikerült csatlakozni. Ellenőrizze az internetet.';
 
   @override
-  String get failUnreachable => 'A Mozilla szerverei blokkolva vannak';
+  String get failUnreachable =>
+      'A Mozilla szerverei blokkolva vannak ezen az interneten. Próbáljon másik internetkapcsolatot.';
 
   @override
-  String get failRefused => 'A Mozilla szervere elutasította a kapcsolatot';
+  String get failRefused =>
+      'A Mozilla szervere elutasította a kapcsolatot. Próbálja újra néhány perc múlva.';
 
   @override
-  String get failSignIn => 'A fióknak újra be kell jelentkeznie';
+  String get failLocationRefused =>
+      'Ez az ország nem érhető el a fiókja számára. Válasszon másik országot.';
+
+  @override
+  String get useRecommendedLocation => 'Az ajánlott helyszín használata';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return 'Ezt választotta: $chosen, de az IP-címe ezt mutatja: $exit.';
+  }
+
+  @override
+  String get failSignIn =>
+      'A fiók bejelentkezése lejárt. Jelentkezzen be újra a Fiókok oldalon.';
 
   @override
   String get failQuota =>
-      'Az e havi adatkeret elfogyott. Adj hozzá egy másik fiókot.';
+      'Az e havi adatkeret elfogyott. Adjon hozzá egy másik fiókot.';
 
   @override
-  String get failNotEntitled => 'Ez a fiók nem használhatja a VPN-t';
+  String get failNotEntitled =>
+      'A Mozilla nem engedi, hogy ez a fiók használja a VPN-t. Adjon hozzá egy másik fiókot.';
 
   @override
   String get failRegion =>
-      'A Mozilla elutasítja az Ön régiójából érkező kapcsolatokat.';
+      'A Mozilla nem nyújtja szolgáltatását az Ön országában.';
 
   @override
-  String get failServer => 'A Mozilla szolgáltatásával probléma van';
+  String get failServer =>
+      'A Mozilla szolgáltatásában átmeneti hiba van. Az alkalmazás magától újrapróbálja.';
 
   @override
   String get failNoAccount =>
-      'Most egyik fiók sem tud csatlakozni: nyissa meg a Fiókok oldalt.';
+      'Egyik fiók sem áll készen. Nyissa meg a Fiókok oldalt.';
 
   @override
   String get failTestSite =>
-      'Csatlakozott a szerverhez, de az oldalak nem nyílnak meg';
+      'Csatlakozott a szerverhez, de az oldalak nem nyílnak meg. Próbáljon másik országot.';
 
   @override
-  String get failOther => 'Nem sikerült csatlakozni';
+  String get failOther => 'Nem sikerült csatlakozni. Próbálja újra.';
 
   @override
-  String get failNoInternet => 'Nincs internet';
+  String get failNoInternet =>
+      'Nincs internet. Ellenőrizze a Wi-Fit vagy a mobiladatot.';
+
+  @override
+  String get waitingForNetwork => 'Várakozás az internetkapcsolatra…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'A proxy nem tudott elindulni a(z) $port porton. Válasszon másik portot.';
+  }
 
   @override
   String get connectionSettings => 'Kapcsolati beállítások';
@@ -1130,14 +1151,6 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get locationsSection => 'Helyszínek';
-
-  @override
-  String get hideLocked => 'Zárolt helyszínek elrejtése';
-
-  @override
-  String showLocked(int count) {
-    return 'Zárolt helyszínek megjelenítése ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'A titkosított DNS működik';

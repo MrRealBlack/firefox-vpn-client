@@ -1,14 +1,16 @@
 import 'dart:io';
 
 import 'core/android_core.dart';
+import 'desktop/desktop_bridge.dart';
 
 /// Opens [url] in the system's handler: the browser, or the app for a
-/// scheme such as tg://.
+/// scheme such as tg://. On Windows the runner opens it through the shell
+/// and accepts only http and https links.
 Future<void> openUrl(String url) async {
   if (Platform.isAndroid) {
     await AndroidCore.openUrl(url);
   } else if (Platform.isWindows) {
-    await Process.start('rundll32', ['url.dll,FileProtocolHandler', url]);
+    await DesktopBridge.openUrl(url);
   } else if (Platform.isMacOS) {
     await Process.start('open', [url]);
   } else {

@@ -113,11 +113,14 @@ class AccountsPage extends StatelessWidget {
 
 /// Why an account is out of the rotation, in the user's language; the
 /// core's English for a reason the app does not know; null for none.
-String? accountReason(AppLocalizations l, Account a) {
+/// [threshold] is the account-switch setting, in percent.
+String? accountReason(AppLocalizations l, Account a, double threshold) {
   final time = a.retryAt == null ? null : formatTime(a.retryAt!.toLocal());
   final detail = a.reasonDetail.isEmpty ? null : ltr(a.reasonDetail);
   final known = switch (a.reasonCode) {
-    'quota_threshold' => l.reasonQuotaThreshold,
+    'quota_threshold' => l.reasonQuotaThreshold(
+      (threshold > 0 ? threshold : 95).round(),
+    ),
     'quota_exhausted' => l.reasonQuotaExhausted,
     'signin_required' => l.reasonSignInRequired,
     'signin_confirm' => l.reasonSignInConfirm,
@@ -232,29 +235,29 @@ class _AccountCard extends StatelessWidget {
           builder: (context, box) {
             // A phone: the controls go under the account.
             final narrow = box.maxWidth < 520;
+            // What the account needs now, beside its name on a computer, so
+            // every card's bar is as wide and the threshold marks line up.
+            final Widget? action = busy
+                ? const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : a.needsSignIn
+                ? FilledButton.tonal(
+                    onPressed: () => _signInAgain(context),
+                    child: Text(l.signInAgain),
+                  )
+                : !a.active && a.enabled && a.status == AccountStatus.ready
+                ? OutlinedButton(
+                    onPressed: () =>
+                        runShowingErrors(context, () => core.activate(a)),
+                    child: Text(l.useNow),
+                  )
+                : null;
             final controls = <Widget>[
-              if (busy)
-                const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              else if (a.needsSignIn)
-                FilledButton.tonal(
-                  onPressed: () => _signInAgain(context),
-                  child: Text(l.signInAgain),
-                )
-              else if (!a.active &&
-                  a.enabled &&
-                  a.status == AccountStatus.ready)
-                OutlinedButton(
-                  onPressed: () =>
-                      runShowingErrors(context, () => core.activate(a)),
-                  child: Text(l.useNow),
-                ),
-              const SizedBox(width: 8),
               Tooltip(
                 message: a.enabled ? l.statusEnabled : l.statusDisabled,
                 child: Switch(
@@ -335,20 +338,32 @@ class _AccountCard extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Flexible(
-                              child: Text(
-                                a.name,
-                                style: theme.textTheme.titleMedium,
-                                overflow: TextOverflow.ellipsis,
+                            // The name takes all the room the button leaves.
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      a.name,
+                                      style: theme.textTheme.titleMedium,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  _StatusPill(account: a),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            _StatusPill(account: a),
+                            if (!narrow && action != null) ...[
+                              const SizedBox(width: 12),
+                              action,
+                            ],
                           ],
                         ),
                         if (a.name != a.email && a.email.isNotEmpty)
                           Text(a.email, style: muted),
-                        if (accountReason(l, a) case final reason?) ...[
+                        if (accountReason(l, a, threshold)
+                            case final reason?) ...[
                           const SizedBox(height: 4),
                           Text(reason, style: muted),
                         ],
@@ -360,7 +375,6 @@ class _AccountCard extends StatelessWidget {
                         else ...[
                           QuotaBar(
                             percent: a.usedPercent,
-                            remainingBytes: usage.limitBytes - usage.usedBytes,
                             threshold: threshold,
                           ),
                           const SizedBox(height: 6),
@@ -381,7 +395,13 @@ class _AccountCard extends StatelessWidget {
                           Wrap(
                             alignment: WrapAlignment.end,
                             crossAxisAlignment: WrapCrossAlignment.center,
-                            children: controls,
+                            children: [
+                              if (action != null) ...[
+                                action,
+                                const SizedBox(width: 8),
+                              ],
+                              ...controls,
+                            ],
                           ),
                         ],
                       ],

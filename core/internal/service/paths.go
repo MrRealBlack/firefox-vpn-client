@@ -10,7 +10,6 @@ import (
 	"github.com/armanlife/firefox-vpn-client/core/internal/accounts"
 	"github.com/armanlife/firefox-vpn-client/core/internal/config"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
-	"github.com/armanlife/firefox-vpn-client/core/internal/proxy"
 )
 
 // Files the service keeps in its data folder.
@@ -75,7 +74,7 @@ func ResolveDataPaths(override string) (DataPaths, error) {
 }
 
 // LoadConfig loads (or creates) the config and applies its process
-// wide settings: log detail, locked-location policy, and the API proxy.
+// wide settings: log detail, DNS, and the API proxy.
 func LoadConfig(paths DataPaths, forceVerbose bool) (config.Config, error) {
 	config.Warn = func(message string) { logx.Warn("%s", message) }
 	accounts.Warn = func(message string) { logx.Warn("%s", message) }
@@ -87,7 +86,6 @@ func LoadConfig(paths DataPaths, forceVerbose bool) (config.Config, error) {
 		logx.Info("created default config path=%s", paths.Config)
 	}
 	logx.Verbose.Store(cfg.Logging.Verbose || forceVerbose)
-	proxy.AllowLockedLocations.Store(cfg.Proxy.AllowLocked)
 	if err := configureDNS(cfg.DNS); err != nil {
 		return config.Config{}, fmt.Errorf("invalid dns.servers: %w", err)
 	}

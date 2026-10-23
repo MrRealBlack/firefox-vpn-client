@@ -34,14 +34,7 @@ func (s *systemProxySync) update(st *service.TrayStatus) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ours, want := "", ""
-	if st != nil && st.Proxy != nil {
-		ours = localProxyAddress(st.Proxy.Listen)
-		// Not while auto-connect has not yet seen the connection work.
-		if st.State.Phase == service.PhaseRunning && st.SystemProxy == config.SystemProxySet && !st.AutoConnecting {
-			want = ours
-		}
-	}
+	ours, want := wantedSystemProxy(st)
 
 	// Remove this program's setting that is no longer wanted: what this
 	// copy set, and what an earlier copy may have left behind for this
@@ -80,6 +73,43 @@ func (s *systemProxySync) update(st *service.TrayStatus) {
 		}
 	}
 	s.applied = want
+}
+
+// wantedSystemProxy is the local proxy's address for st (nil when the
+// service is not reachable), and the address the system proxy should
+// point at now, "" for none.
+func wantedSystemProxy(st *service.TrayStatus) (ours, want string) {
+	if st != nil && st.Proxy != nil {
+		ours = localProxyAddress(st.Proxy.Listen)
+		// Not while auto-connect has not yet seen the connection work.
+		if st.State.Phase == service.PhaseRunning && st.SystemProxy == config.SystemProxySet && !st.AutoConnecting {
+			want = ours
+		}
+	}
+	return ours, want
+}
+
+// handOver leaves the setting to the process serving the folder, which
+// applies the mode itself (st.SystemProxyByHost): this copy forgets what
+// it set without restoring it (both set the same address), so closing it,
+// or a failed poll, never undoes the other copy's setting while that copy
+// keeps it recorded as applied. It records the mode, so that applying it
+// again later does not count as a switch to clear.
+func (s *systemProxySync) handOver(st *service.TrayStatus) {
+	if !systemProxySupported() {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// A setting for another address (the port changed) is not the other
+	// copy's; it goes.
+	if _, want := wantedSystemProxy(st); s.applied != "" && s.applied != want {
+		if err := restoreSystemProxy(s.applied); err != nil {
+			logx.Warn("restoring the system proxy setting failed err=%s", logx.Err(err))
+		}
+	}
+	s.applied = ""
+	s.mode = st.SystemProxy
 }
 
 // active reports whether this program's setting is in place now.

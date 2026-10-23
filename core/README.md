@@ -1,19 +1,18 @@
 # Firefox Firefox VPN
 
-An unofficial Go client for Mozilla's Firefox VPN (IP Protection) service. It signs in with Firefox Accounts, obtains a Guardian ProxyPass, and serves a local SOCKS5 CONNECT proxy through Mozilla's Fastly HTTP/2 (or experimental HTTP/3) proxies. Several accounts can be stored; when the active one has used its quota threshold (90% by default), the next one takes over without dropping open connections. A built-in web dashboard manages accounts, settings, logs, and connection tests.
+An unofficial Go client for Mozilla's Firefox VPN (IP Protection) service. It signs in with Firefox Accounts, obtains a Guardian ProxyPass, and serves a local SOCKS5 CONNECT proxy through Mozilla's Fastly HTTP/2 (or experimental HTTP/3) proxies. Several accounts can be stored; when the active one has used its quota threshold (95% by default; the last usable account goes on to the end of its quota), the next one takes over without dropping open connections. A built-in web dashboard manages accounts, settings, logs, and connection tests.
 
 The proxy carries TCP traffic from applications configured to use SOCKS5. Firefox does not need to be installed or running. There is no SOCKS5 UDP ASSOCIATE, BIND, TUN interface, or system-wide routing beyond Windows' proxy setting.
 
 ## Quick start
 
-1. Run the program: double-click `firefox-vpn-core.exe` on Windows, or start `./firefox-vpn-core` in a Linux terminal. The window shows a status screen with a numbered list of actions and runs the proxy until you quit it; if the desktop app (or the Windows service, or a tray started with `-tray`) already runs the core for the same data folder, the window controls that one instead. A `user-data` folder is created next to the program; beside the desktop app (`firefox-vpn.exe`) the core uses the app's data folder.
+1. Run the program: double-click `firefox-vpn-core.exe` on Windows, or start `./firefox-vpn-core` in a Linux terminal. The window shows a status screen with a numbered list of actions and runs the proxy until you quit it; if the desktop app (or a tray started with `-tray`) already runs the core for the same data folder, the window controls that one instead. A `user-data` folder is created next to the program; beside the desktop app (`firefox-vpn.exe`) the core uses the app's data folder.
 2. Open the dashboard at <http://127.0.0.1:10820/app/> (option **1** on the status screen).
 3. On **Accounts**, choose **Add account** and sign in with a Firefox Account (email code, authenticator code, unblock code, and CAPTCHA prompts are shown when Mozilla asks for them).
-4. Point applications at the SOCKS5 proxy `127.0.0.1:10810` (it also serves HTTP proxy clients). On Windows the tray sets Windows' system proxy to it by default while it runs (**Set system proxy**); choose **Clear system proxy** in the tray menu to leave it to applications set up by hand.
+4. Point applications at the SOCKS5 proxy `127.0.0.1:10810` (it also serves HTTP proxy clients). By default (**Clear system proxy**) only applications set up by hand use it; on Windows, **Set system proxy** (the tray menu, the status screen, or the dashboard's Settings) points Windows' proxy setting at it while it runs.
 5. Optional: on the dashboard's **Servers** page, test the real delay and pick a server, or choose **Auto (fastest)**.
-6. Optional, Windows: to start the proxy with Windows, choose **Install as a Windows service** on the status screen (asks for administrator rights); the tray icon then also appears at sign-in.
 
-Everything else (location, ports, threshold, dashboard login, transport) is on the **Settings** tab or in `user-data/config.json`. See the [operator guide](doc/OPERATOR.md) for the tray icon, the Windows service, Linux/systemd, and troubleshooting.
+Everything else (location, ports, threshold, dashboard login, transport) is on the **Settings** tab or in `user-data/config.json`. See the [operator guide](doc/OPERATOR.md) for the tray icon, Linux/systemd, and troubleshooting.
 
 **The `user-data` folder holds account credentials.** Keep it private; do not share or zip the program folder with it. Use only accounts you are authorized to use and respect Mozilla's terms.
 
@@ -25,8 +24,7 @@ tools/winres/            Generator of the Windows icon and version resources
 internal/service/        Service supervisor, dashboard and its API, API client
 internal/service/web/    Dashboard page, styles, and script (embedded in the binary)
 internal/proxy/          Accounts bridge, location selection, SOCKS5, H2/H3 sessions, renewal
-internal/desktop/        Tray icon, terminal status screen, autostart, notifications
-internal/winsvc/         Windows service
+internal/desktop/        Tray icon, terminal status screen, desktop app mode, notifications
 internal/logx/           Logging and the log file
 internal/version/        Program version
 internal/fxa/            Firefox Accounts sign-in, HAWK, OAuth, Fastly challenge

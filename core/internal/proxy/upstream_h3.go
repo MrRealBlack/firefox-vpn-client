@@ -17,6 +17,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 
+	"github.com/armanlife/firefox-vpn-client/core/internal/controlplane"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 	"github.com/armanlife/firefox-vpn-client/core/internal/resolver"
 )
@@ -151,6 +152,8 @@ func (s *h3ProxySession) OpenTunnel(authority string) (net.Conn, error) {
 		req.Host = authority
 		req.URL.Host = s.proxyHost
 		req.Header.Set("Proxy-Authorization", "Bearer "+s.bearerToken())
+		// As Firefox's CONNECT; quic-go would otherwise name itself.
+		req.Header.Set("User-Agent", controlplane.FirefoxUserAgent())
 		return s.rt.RoundTrip(req)
 	})
 	if err != nil {

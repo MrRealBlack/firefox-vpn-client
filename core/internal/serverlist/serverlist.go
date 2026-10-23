@@ -51,8 +51,10 @@ type Country struct {
 	Name   string `json:"name"`
 	Code   string `json:"code"`
 	Cities []City `json:"cities"`
-	// Locked marks a location that Firefox keeps behind preconditions
-	// (e.g. an upgraded account). It is not selected by default.
+	// Locked marks a location that Firefox offers only under
+	// preconditions (e.g. an upgraded account). The program offers every
+	// location regardless: Mozilla's servers accept an ordinary account's
+	// pass on locked ones too. It is shown only in the server-list dump.
 	Locked bool `json:"locked,omitempty"`
 	// FilterExpression is the Remote Settings JEXL filter that decides
 	// whether this record applies to a client (Firefox version, region).
@@ -68,7 +70,7 @@ func fetchServerList(ctx context.Context) ([]Country, error) {
 	if err != nil {
 		return nil, err
 	}
-	controlplane.ApplyMozillaVPNHeaders(req)
+	controlplane.ApplyFirefoxHeaders(req)
 
 	resp, err := controlplane.Do(req)
 	if err != nil {
@@ -112,7 +114,7 @@ func printServerList(countries []Country) {
 			flags += " [RECOMMENDED]"
 		}
 		if country.Locked {
-			flags += " [LOCKED]"
+			flags += " [locked in Firefox]"
 		}
 		fmt.Printf("\n=== %s (%s)%s ===\n", country.Name, country.Code, flags)
 		for _, city := range country.Cities {

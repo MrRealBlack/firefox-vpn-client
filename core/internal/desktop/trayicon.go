@@ -1,38 +1,16 @@
 package desktop
 
 import (
-	"bytes"
 	"embed"
-	"image"
-	"image/png"
 	"runtime"
-
-	xdraw "golang.org/x/image/draw"
 )
 
-// appIconPNG is the program's icon, the fox shield (256 px, transparent),
-// made by app/tool/app_icons.py from the same art as the app's icons.
-//
-//go:embed appicon.png
-var appIconPNG []byte
-
-// AppIconICO is the same icon in the sizes Windows uses, the small ones
-// sharpened (made by app/tool/app_icons.py): the executable's resources
-// (tools/winres).
+// AppIconICO is the program's icon, the fox shield, in the sizes Windows
+// uses, the small ones sharpened (made by app/tool/app_icons.py from the
+// same art as the app's icons): the executable's resources (tools/winres).
 //
 //go:embed appicon.ico
 var AppIconICO []byte
-
-// AppIcon is the program's icon at size pixels, for its notifications.
-func AppIcon(size int) image.Image {
-	dst := image.NewNRGBA(image.Rect(0, 0, size, size))
-	src, err := png.Decode(bytes.NewReader(appIconPNG))
-	if err != nil {
-		return dst // not possible with the embedded file
-	}
-	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
-	return dst
-}
 
 // trayFiles are the tray icons by state, made by app/tool/app_icons.py
 // together with the app's tray icons: a disk in the state's color with the

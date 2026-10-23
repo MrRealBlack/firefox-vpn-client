@@ -42,7 +42,6 @@ class Location {
       name = _str(j['name']),
       city = _str(j['city']),
       server = _str(j['server']),
-      locked = _bool(j['locked']),
       recommended = _bool(j['recommended']),
       pingMs = _int(j['ping_ms']),
       // The list names it ping_error; the ping result names it error.
@@ -52,7 +51,6 @@ class Location {
   final String name;
   final String city;
   final String server;
-  final bool locked;
   final bool recommended;
 
   /// The last real delay; 0 when not measured or failed.

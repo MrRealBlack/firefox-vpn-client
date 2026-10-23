@@ -286,7 +286,8 @@ class CoreApi {
   /// the user is looking.
   Future<void> retry() => _json('POST', '/api/retry', {});
 
-  /// Ends the core process the app started (409 for a Windows service).
+  /// Ends the core process the app started (409 for a copy that neither
+  /// the app nor a tray hosts, such as one under systemd).
   Future<void> exitCore() => _json('POST', '/api/app/exit', const {});
 
   Future<void> openFolder() => _json('POST', '/api/open-folder', const {});

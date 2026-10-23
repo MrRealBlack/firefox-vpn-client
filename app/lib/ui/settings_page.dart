@@ -413,18 +413,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('h3', l.transportH3, null),
                 ],
               ),
-              _Row(
-                icon: Icons.lock_open_rounded,
-                label: l.allowLocked,
-                child: Switch(
-                  value: _bool(['proxy', 'allow_locked']),
-                  onChanged: _saving
-                      ? null
-                      : (v) => _save({
-                          ['proxy', 'allow_locked']: v,
-                        }),
-                ),
-              ),
               // The phone never sleeps (the core turns it off there).
               if (!Platform.isAndroid) _sleepChoice(l),
             ],
@@ -707,15 +695,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ['accounts', 'switch_threshold_percent']: int.parse(v.trim()),
           }),
         ),
-        const SizedBox(height: 16),
-        _TextSetting(
-          label: l.quotaInterval,
-          value: _shortDuration(_str(['accounts', 'quota_check_interval'])),
-          validator: (v) => _durationOk(v) ? null : l.durationInvalid,
-          onSave: (v) => _save({
-            ['accounts', 'quota_check_interval']: v.trim(),
-          }),
-        ),
       ],
     ),
   );
@@ -864,10 +843,6 @@ bool _intIn(String v, int min, int max) {
   final n = int.tryParse(v.trim());
   return n != null && n >= min && n <= max;
 }
-
-final _durationPattern = RegExp(r'^(0|(\d+(\.\d+)?(ms|s|m|h))+)$');
-
-bool _durationOk(String v) => _durationPattern.hasMatch(v.trim());
 
 /// Go's "1h0m0s" as "1h", "15m0s" as "15m".
 String _shortDuration(String go) {

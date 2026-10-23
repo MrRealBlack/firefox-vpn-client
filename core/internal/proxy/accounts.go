@@ -90,14 +90,19 @@ func (p *AccountPool) ActiveName() string {
 // AcquirePass returns a usable ProxyPass from the active account or, when
 // that account cannot supply one, from the next usable account in priority
 // order. Failures that affect every account alike (network, Guardian
-// outage, region refusal) are returned without trying other accounts.
+// outage, region refusal) are returned without trying other accounts. An
+// account set aside at the switch threshold goes on with the pass it
+// supplied when no other account supplies one after all.
 func (p *AccountPool) AcquirePass(ctx context.Context, endpoint string) (*runtimeAuth, *guardian.ProxyPassInfo, error) {
 	previous, hadActive := p.mgr.Active()
 	tried := make(map[string]bool)
+	// setAside is the first account this call set aside at the switch
+	// threshold, with the pass it supplied.
+	var setAside *heldPass
 	for {
 		acc, err := p.mgr.Candidate(tried)
 		if err != nil {
-			return nil, nil, err
+			return p.resumeSetAside(setAside, previous, hadActive, err)
 		}
 		tried[acc.ID] = true
 
@@ -107,17 +112,54 @@ func (p *AccountPool) AcquirePass(ctx context.Context, endpoint string) (*runtim
 			if err := p.mgr.Activate(acc.ID); err != nil {
 				logx.Warn("persisting active account failed account=%s err=%s", logx.Email(acc.Name()), logx.Err(err))
 			}
-			if hadActive && previous.ID != acc.ID {
-				logx.Info("active account switched from=%s to=%s reason=%q", logx.Email(previous.Name()), logx.Email(acc.Name()), accountStatusReason(p.mgr, previous.ID))
-			} else if !hadActive {
-				logx.Info("active account selected account=%s", logx.Email(acc.Name()))
-			}
+			p.logSelected(acc, previous, hadActive)
 			return auth, pass, nil
 		case AccountSkipped:
+			// A valid pass with quota left is skipped only when its account
+			// reached the switch threshold while another one can take over.
+			if setAside == nil && err == nil && !isQuotaExhausted(pass) {
+				setAside = &heldPass{acc: acc, auth: auth, pass: pass}
+			}
 			continue
 		default:
-			return nil, nil, err
+			return p.resumeSetAside(setAside, previous, hadActive, err)
 		}
+	}
+}
+
+// heldPass is the pass of an account AcquirePass set aside.
+type heldPass struct {
+	acc  accounts.Account
+	auth *runtimeAuth
+	pass *guardian.ProxyPassInfo
+}
+
+// resumeSetAside ends AcquirePass when no other account supplied a pass
+// (err says why): the account set aside at the switch threshold, if any,
+// is put back in use with the pass it supplied, rather than the proxy
+// stopping while that account still has quota left.
+func (p *AccountPool) resumeSetAside(held *heldPass, previous accounts.Account, hadActive bool, err error) (*runtimeAuth, *guardian.ProxyPassInfo, error) {
+	if held == nil {
+		return nil, nil, err
+	}
+	resumed, saveErr := p.mgr.Resume(held.acc.ID)
+	if saveErr != nil {
+		logx.Warn("persisting active account failed account=%s err=%s", logx.Email(held.acc.Name()), logx.Err(saveErr))
+	}
+	if !resumed {
+		return nil, nil, err
+	}
+	logx.Info("no other account could take over; going on past the switch threshold account=%s err=%s", logx.Email(held.acc.Name()), logx.Err(err))
+	p.logSelected(held.acc, previous, hadActive)
+	return held.auth, held.pass, nil
+}
+
+// logSelected logs a change of the active account to acc.
+func (p *AccountPool) logSelected(acc, previous accounts.Account, hadActive bool) {
+	if hadActive && previous.ID != acc.ID {
+		logx.Info("active account switched from=%s to=%s reason=%q", logx.Email(previous.Name()), logx.Email(acc.Name()), accountStatusReason(p.mgr, previous.ID))
+	} else if !hadActive {
+		logx.Info("active account selected account=%s", logx.Email(acc.Name()))
 	}
 }
 
@@ -232,17 +274,34 @@ func (p *AccountPool) Record(acc accounts.Account, pass *guardian.ProxyPassInfo,
 }
 
 // observeActiveUsage records usage of the active account and reports
-// whether it should hand over to the next account.
-func (p *AccountPool) observeActiveUsage(usage *guardian.ProxyUsage) bool {
+// whether it should hand over to the next account, and which account that
+// is.
+func (p *AccountPool) observeActiveUsage(usage *guardian.ProxyUsage) (accounts.Account, bool) {
 	acc, ok := p.mgr.Active()
 	if !ok || usage == nil {
-		return false
+		return accounts.Account{}, false
 	}
 	reached, err := p.mgr.ObserveUsage(acc.ID, AccountUsage(usage))
 	if err != nil {
 		logx.Warn("saving account usage failed account=%s err=%s", logx.Email(acc.Name()), logx.Err(err))
 	}
-	return reached
+	return acc, reached
+}
+
+// resumeAfterQuotaCheck puts acc back in use when a quota check set it
+// aside at the switch threshold and no other account then supplied a pass
+// (err says why). Its current pass goes on, as when the threshold is
+// crossed at a pass renewal (resumeSetAside), instead of acc staying
+// reserved until its quota reset while the next account keeps failing.
+// A spent account is left reserved.
+func (p *AccountPool) resumeAfterQuotaCheck(acc accounts.Account, err error) {
+	resumed, saveErr := p.mgr.Resume(acc.ID)
+	if saveErr != nil {
+		logx.Warn("persisting active account failed account=%s err=%s", logx.Email(acc.Name()), logx.Err(saveErr))
+	}
+	if resumed {
+		logx.Info("no other account could take over; going on past the switch threshold account=%s err=%s", logx.Email(acc.Name()), logx.Err(err))
+	}
 }
 
 func (p *AccountPool) Forget(id string) {

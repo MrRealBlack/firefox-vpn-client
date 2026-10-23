@@ -32,9 +32,6 @@ class _ServersPageState extends State<ServersPage> {
   List<Location>? _locations;
   DateTime? _pingedAt;
   String _country = '';
-
-  /// Also the locations the accounts may not use that never answered.
-  bool _showLocked = false;
   bool _testing = false;
 
   /// The choice being saved ('' recommended, 'fastest', or a code).
@@ -93,8 +90,7 @@ class _ServersPageState extends State<ServersPage> {
   Future<void> _test() async {
     final l = AppLocalizations.of(context);
     final codes = [
-      for (final loc in _locations ?? const <Location>[])
-        if (_showLocked || !loc.locked || loc.answered) loc.code,
+      for (final loc in _locations ?? const <Location>[]) loc.code,
     ];
     setState(() {
       _testing = true;
@@ -122,21 +118,21 @@ class _ServersPageState extends State<ServersPage> {
     }
   }
 
-  /// The countries, without Mozilla's recommended location (the choice
-  /// above), fastest first, then by name; the locked ones that never
-  /// answered only when asked for.
-  List<Location> _countries() {
+  /// Every country, without Mozilla's recommended location (the choice
+  /// above), fastest first, then by name in the app's language.
+  List<Location> _countries(AppLocalizations l) {
     final list = [
       for (final loc in _locations ?? const <Location>[])
-        if (!isRecommendedPlace(loc.code) &&
-            (_showLocked || !loc.locked || loc.answered))
-          loc,
+        if (!isRecommendedPlace(loc.code)) loc,
     ];
     list.sort((a, b) {
       final da = a.answered ? a.pingMs : 1 << 30;
       final db = b.answered ? b.pingMs : 1 << 30;
       if (da != db) return da.compareTo(db);
-      return a.name.compareTo(b.name);
+      return nameSortKey(
+        l.localeName,
+        locationName(l, a.code, a.name),
+      ).compareTo(nameSortKey(l.localeName, locationName(l, b.code, b.name)));
     });
     return list;
   }
@@ -149,15 +145,10 @@ class _ServersPageState extends State<ServersPage> {
       color: theme.colorScheme.onSurfaceVariant,
     );
     final chosen = _country.toLowerCase();
-    final countries = _countries();
+    final countries = _countries(l);
     final recommended = (_locations ?? const <Location>[])
         .where((loc) => isRecommendedPlace(loc.code))
         .firstOrNull;
-    final hiddenLocked = (_locations ?? const <Location>[])
-        .where(
-          (loc) => !isRecommendedPlace(loc.code) && loc.locked && !loc.answered,
-        )
-        .length;
     final delayLine =
         _summary ??
         (_pingedAt == null ? null : l.testedAgo(formatAgo(l, _pingedAt!)));
@@ -172,7 +163,9 @@ class _ServersPageState extends State<ServersPage> {
               leading: const CountryFlag(code: 'REC', width: 36),
               title: l.modeRecommended,
               subtitle: l.modeRecommendedHint,
-              delay: recommended == null ? null : _Delay(location: recommended),
+              delay: recommended == null
+                  ? null
+                  : _Delay(location: recommended, testing: _testing),
               selected: chosen == '',
               busy: _busy == '',
               onTap: () => _choose(''),
@@ -220,46 +213,22 @@ class _ServersPageState extends State<ServersPage> {
                 _ChoiceRow(
                   leading: CountryFlag(code: loc.code, width: 36),
                   title: locationName(l, loc.code, loc.name),
-                  subtitle: _subtitle(l, loc),
-                  locked: loc.locked,
-                  delay: _Delay(location: loc),
+                  subtitle: _subtitle(loc),
+                  delay: _Delay(location: loc, testing: _testing),
                   selected: chosen == loc.code.toLowerCase(),
                   busy: _busy?.toLowerCase() == loc.code.toLowerCase(),
                   onTap: () => _choose(loc.code),
                 ),
             ],
           ),
-        if (hiddenLocked > 0 || _showLocked)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Center(
-              child: TextButton.icon(
-                onPressed: () => setState(() => _showLocked = !_showLocked),
-                icon: Icon(
-                  _showLocked
-                      ? Icons.expand_less_rounded
-                      : Icons.lock_outline_rounded,
-                  size: 18,
-                ),
-                label: Text(
-                  _showLocked ? l.hideLocked : l.showLocked(hiddenLocked),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
 
   /// A location's second line: its city when it says more than the
-  /// country, why a locked one is locked.
-  String? _subtitle(AppLocalizations l, Location loc) {
-    final parts = [
-      if (loc.city.isNotEmpty && loc.city != loc.name) loc.city,
-      if (loc.locked) l.lockedHint,
-    ];
-    return parts.isEmpty ? null : parts.join(' · ');
-  }
+  /// country.
+  String? _subtitle(Location loc) =>
+      loc.city.isNotEmpty && loc.city != loc.name ? loc.city : null;
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -343,7 +312,6 @@ class _ChoiceRow extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.delay,
-    this.locked = false,
   });
 
   final Widget leading;
@@ -352,7 +320,6 @@ class _ChoiceRow extends StatelessWidget {
   final Widget? delay;
   final bool selected;
   final bool busy;
-  final bool locked;
   final VoidCallback onTap;
 
   @override
@@ -369,34 +336,20 @@ class _ChoiceRow extends StatelessWidget {
           padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 12, 12),
           child: Row(
             children: [
-              Opacity(opacity: locked ? 0.55 : 1, child: leading),
+              leading,
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: selected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (locked) ...[
-                          const SizedBox(width: 6),
-                          Icon(
-                            Icons.lock_outline_rounded,
-                            size: 14,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ],
-                      ],
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
@@ -436,35 +389,47 @@ class _ChoiceRow extends StatelessWidget {
   }
 }
 
-/// A location's real delay as a small badge in its color.
+/// A location's real delay as a small badge in its color. While the delays
+/// are measured, a small spinner instead of the last results, which may be
+/// old (a measurement while offline answers nothing). A location that did
+/// not answer is grey, not red: it says nothing is wrong with the app.
 class _Delay extends StatelessWidget {
-  const _Delay({required this.location});
+  const _Delay({required this.location, required this.testing});
 
   final Location location;
+  final bool testing;
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
     final loc = location;
-    final (text, color) = loc.answered
+    final (text, color) = testing
+        ? ('', muted)
+        : loc.answered
         ? (l.milliseconds(loc.pingMs), delayColor(loc.pingMs))
         : loc.pingError.isNotEmpty
-        ? (l.noAnswer, StatusColors.bad)
-        : ('—', theme.colorScheme.onSurfaceVariant);
+        ? (l.noAnswer, muted)
+        : ('—', muted);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        text,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+      child: testing
+          ? SizedBox.square(
+              dimension: 12,
+              child: CircularProgressIndicator(strokeWidth: 1.5, color: muted),
+            )
+          : Text(
+              text,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
     );
   }
 }

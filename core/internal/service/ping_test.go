@@ -26,4 +26,19 @@ func TestSetLocationEndpoint(t *testing.T) {
 	if got := d.config().Proxy.Country; got != proxy.FastestCountry {
 		t.Fatalf("country = %q", got)
 	}
+
+	// A refused location's failure goes with it: the recommended location
+	// starts afresh.
+	d.mu.Lock()
+	d.connectFailure = proxy.FailureLocationRefused
+	d.mu.Unlock()
+	if rec := client.do(http.MethodPost, "/api/location", map[string]string{"country": ""}); rec.Code != http.StatusOK {
+		t.Fatalf("got %d %s", rec.Code, rec.Body.String())
+	}
+	d.mu.Lock()
+	failure := d.connectFailure
+	d.mu.Unlock()
+	if got := d.config().Proxy.Country; got != "" || failure != "" {
+		t.Fatalf("country = %q, connect_failure = %q", got, failure)
+	}
 }

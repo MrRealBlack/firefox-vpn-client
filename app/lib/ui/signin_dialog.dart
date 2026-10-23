@@ -214,6 +214,9 @@ class _SignInDialogState extends State<_SignInDialog> {
     final done = s?.step == SignInStep.done;
     final failed =
         s?.step == SignInStep.failed || s?.step == SignInStep.cancelled;
+    // An account without a password (Google or Apple sign-in) cannot sign
+    // in again as it is: the button opens Mozilla's page to set one.
+    final noPassword = failed && s?.errorCode == SignInError.noPassword;
     return AlertDialog(
       // A phone's keyboard leaves little room: the content scrolls.
       scrollable: true,
@@ -238,7 +241,13 @@ class _SignInDialogState extends State<_SignInDialog> {
             onPressed: _close,
             child: Text(failed ? l.close : l.cancel),
           ),
-          if (failed)
+          if (noPassword)
+            FilledButton.icon(
+              onPressed: () => openUrl(firefoxAccountSetPasswordUrl),
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: Text(l.setPasswordButton),
+            )
+          else if (failed)
             FilledButton(onPressed: _restart, child: Text(l.tryAgain))
           else if (s == null)
             FilledButton(
@@ -367,6 +376,7 @@ class _SignInDialogState extends State<_SignInDialog> {
       switch (code) {
         SignInError.noAccount => l.signInNoAccount,
         SignInError.wrongPassword => l.signInWrongPassword,
+        SignInError.noPassword => l.signInNoPassword,
         SignInError.tooManyAttempts => l.signInTooManyAttempts,
         SignInError.unblockCodeRejected => l.signInUnblockRejected,
         SignInError.wrongCode => l.signInWrongCode,

@@ -32,6 +32,23 @@ func (e *AddressInUseError) Error() string {
 
 func (e *AddressInUseError) Unwrap() error { return e.Err }
 
+// ListenError means a listener could not start on its address for another
+// reason than a program holding it, such as a port Windows reserves for
+// itself (WSL and Docker reserve ranges) or a host not on this machine.
+type ListenError struct {
+	// Listener is ListenerProxy or ListenerDashboard.
+	Listener string
+	// Address is the configured listen address.
+	Address string
+	Err     error
+}
+
+func (e *ListenError) Error() string {
+	return fmt.Sprintf("listening on %s: %v", e.Address, e.Err)
+}
+
+func (e *ListenError) Unwrap() error { return e.Err }
+
 // IsAddressInUse reports whether err is the system's "address already in
 // use" error (EADDRINUSE, or WSAEADDRINUSE on Windows).
 func IsAddressInUse(err error) bool {
@@ -39,7 +56,7 @@ func IsAddressInUse(err error) bool {
 }
 
 // listenTCP listens on addr for listener. A taken address is returned as
-// an *AddressInUseError; other failures are wrapped with the address.
+// an *AddressInUseError; other failures as a *ListenError.
 func listenTCP(listener, addr string) (net.Listener, error) {
 	ln, err := net.Listen("tcp", addr)
 	if err == nil {
@@ -48,7 +65,7 @@ func listenTCP(listener, addr string) (net.Listener, error) {
 	if IsAddressInUse(err) {
 		return nil, &AddressInUseError{Listener: listener, Address: addr, Err: err}
 	}
-	return nil, fmt.Errorf("listening on %s: %w", addr, err)
+	return nil, &ListenError{Listener: listener, Address: addr, Err: err}
 }
 
 // probeListen checks that addr can be listened on now, without keeping it.

@@ -35,13 +35,17 @@ class AppLocalizationsFa extends AppLocalizations {
       'برای اتصال، در بخش حساب‌ها یک Firefox Account اضافه کنید.';
 
   @override
+  String get waitingForEnabledAccount =>
+      'همه حساب‌ها خاموش هستند. یکی را در صفحه حساب‌ها روشن کنید.';
+
+  @override
   String get stateError => 'خطا';
 
   @override
   String get stateUnknown => 'نامشخص';
 
   @override
-  String get restartProxy => 'راه‌اندازی دوباره‌ی پروکسی';
+  String get restartProxy => 'راه‌اندازی دوباره پروکسی';
 
   @override
   String copied(String value) {
@@ -147,7 +151,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'حساب‌ها به ترتیب همین فهرست، هر کدام تا $percent٪ استفاده می‌شوند.';
+    return 'به ترتیب همین فهرست؛ هر حساب تا $percent٪ و آخرین حساب تا تمام شدن حجم.';
   }
 
   @override
@@ -210,8 +214,9 @@ class AppLocalizationsFa extends AppLocalizations {
   String get signInAgain => 'ورود دوباره';
 
   @override
-  String get reasonQuotaThreshold =>
-      'به مرز تعویض رسیده؛ بعد از ریست ماهانه دوباره استفاده می‌شود.';
+  String reasonQuotaThreshold(int percent) {
+    return 'حجم این حساب به $percent٪ رسید و حساب بعدی فعال شد.';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -258,7 +263,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String removeBody(String name) {
-    return '$name و اطلاعات ورود ذخیره‌شده‌ی آن از این کامپیوتر حذف می‌شود. بعداً می‌توانید دوباره اضافه‌اش کنید.';
+    return '$name و اطلاعات ورود ذخیره‌شده آن از این کامپیوتر حذف می‌شود. بعداً می‌توانید دوباره اضافه‌اش کنید.';
   }
 
   @override
@@ -330,7 +335,7 @@ class AppLocalizationsFa extends AppLocalizations {
   }
 
   @override
-  String get stepTotp => 'کد برنامه‌ی احراز هویت (Authenticator) را وارد کنید.';
+  String get stepTotp => 'کد برنامه احراز هویت (Authenticator) را وارد کنید.';
 
   @override
   String stepUnblockCode(String email) {
@@ -342,7 +347,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String stepEmailLink(String email) {
-    return 'لینک تأییدی را که Mozilla به $email فرستاد باز کنید. ادامه‌ی کار خودکار است.';
+    return 'لینک تأییدی را که Mozilla به $email فرستاد باز کنید. ادامه کار خودکار است.';
   }
 
   @override
@@ -365,6 +370,13 @@ class AppLocalizationsFa extends AppLocalizations {
   String get signInWrongPassword => 'رمز عبور اشتباه است.';
 
   @override
+  String get signInNoPassword =>
+      'این حساب رمز ندارد؛ با گوگل یا اپل ساخته شده است. یک رمز بگذارید و بعد با همان رمز اینجا وارد شوید.';
+
+  @override
+  String get setPasswordButton => 'ساختن رمز';
+
+  @override
   String get signInTooManyAttempts =>
       'تلاش‌ها بیش از حد بود. کمی صبر کنید و دوباره امتحان کنید.';
 
@@ -378,7 +390,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get signInWrongTotp =>
-      'کد اشتباه است. کدی را که الان برنامه‌ی احراز هویت نشان می‌دهد وارد کنید.';
+      'کد اشتباه است. کدی را که الان برنامه احراز هویت نشان می‌دهد وارد کنید.';
 
   @override
   String get signInTooManyCodes =>
@@ -408,7 +420,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String errNoCore(String path) {
-    return 'برنامه‌ی هسته کنار اپ پیدا نشد ($path).';
+    return 'برنامه هسته کنار اپ پیدا نشد ($path).';
   }
 
   @override
@@ -420,8 +432,7 @@ class AppLocalizationsFa extends AppLocalizations {
   String get errNotAnswering => 'هسته پاسخ نمی‌دهد.';
 
   @override
-  String get errRefused =>
-      'هسته اپ را نپذیرفت؛ شاید متعلق به نسخه‌ی دیگری باشد.';
+  String get errRefused => 'هسته اپ را نپذیرفت؛ شاید متعلق به نسخه دیگری باشد.';
 
   @override
   String get settingsTitle => 'تنظیمات';
@@ -509,7 +520,7 @@ class AppLocalizationsFa extends AppLocalizations {
   String get saved => 'ذخیره شد';
 
   @override
-  String get dataFolder => 'پوشه‌ی داده';
+  String get dataFolder => 'پوشه داده';
 
   @override
   String get openFolder => 'باز کردن پوشه';
@@ -547,12 +558,12 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String errPortInUse(String port) {
-    return 'پورت $port در اختیار برنامه‌ی دیگری است و اپ نمی‌تواند به هسته‌اش وصل شود.';
+    return 'پورت $port در اختیار برنامه دیگری است و اپ نمی‌تواند به هسته‌اش وصل شود.';
   }
 
   @override
   String proxyPortInUse(String port) {
-    return 'پورت $port در اختیار برنامه‌ی دیگری است و پروکسی اجرا نمی‌شود.';
+    return 'پورت $port در اختیار برنامه دیگری است و پروکسی اجرا نمی‌شود.';
   }
 
   @override
@@ -580,7 +591,7 @@ class AppLocalizationsFa extends AppLocalizations {
   String get portBusy => 'این پورت هم اشغال است';
 
   @override
-  String get portInUse => 'برنامه‌ی دیگری از این پورت استفاده می‌کند';
+  String get portInUse => 'برنامه دیگری از این پورت استفاده می‌کند';
 
   @override
   String get save => 'ذخیره';
@@ -665,13 +676,6 @@ class AppLocalizationsFa extends AppLocalizations {
   String get search => 'جستجو';
 
   @override
-  String get locked => 'قفل';
-
-  @override
-  String get lockedHint =>
-      'ممکن است Mozilla اجازه‌ی استفاده از این مکان را به حساب شما ندهد.';
-
-  @override
   String get noAnswer => 'بی‌پاسخ';
 
   @override
@@ -718,9 +722,6 @@ class AppLocalizationsFa extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'وقتی این مقدار از حجم مصرف شود، حساب بعدی جایگزین می‌شود.';
-
-  @override
-  String get quotaInterval => 'بررسی حجم هر';
 
   @override
   String get sectionDns => 'DNS';
@@ -838,7 +839,7 @@ class AppLocalizationsFa extends AppLocalizations {
   String get listenLocal => '127.0.0.1 · فقط همین دستگاه';
 
   @override
-  String get listenAll => '0.0.0.0 · همه‌ی شبکه‌ها (LAN)';
+  String get listenAll => '0.0.0.0 · همه شبکه‌ها (LAN)';
 
   @override
   String get proxyUsername => 'نام کاربری پروکسی';
@@ -886,9 +887,6 @@ class AppLocalizationsFa extends AppLocalizations {
   String get verboseLogs => 'لاگ کامل';
 
   @override
-  String get allowLocked => 'استفاده از مکان‌های قفل';
-
-  @override
   String get webDashboard => 'داشبورد وب';
 
   @override
@@ -896,9 +894,6 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'تنظیمات پیشرفته و ابزارهای بیشتر';
-
-  @override
-  String get durationInvalid => 'مدتی مثل 30s، 15m یا 6h وارد کنید';
 
   @override
   String numberInvalid(int min, int max) {
@@ -918,16 +913,16 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get notifySignInBody =>
-      'یکی از حساب‌ها باید در صفحه‌ی حساب‌ها دوباره وارد شود.';
+      'یکی از حساب‌ها باید در صفحه حساب‌ها دوباره وارد شود.';
 
   @override
   String get navAbout => 'درباره';
 
   @override
-  String get appVersionLabel => 'نسخه‌ی برنامه';
+  String get appVersionLabel => 'نسخه برنامه';
 
   @override
-  String get coreVersionLabel => 'نسخه‌ی هسته';
+  String get coreVersionLabel => 'نسخه هسته';
 
   @override
   String get checkUpdates => 'بررسی به‌روزرسانی';
@@ -940,7 +935,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String updateAvailable(String version) {
-    return 'نسخه‌ی $version منتشر شده است.';
+    return 'نسخه $version منتشر شده است.';
   }
 
   @override
@@ -989,7 +984,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String lanAddress(String address) {
-    return 'شبکه‌ی محلی $address';
+    return 'شبکه محلی $address';
   }
 
   @override
@@ -1008,7 +1003,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get vpnNotAllowed =>
-      'VPN به اجازه‌ی شما نیاز دارد. دوباره دکمه را بزنید و اجازه دهید.';
+      'VPN به اجازه شما نیاز دارد. دوباره دکمه را بزنید و اجازه دهید.';
 
   @override
   String get dataUsedTitle => 'حجم مصرف‌شده';
@@ -1020,38 +1015,64 @@ class AppLocalizationsFa extends AppLocalizations {
   String get connectRetrying => 'اتصال برقرار نشد. اینترنت را بررسی کنید.';
 
   @override
-  String get failUnreachable => 'سرورهای Mozilla فیلتر هستند';
+  String get failUnreachable =>
+      'سرورهای Mozilla روی این اینترنت فیلتر هستند. اینترنت دیگری را امتحان کنید.';
 
   @override
-  String get failRefused => 'سرور Mozilla اتصال را رد کرد';
+  String get failRefused =>
+      'سرور Mozilla اتصال را رد کرد. چند دقیقه دیگر دوباره امتحان کنید.';
 
   @override
-  String get failSignIn => 'حساب باید دوباره لاگین شود';
+  String get failLocationRefused =>
+      'این کشور برای حساب شما باز نیست. کشور دیگری انتخاب کنید.';
+
+  @override
+  String get useRecommendedLocation => 'استفاده از مکان پیشنهادی';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return '$chosen را انتخاب کردید، اما IP شما مال $exit است.';
+  }
+
+  @override
+  String get failSignIn =>
+      'ورود این حساب منقضی شده. از صفحه حساب‌ها دوباره وارد شوید.';
 
   @override
   String get failQuota => 'حجم این ماه تمام شده. حساب دیگری اضافه کنید.';
 
   @override
-  String get failNotEntitled => 'این حساب اجازه VPN ندارد';
+  String get failNotEntitled =>
+      'این حساب از طرف Mozilla اجازه VPN ندارد. حساب دیگری اضافه کنید.';
 
   @override
-  String get failRegion => 'Mozilla اتصال از منطقه‌ی شما را نمی‌پذیرد.';
+  String get failRegion => 'سرویس Mozilla در کشور شما ارائه نمی‌شود.';
 
   @override
-  String get failServer => 'سرویس Mozilla مشکل دارد';
+  String get failServer =>
+      'سرویس Mozilla موقتاً مشکل دارد. برنامه خودش دوباره تلاش می‌کند.';
 
   @override
-  String get failNoAccount =>
-      'الان هیچ حسابی نمی‌تواند وصل شود: «حساب‌ها» را باز کنید.';
+  String get failNoAccount => 'هیچ حسابی آماده نیست. صفحه حساب‌ها را باز کنید.';
 
   @override
-  String get failTestSite => 'به سرور وصل شد، اما سایت‌ها باز نمی‌شوند';
+  String get failTestSite =>
+      'به سرور وصل شد، اما سایت‌ها باز نمی‌شوند. کشور دیگری را امتحان کنید.';
 
   @override
-  String get failOther => 'اتصال برقرار نشد';
+  String get failOther => 'اتصال برقرار نشد. دوباره امتحان کنید.';
 
   @override
-  String get failNoInternet => 'اینترنت وصل نیست';
+  String get failNoInternet =>
+      'اینترنت وصل نیست. Wi-Fi یا اینترنت موبایل را بررسی کنید.';
+
+  @override
+  String get waitingForNetwork => 'منتظر اتصال اینترنت…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'پروکسی روی پورت $port اجرا نشد. پورت دیگری انتخاب کنید.';
+  }
 
   @override
   String get connectionSettings => 'تنظیمات اتصال';
@@ -1105,7 +1126,7 @@ class AppLocalizationsFa extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count برنامه‌ی پیشنهادی انتخاب شد',
+      other: '$count برنامه پیشنهادی انتخاب شد',
       zero: 'برنامه‌های پیشنهادی از قبل انتخاب شده‌اند',
     );
     return '$_temp0';
@@ -1116,14 +1137,6 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get locationsSection => 'مکان‌ها';
-
-  @override
-  String get hideLocked => 'پنهان کردن مکان‌های قفل';
-
-  @override
-  String showLocked(int count) {
-    return 'نمایش مکان‌های قفل ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'DNS رمزنگاری‌شده کار می‌کند';
@@ -1149,7 +1162,7 @@ class AppLocalizationsFa extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          'DNS شبکه‌ی شما برای $count نام آدرس فیلترینگ داد. این برنامه برای آن‌ها از آن استفاده نمی‌کند.',
+          'DNS شبکه شما برای $count نام آدرس فیلترینگ داد. این برنامه برای آن‌ها از آن استفاده نمی‌کند.',
     );
     return '$_temp0';
   }
@@ -1192,7 +1205,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get noNetwork =>
-      'اتصال اینترنت برقرار نیست. Wi-Fi یا داده‌ی همراه را روشن کنید.';
+      'اتصال اینترنت برقرار نیست. اینترنت موبایل یا Wi-Fi را روشن کنید.';
 
   @override
   String get blockAds => 'مسدود کردن تبلیغات';

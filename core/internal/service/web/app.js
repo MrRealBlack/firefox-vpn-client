@@ -21,12 +21,11 @@ const state = {
   view: "overview",
   status: null,
   accounts: [],
-  threshold: 90,
+  threshold: 95,
   settings: null,
   locations: [],
   pingedAt: null,
   sort: "latency",
-  scope: "available",
   testing: false,
   logs: [],
   logSource: null,
@@ -215,6 +214,13 @@ const STATUS_LABELS = {
   disabled: "Disabled",
 };
 const PHASE_LABELS = { running: "Connected", waiting: "Waiting", starting: "Starting", error: "Error", off: "Off" };
+
+// statusLabel names an account's status; a reserved account whose quota
+// is spent says so instead of "Threshold reached".
+function statusLabel(account, status = account.status) {
+  if (status === "reserved" && account.reason_code === "quota_exhausted") return "Quota used up";
+  return STATUS_LABELS[status] || status;
+}
 
 // placeName names where the proxy leaves from. Mozilla's recommended
 // location names no place, so the public IP check's city and country are
@@ -456,7 +462,7 @@ $("#logout").addEventListener("click", async () => {
 
 async function loadStatus() {
   state.status = await api("GET", "/api/status");
-  state.threshold = state.status.switch_threshold_percent || 90;
+  state.threshold = state.status.switch_threshold_percent || 95;
   renderStatus();
 }
 
@@ -543,7 +549,7 @@ function renderStatus() {
         el("div", {},
           el("div", { class: "account-name", text: active.name }),
           el("div", { class: "account-meta" },
-            el("span", { class: "chip " + active.status, text: STATUS_LABELS[active.status] || active.status }),
+            el("span", { class: "chip " + active.status, text: statusLabel(active) }),
             active.email && active.email !== active.name ? el("span", { text: active.email }) : null))),
       quotaBar(active.usage, state.threshold),
     );
@@ -943,7 +949,7 @@ function renderAccounts() {
     // The active account is ready by definition: "Active" takes the place
     // of "Ready", so every row keeps its chips on one line.
     const meta = el("div", { class: "account-meta" },
-      account.active && status === "ready" ? el("span", { class: "chip active", text: "Active" }) : el("span", { class: "chip " + status, text: STATUS_LABELS[status] || status }),
+      account.active && status === "ready" ? el("span", { class: "chip active", text: "Active" }) : el("span", { class: "chip " + status, text: statusLabel(account, status) }),
       account.email && account.email !== account.name ? el("span", { text: account.email }) : null,
       account.retry_at && account.status !== "ready" ? el("span", { text: `until ${formatTime(account.retry_at)}` }) : null,
       account.has_password ? el("span", { class: "chip", title: "The password is saved (encrypted). When this account's tokens stop working and cannot be renewed, the program signs in again by itself.", text: "Auto re-login" }) : null,
@@ -1098,17 +1104,13 @@ function renderLocations() {
 
   $("#serverlist-note").textContent = state.firefoxVersion ? `Server list as Firefox ${state.firefoxVersion} (the latest) sees it; updated automatically.` : "";
   $("#ping-note").textContent = state.pingedAt
-    ? `Real delay tested ${relative(state.pingedAt)}: the time to reach www.google.com through each server with the active account, so it covers the whole path to the exit. Test real delay checks the servers of this tab only.`
-    : "Test real delay to compare the servers of this tab. Each one is tested through the tunnel with the active account (the proxy must be running); this takes from a few seconds to a minute.";
+    ? `Real delay tested ${relative(state.pingedAt)}: the time to reach www.google.com through each server with the active account, so it covers the whole path to the exit. Test real delay checks every server.`
+    : "Test real delay to compare the servers. Each one is tested through the tunnel with the active account (the proxy must be running); this takes from a few seconds to a minute.";
 
   const query = $("#location-search").value.trim().toLowerCase();
-  // "Available" lists the open locations, and a locked one only when the
-  // real-delay test reached it (proof that this account may use it);
-  // "All servers" lists everything. "Allow locked" in Settings only permits
-  // choosing locked locations, it does not make them available.
-  const showLocked = state.scope === "all";
-  $("#locked-note").hidden = !showLocked || !state.locations.some((l) => l.locked);
-  let rows = tabLocations(state.scope).filter((l) => (!query || l.name.toLowerCase().includes(query) || l.code.toLowerCase().includes(query)));
+  // Every location is listed: Mozilla's servers accept every account on
+  // all of them, including those its server list marks locked.
+  let rows = state.locations.filter((l) => (!query || l.name.toLowerCase().includes(query) || l.code.toLowerCase().includes(query)));
   rows = rows.slice().sort((a, b) => {
     if (state.sort === "latency") {
       const pa = a.ping_ms || Infinity;
@@ -1141,15 +1143,15 @@ function renderLocations() {
         el("div", { class: "latency-bar" }, bar),
         el("span", { class: "latency-ms", text: `${loc.ping_ms} ms` }));
     } else {
-      latency = el("span", { class: loc.ping_error ? "latency-err" : "muted small", text: loc.ping_error || "not tested" });
+      // A location that did not answer is grey, not red: nothing is broken
+      // here; the reason is on hover.
+      latency = el("span", { class: "muted small", text: loc.ping_error ? "No answer" : "not tested", title: loc.ping_error || "" });
     }
-    const sub = el("div", { class: "loc-sub" }, el("span", { text: loc.code }));
-    if (loc.locked) sub.append(icon("lock"), el("span", { text: "locked", title: "Mozilla offers this location only to entitled accounts" }));
     const action = isCurrent
       ? el("span", { class: "chip active", text: "Active" })
-      : button("Use", () => chooseLocation(loc.code, locationName(loc)), { disabled: loc.locked && !(state.settings && state.settings.config.proxy.allow_locked), title: loc.locked ? "Locked locations need “Allow locked” in Settings" : undefined });
+      : button("Use", () => chooseLocation(loc.code, locationName(loc)));
     body.append(el("tr", { class: isCurrent ? "current" : "" },
-      el("td", {}, el("div", { class: "loc" }, flag(loc.code, loc.recommended), el("div", {}, el("div", { class: "loc-name", text: locationName(loc) }), sub))),
+      el("td", {}, el("div", { class: "loc" }, flag(loc.code, loc.recommended), el("div", { class: "loc-name", text: locationName(loc) }))),
       el("td", { class: "hide-sm mono muted", text: loc.server || "" }),
       el("td", {}, latency),
       el("td", { class: "actions-cell" }, action),
@@ -1167,15 +1169,10 @@ async function chooseLocation(country, label) {
   } catch (error) { reportError(error); }
 }
 
-// tabLocations lists the locations of a tab, ignoring the search box.
-function tabLocations(scope) {
-  return state.locations.filter((l) => scope === "all" || !l.locked || l.ping_ms);
-}
-
 $("#measure").addEventListener("click", async (event) => {
   const node = event.currentTarget;
-  const codes = tabLocations(state.scope).map((l) => l.code);
-  if (codes.length === 0) { toast("No location to test in this tab", true); return; }
+  const codes = state.locations.map((l) => l.code);
+  if (codes.length === 0) { toast("No location to test", true); return; }
   try {
     const result = await busy(node, `Testing ${codes.length}…`, () => api("POST", "/api/locations/ping", { codes }));
     const answered = (result.locations || []).filter((l) => l.ping_ms);
@@ -1191,13 +1188,6 @@ for (const seg of document.querySelectorAll(".seg[data-sort]")) {
   seg.addEventListener("click", () => {
     state.sort = seg.dataset.sort;
     for (const other of document.querySelectorAll(".seg[data-sort]")) other.classList.toggle("active", other === seg);
-    renderLocations();
-  });
-}
-for (const seg of document.querySelectorAll(".seg[data-scope]")) {
-  seg.addEventListener("click", () => {
-    state.scope = seg.dataset.scope;
-    for (const other of document.querySelectorAll(".seg[data-scope]")) other.classList.toggle("active", other === seg);
     renderLocations();
   });
 }
@@ -1495,7 +1485,6 @@ $("#dns-test").addEventListener("click", async (event) => {
   }
 });
 
-const DURATION_FIELDS = ["accounts.quota_check_interval"];
 const INT_FIELDS = ["proxy.upstream_connections", "proxy.max_connections"];
 const FLOAT_FIELDS = ["accounts.switch_threshold_percent"];
 
@@ -1582,7 +1571,6 @@ function collectSettings() {
     let value = input.type === "checkbox" ? input.checked : input.value.trim();
     if (INT_FIELDS.includes(input.name)) value = parseInt(value, 10) || 0;
     if (FLOAT_FIELDS.includes(input.name)) value = parseFloat(value) || 0;
-    if (DURATION_FIELDS.includes(input.name) && /^\d+$/.test(value)) value += "s";
     setPath(config, input.name, value);
   }
   config.proxy.listen = listenFromForm("proxy");
@@ -1616,7 +1604,7 @@ function renderLocationSelect(proxy) {
   );
   for (const loc of state.locations) {
     if (loc.recommended) continue;
-    select.append(el("option", { value: loc.code, text: `${loc.name} (${loc.code})${loc.locked ? " — locked" : ""}${loc.ping_ms ? ` — ${loc.ping_ms} ms` : ""}` }));
+    select.append(el("option", { value: loc.code, text: `${loc.name} (${loc.code})${loc.ping_ms ? ` — ${loc.ping_ms} ms` : ""}` }));
   }
   select.append(el("option", { value: "__server__", text: "Custom server…" }));
   let value = "";

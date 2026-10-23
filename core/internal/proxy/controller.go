@@ -37,6 +37,10 @@ type ControllerConfig struct {
 	Sessions   int
 	StatusFile string
 	Accounts   *AccountPool // optional; multi-account mode with threshold failover
+	// ChosenLocation is set when the user chose the location (a country,
+	// not the recommended location or the fastest one): a refusal that a
+	// new pass does not cure is then reported as LocationRefusedError.
+	ChosenLocation bool
 }
 
 type Controller struct {
@@ -47,6 +51,8 @@ type Controller struct {
 	guardian string
 	proxyURL *url.URL
 	timeout  time.Duration
+	// chosenLocation is ControllerConfig.ChosenLocation.
+	chosenLocation bool
 
 	sessionFactory func(token string) (proxySession, error)
 	refreshSession func() error
@@ -55,7 +61,11 @@ type Controller struct {
 	// trafficSinceCheck counts tunnel bytes since the last quota check;
 	// crossing usageProbeBytes requests an early check on quotaCheckNow.
 	trafficSinceCheck atomic.Int64
-	quotaCheckNow     chan struct{}
+	// trafficSinceReading counts tunnel bytes since the quota in usage was
+	// read: setUsage resets it together with usage, under mu, and
+	// nearSwitch adds it to that reading.
+	trafficSinceReading atomic.Int64
+	quotaCheckNow       chan struct{}
 
 	renewMu    sync.Mutex
 	mu         sync.Mutex
@@ -128,6 +138,7 @@ func NewController(cfg ControllerConfig) (*Controller, error) {
 		auth:           cfg.Auth,
 		statusFile:     cfg.StatusFile,
 		accounts:       cfg.Accounts,
+		chosenLocation: cfg.ChosenLocation,
 		quotaCheckNow:  make(chan struct{}, 1),
 		done:           make(chan struct{}),
 		usage:          cfg.Pass.Usage,
@@ -191,8 +202,15 @@ func (c *Controller) openTunnel(authority, clientKey string) (net.Conn, error) {
 					traffic: c.noteTraffic,
 				}, nil
 			}
-			if !shouldRebuildProxySession(err) || c.refusedAgain(ms, err) {
+			if !shouldRebuildProxySession(err) {
 				release()
+				return nil, err
+			}
+			if c.refusedAgain(ms, err) {
+				release()
+				if c.chosenLocation {
+					err = &LocationRefusedError{Err: err}
+				}
 				return nil, err
 			}
 			lastErr = err
@@ -214,13 +232,15 @@ func (c *Controller) openTunnel(authority, clientKey string) (net.Conn, error) {
 	return nil, lastErr
 }
 
-// refusedAgain reports a CONNECT 403 on a session whose pass was fetched
-// because Mozilla refused the one before: a new pass would be refused too
-// (a location the account may not use, or a refused destination), so the
-// client gets the refusal and the session goes on serving the others.
+// refusedAgain reports a CONNECT 403 or 407 on a session whose pass was
+// fetched because Mozilla refused the one before: a new pass would be
+// refused too (a location the account may not use, or a refused
+// destination), so the client gets the refusal and the session goes on
+// serving the others.
 func (c *Controller) refusedAgain(ms *managedSession, err error) bool {
 	var connectErr *proxyConnectHTTPError
-	if !errors.As(err, &connectErr) || connectErr.statusCode != http.StatusForbidden {
+	if !errors.As(err, &connectErr) ||
+		(connectErr.statusCode != http.StatusForbidden && connectErr.statusCode != http.StatusProxyAuthRequired) {
 		return false
 	}
 	c.mu.Lock()
@@ -452,21 +472,46 @@ func (c *Controller) Close() error {
 	return c.closeErr
 }
 
-// noteTraffic counts tunnel bytes and requests an early quota check after
-// usageProbeBytes, so a heavy transfer cannot run far past the account
-// switch threshold between periodic checks.
+// noteTraffic counts tunnel bytes toward the usage since the last quota
+// reading and, near the switch point, requests an early quota check after
+// every usageProbeBytes, so a heavy transfer cannot run far past the
+// account switch threshold between pass renewals.
 func (c *Controller) noteTraffic(n int) {
 	if n <= 0 {
 		return
 	}
+	c.trafficSinceReading.Add(int64(n))
 	if c.trafficSinceCheck.Add(int64(n)) < usageProbeBytes {
 		return
 	}
 	c.trafficSinceCheck.Store(0)
+	if !c.nearSwitch() {
+		return
+	}
 	select {
 	case c.quotaCheckNow <- struct{}{}:
 	default:
 	}
+}
+
+// nearSwitch reports whether the active account's usage, as last read plus
+// the tunnel traffic since then, is within quotaProbeMargin of its switch
+// point: the switch threshold with an account pool (the service always has
+// one, also when no other account could take over), the end of the quota
+// without one. Unknown and unlimited quotas are never near.
+func (c *Controller) nearSwitch() bool {
+	c.mu.Lock()
+	usage, since := c.usage, c.trafficSinceReading.Load()
+	c.mu.Unlock()
+	if usage == nil || usage.Unlimited || usage.Limit <= 0 {
+		return false
+	}
+	switchAt := usage.Limit
+	if c.accounts != nil {
+		switchAt = int64(float64(usage.Limit) * c.accounts.mgr.Policy().ThresholdPercent / 100)
+	}
+	used := usage.Limit - usage.Remaining + since
+	return switchAt-used <= quotaProbeMargin
 }
 
 type managedTunnelConn struct {

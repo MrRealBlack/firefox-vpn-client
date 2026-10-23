@@ -35,6 +35,10 @@ class AppLocalizationsBn extends AppLocalizations {
       'সংযোগ করতে অ্যাকাউন্ট পাতায় একটি Firefox Account যোগ করুন।';
 
   @override
+  String get waitingForEnabledAccount =>
+      'সব অ্যাকাউন্ট বন্ধ আছে। অ্যাকাউন্ট পাতা থেকে একটি চালু করুন।';
+
+  @override
   String get stateError => 'ত্রুটি';
 
   @override
@@ -147,7 +151,7 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String accountsOrderNote(int percent) {
-    return 'এই তালিকার ক্রমে অ্যাকাউন্টগুলো ব্যবহৃত হয়, প্রতিটি $percent% পর্যন্ত।';
+    return 'এই তালিকার ক্রমে: প্রতিটি অ্যাকাউন্ট $percent% পর্যন্ত, শেষটি ডেটা শেষ না হওয়া পর্যন্ত।';
   }
 
   @override
@@ -210,8 +214,9 @@ class AppLocalizationsBn extends AppLocalizations {
   String get signInAgain => 'আবার সাইন ইন করুন';
 
   @override
-  String get reasonQuotaThreshold =>
-      'সুইচ সীমায় পৌঁছেছে; মাসিক রিসেটের পর আবার ব্যবহার হবে।';
+  String reasonQuotaThreshold(int percent) {
+    return 'এই অ্যাকাউন্টের ডেটা $percent% ব্যবহৃত হয়েছে, তাই পরের অ্যাকাউন্টটি চালু হয়েছে।';
+  }
 
   @override
   String get reasonQuotaExhausted =>
@@ -363,6 +368,13 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get signInWrongPassword => 'পাসওয়ার্ড ভুল।';
+
+  @override
+  String get signInNoPassword =>
+      'এই অ্যাকাউন্টের কোনো পাসওয়ার্ড নেই: এটি Google বা Apple দিয়ে সাইন ইন করে তৈরি। একটি পাসওয়ার্ড সেট করুন, তারপর সেটি দিয়ে এখানে সাইন ইন করুন।';
+
+  @override
+  String get setPasswordButton => 'পাসওয়ার্ড সেট করুন';
 
   @override
   String get signInTooManyAttempts =>
@@ -667,13 +679,6 @@ class AppLocalizationsBn extends AppLocalizations {
   String get search => 'খুঁজুন';
 
   @override
-  String get locked => 'লক করা';
-
-  @override
-  String get lockedHint =>
-      'Mozilla হয়তো আপনার অ্যাকাউন্টকে এই লোকেশন ব্যবহারের অনুমতি দেবে না।';
-
-  @override
   String get noAnswer => 'সাড়া নেই';
 
   @override
@@ -720,9 +725,6 @@ class AppLocalizationsBn extends AppLocalizations {
   @override
   String get switchThresholdHint =>
       'ডেটার এই অংশ খরচ হলে পরের অ্যাকাউন্টে চলে যায়।';
-
-  @override
-  String get quotaInterval => 'ডেটা চেকের বিরতি';
 
   @override
   String get sectionDns => 'DNS';
@@ -888,9 +890,6 @@ class AppLocalizationsBn extends AppLocalizations {
   String get verboseLogs => 'বিস্তারিত লগ';
 
   @override
-  String get allowLocked => 'লক করা লোকেশন ব্যবহারের অনুমতি';
-
-  @override
   String get webDashboard => 'ওয়েব ড্যাশবোর্ড';
 
   @override
@@ -898,9 +897,6 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get webDashboardHint => 'উন্নত সেটিংস ও আরও টুল';
-
-  @override
-  String get durationInvalid => '30s, 15m বা 6h-এর মতো সময় লিখুন';
 
   @override
   String numberInvalid(int min, int max) {
@@ -1022,38 +1018,65 @@ class AppLocalizationsBn extends AppLocalizations {
   String get connectRetrying => 'সংযোগ করা যায়নি। ইন্টারনেট পরীক্ষা করুন।';
 
   @override
-  String get failUnreachable => 'Mozilla-র সার্ভার ব্লক করা আছে';
+  String get failUnreachable =>
+      'এই ইন্টারনেটে Mozilla-র সার্ভার ব্লক করা আছে। অন্য ইন্টারনেট সংযোগ চেষ্টা করুন।';
 
   @override
-  String get failRefused => 'Mozilla-র সার্ভার সংযোগ প্রত্যাখ্যান করেছে';
+  String get failRefused =>
+      'Mozilla-র সার্ভার সংযোগ প্রত্যাখ্যান করেছে। কয়েক মিনিট পরে আবার চেষ্টা করুন।';
 
   @override
-  String get failSignIn => 'অ্যাকাউন্টে আবার সাইন ইন করতে হবে';
+  String get failLocationRefused =>
+      'এই দেশটি আপনার অ্যাকাউন্টের জন্য খোলা নয়। অন্য দেশ বেছে নিন।';
+
+  @override
+  String get useRecommendedLocation => 'প্রস্তাবিত লোকেশন ব্যবহার করুন';
+
+  @override
+  String exitMismatch(String exit, String chosen) {
+    return 'আপনি $chosen বেছে নিয়েছেন, কিন্তু আপনার IP-র দেশ: $exit।';
+  }
+
+  @override
+  String get failSignIn =>
+      'এই অ্যাকাউন্টের সাইন-ইনের মেয়াদ শেষ। অ্যাকাউন্ট পাতা থেকে আবার সাইন ইন করুন।';
 
   @override
   String get failQuota => 'এই মাসের ডেটা শেষ। আরেকটি অ্যাকাউন্ট যোগ করুন।';
 
   @override
-  String get failNotEntitled => 'এই অ্যাকাউন্ট VPN ব্যবহার করতে পারে না';
+  String get failNotEntitled =>
+      'Mozilla এই অ্যাকাউন্টকে VPN ব্যবহার করতে দেয় না। আরেকটি অ্যাকাউন্ট যোগ করুন।';
 
   @override
-  String get failRegion => 'Mozilla আপনার অঞ্চল থেকে সংযোগ গ্রহণ করে না।';
+  String get failRegion => 'আপনার দেশে Mozilla তার পরিষেবা দেয় না।';
 
   @override
-  String get failServer => 'Mozilla-র পরিষেবায় সমস্যা হয়েছে';
+  String get failServer =>
+      'Mozilla-র পরিষেবায় সাময়িক সমস্যা হয়েছে। অ্যাপ নিজেই আবার চেষ্টা করবে।';
 
   @override
   String get failNoAccount =>
-      'এখন কোনো অ্যাকাউন্ট সংযোগ করতে পারছে না: অ্যাকাউন্ট পাতা খুলুন।';
+      'কোনো অ্যাকাউন্ট প্রস্তুত নেই। অ্যাকাউন্ট পাতা খুলুন।';
 
   @override
-  String get failTestSite => 'সার্ভারে সংযুক্ত হয়েছে, কিন্তু সাইট খুলছে না';
+  String get failTestSite =>
+      'সার্ভারে সংযুক্ত হয়েছে, কিন্তু সাইট খুলছে না। অন্য দেশ চেষ্টা করুন।';
 
   @override
-  String get failOther => 'সংযোগ করা যায়নি';
+  String get failOther => 'সংযোগ করা যায়নি। আবার চেষ্টা করুন।';
 
   @override
-  String get failNoInternet => 'ইন্টারনেট নেই';
+  String get failNoInternet =>
+      'ইন্টারনেট নেই। Wi-Fi বা মোবাইল ডেটা পরীক্ষা করুন।';
+
+  @override
+  String get waitingForNetwork => 'ইন্টারনেট সংযোগের অপেক্ষায়…';
+
+  @override
+  String proxyStartFailed(String port) {
+    return 'পোর্ট $port-এ প্রক্সি চালু হয়নি। অন্য একটি পোর্ট বেছে নিন।';
+  }
 
   @override
   String get connectionSettings => 'সংযোগ সেটিংস';
@@ -1119,14 +1142,6 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get locationsSection => 'লোকেশন';
-
-  @override
-  String get hideLocked => 'লক করা লোকেশন লুকান';
-
-  @override
-  String showLocked(int count) {
-    return 'লক করা লোকেশন দেখান ($count)';
-  }
 
   @override
   String get dnsSummaryOk => 'এনক্রিপ্টেড DNS কাজ করছে';

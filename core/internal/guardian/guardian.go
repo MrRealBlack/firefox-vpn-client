@@ -31,13 +31,13 @@ type proxyPassResponse struct {
 }
 
 // applyGuardianHeaders sets the request shape Firefox uses for every
-// Guardian call: bearer auth, JSON content type, and no caching.
+// Guardian call: bearer auth, JSON content type, and fetch's "no-cache"
+// mode, which Firefox sends as Cache-Control: max-age=0 (no Pragma).
 func applyGuardianHeaders(req *http.Request, accessToken string) {
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Cache-Control", "no-cache")
-	req.Header.Set("Pragma", "no-cache")
-	controlplane.ApplyMozillaVPNHeaders(req)
+	req.Header.Set("Cache-Control", "max-age=0")
+	controlplane.ApplyFirefoxHeaders(req)
 }
 
 func guardianURL(endpoint, path string) string {

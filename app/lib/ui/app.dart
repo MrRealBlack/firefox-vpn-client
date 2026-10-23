@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -240,8 +242,10 @@ class _ShellState extends State<Shell> {
         _page = pages[i];
         _settingsOpening = null;
       });
-      // A phone: its own layout, Home and Settings.
-      if (MediaQuery.sizeOf(context).width < 640) {
+      // Android (a phone, or a tablet in either orientation) and a narrow
+      // window: the phone layout, Home and Settings. The computer layout
+      // offers computer-only choices, such as Windows' system proxy.
+      if (Platform.isAndroid || MediaQuery.sizeOf(context).width < 640) {
         return MobileShell(
           core: core,
           settings: widget.settings,
@@ -282,15 +286,25 @@ class _ShellState extends State<Shell> {
                     label: Text(label),
                   ),
               ],
-              // The traffic at the bottom of the menu.
-              trailing: Expanded(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: _TrafficPanel(traffic: status?.traffic),
-                ),
-              ),
+              // The traffic at the bottom of the menu; in a short window the
+              // pages above it scroll rather than run under it.
+              trailing: _TrafficPanel(traffic: status?.traffic),
+              trailingAtBottom: true,
+              scrollable: true,
             ),
-            Expanded(child: content),
+            // A maximized window: the pages stay as wide as reads well; the
+            // home page, centered by itself, keeps its colors to the edges.
+            Expanded(
+              child: page == _Page.overview || status == null
+                  ? content
+                  : Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1000),
+                        child: content,
+                      ),
+                    ),
+            ),
           ],
         ),
       );

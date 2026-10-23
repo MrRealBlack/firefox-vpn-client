@@ -3,6 +3,8 @@
 #include <flutter/standard_method_codec.h>
 #include <shellapi.h>
 
+#include <cmath>
+#include <cstring>
 #include <cwchar>
 
 namespace {
@@ -32,6 +34,16 @@ std::optional<T> Field(const flutter::EncodableMap& map, const char* key) {
     return *value;
   }
   return std::nullopt;
+}
+
+// Whether url is an http or https link. Only these are opened: the shell
+// would also run a local program or open a network path.
+bool IsWebUrl(const std::string& url) {
+  auto starts_with = [&url](const char* prefix) {
+    const size_t n = std::strlen(prefix);
+    return url.size() > n && _strnicmp(url.c_str(), prefix, n) == 0;
+  };
+  return starts_with("http://") || starts_with("https://");
 }
 
 }  // namespace
@@ -86,6 +98,21 @@ void DesktopBridge::HandleCall(
     }
     SetAutostart(Field<bool>(*args, "enabled").value_or(false),
                  Wide(Field<std::string>(*args, "command").value_or("")));
+    result->Success();
+  } else if (name == "openUrl") {
+    const auto* url = std::get_if<std::string>(call.arguments());
+    if (!url) {
+      result->Error("bad_args", "openUrl expects a string");
+      return;
+    }
+    if (!IsWebUrl(*url)) {
+      result->Error("bad_url", "only http and https links are opened");
+      return;
+    }
+    if (!OpenUrl(Wide(*url))) {
+      result->Error("open_failed", "the system could not open the link");
+      return;
+    }
     result->Success();
   } else if (name == "show") {
     ShowWindowNow();
@@ -299,6 +326,16 @@ void DesktopBridge::SetAutostart(bool enabled, const std::wstring& command) {
   RegCloseKey(key);
 }
 
+// Opens url in the default browser, as Explorer does, without starting a
+// helper program.
+bool DesktopBridge::OpenUrl(const std::wstring& url) {
+  HINSTANCE done =
+      ShellExecuteW(window_, L"open", url.c_str(), nullptr, nullptr,
+                    SW_SHOWNORMAL);
+  // Values above 32 mean success.
+  return reinterpret_cast<INT_PTR>(done) > 32;
+}
+
 void DesktopBridge::ShowWindowNow() {
   ShowWindow(window_, IsIconic(window_) ? SW_RESTORE : SW_SHOW);
   SetForegroundWindow(window_);
@@ -308,11 +345,21 @@ std::optional<LRESULT> DesktopBridge::HandleMessage(UINT message,
                                                     WPARAM wparam,
                                                     LPARAM lparam) {
   if (message == WM_GETMINMAXINFO) {
-    // The smallest window the pages are laid out for, in logical pixels.
-    const double scale = GetDpiForWindow(window_) / 96.0;
+    // The smallest window the computer layout is made for: 640 by 480
+    // logical pixels inside the frame (narrower, the app uses the phone's);
+    // small enough to snap into half, or a quarter, of most screens. The
+    // limit is for the whole window, so the frame is added; rounded up, so
+    // the inside never comes out a fraction short.
+    const UINT dpi = GetDpiForWindow(window_);
+    const double scale = dpi / 96.0;
+    RECT rect = {0, 0, static_cast<LONG>(std::ceil(640 * scale)),
+                 static_cast<LONG>(std::ceil(480 * scale))};
+    AdjustWindowRectExForDpi(
+        &rect, static_cast<DWORD>(GetWindowLongPtr(window_, GWL_STYLE)), FALSE,
+        static_cast<DWORD>(GetWindowLongPtr(window_, GWL_EXSTYLE)), dpi);
     auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
-    info->ptMinTrackSize.x = static_cast<LONG>(720 * scale);
-    info->ptMinTrackSize.y = static_cast<LONG>(560 * scale);
+    info->ptMinTrackSize.x = rect.right - rect.left;
+    info->ptMinTrackSize.y = rect.bottom - rect.top;
     return 0;
   }
   // The taskbar's theme changed: the icon for it, at once.
