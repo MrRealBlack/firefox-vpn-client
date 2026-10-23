@@ -73,9 +73,12 @@ func TestAutoConnectGivesUpAndTurnsTheProxyOff(t *testing.T) {
 	if !autoConnecting(t, d) {
 		t.Fatal("the system proxy must wait for the test")
 	}
+	// The phase was off before the attempt too, so wait for the attempt to
+	// end first, then for the proxy to be off again.
+	waitForCondition(t, 5*time.Second, func() bool { return !autoConnecting(t, d) })
 	waitMessage(t, d, PhaseOff, "Proxy off")
-	if autoConnecting(t, d) {
-		t.Fatal("the attempt must end when it gives up")
+	if !d.isOff() {
+		t.Fatal("the proxy must be off again when the attempt gives up")
 	}
 }
 
