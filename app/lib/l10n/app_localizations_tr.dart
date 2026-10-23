@@ -1215,4 +1215,16 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get blockAds => 'Reklamları engelle';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return 'Başka bir program sistem proxy\'sini $address olarak değiştirdi, bu yüzden trafik VPN\'den geçmiyor.';
+  }
+
+  @override
+  String get systemProxyTakenOff =>
+      'Başka bir program sistem proxy\'sini kapattı, bu yüzden trafik VPN\'den geçmiyor.';
+
+  @override
+  String get setSystemProxyAgain => 'Yeniden ayarla';
 }

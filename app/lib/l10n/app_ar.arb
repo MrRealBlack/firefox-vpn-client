@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "البروكسي فقط",
   "noNetwork": "لا يوجد اتصال بالإنترنت. شغّل Wi-Fi أو بيانات الجوال.",
-  "blockAds": "حظر الإعلانات"
+  "blockAds": "حظر الإعلانات",
+  "systemProxyTakenBy": "غيّر برنامج آخر بروكسي النظام إلى {address}، لذا لا تمر حركة المرور عبر VPN.",
+  "systemProxyTakenOff": "أوقف برنامج آخر بروكسي النظام، لذا لا تمر حركة المرور عبر VPN.",
+  "setSystemProxyAgain": "اضبطه مرة أخرى"
 }

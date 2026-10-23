@@ -44,6 +44,12 @@ const (
 	// deployment that does not accept verificationMethod in the login
 	// body answers with it, so we fall back to a plain login.
 	fxaErrnoInvalidParameter = 107
+
+	// fxaErrnoIncorrectEmailCase is FxA's "Incorrect email case" errno: the
+	// email was typed in another letter case than the account's, which the
+	// password's key stretching depends on. The error names the account's
+	// own spelling.
+	fxaErrnoIncorrectEmailCase = 120
 )
 
 type LoginResponse struct {
@@ -53,6 +59,10 @@ type LoginResponse struct {
 	AuthAt             int64  `json:"authAt"`
 	VerificationMethod string `json:"verificationMethod"`
 	VerificationReason string `json:"verificationReason"`
+
+	// Email is the email the sign-in succeeded with, in the account's own
+	// letter case.
+	Email string `json:"-"`
 }
 
 type TokenResponse struct {
@@ -69,6 +79,9 @@ type fxaAPIError struct {
 	Status int
 	Errno  int
 	Body   string
+	// Email is the account's email as FxA stores it, which sign-in errors
+	// carry.
+	Email string
 }
 
 func (e *fxaAPIError) Error() string {
@@ -99,11 +112,23 @@ func (e *fxaAPIError) Is(target error) bool {
 
 func newFxaAPIError(status int, body []byte) *fxaAPIError {
 	var parsed struct {
-		Errno int `json:"errno"`
+		Errno int    `json:"errno"`
+		Email string `json:"email"`
 	}
 	_ = json.Unmarshal(body, &parsed)
-	return &fxaAPIError{Status: status, Errno: parsed.Errno, Body: string(body)}
+	return &fxaAPIError{Status: status, Errno: parsed.Errno, Body: string(body), Email: parsed.Email}
 }
+
+// emailCaseError is the error of a sign-in repeated in the account's own
+// letter case that still failed (for example blocked until an unblock
+// code); it keeps that spelling for the next attempts.
+type emailCaseError struct {
+	email string
+	err   error
+}
+
+func (e *emailCaseError) Error() string { return e.err.Error() }
+func (e *emailCaseError) Unwrap() error { return e.err }
 
 // fxaDo sends an FxA API request built by newRequest, transparently solving
 // the Fastly anti-bot client challenge when the edge answers HTTP 406 (empty
@@ -135,19 +160,38 @@ func fxaDo(ctx context.Context, newRequest func() (*http.Request, error)) (*http
 	return nil, fmt.Errorf("Fastly anti-bot challenge still failing after %d attempts (HTTP 406)", maxChallengeAttempts)
 }
 
+// fxaLogin signs in. An email typed in another letter case than the
+// account's is refused with the account's own spelling (errno 120); the
+// sign-in is then repeated once with it, as Firefox does, naming the typed
+// email as originalLoginEmail.
 func fxaLogin(ctx context.Context, email, password, unblockCode string) (*LoginResponse, error) {
-	loginResp, err := fxaLoginAttempt(ctx, email, password, verificationMethodEmail2FA, unblockCode)
-	if err != nil {
-		var apiErr *fxaAPIError
-		if errors.As(err, &apiErr) && apiErr.Errno == fxaErrnoInvalidParameter {
-			return fxaLoginAttempt(ctx, email, password, "", unblockCode)
+	resp, err := fxaLoginAs(ctx, email, "", password, unblockCode)
+	var apiErr *fxaAPIError
+	if errors.As(err, &apiErr) && apiErr.Errno == fxaErrnoIncorrectEmailCase && apiErr.Email != "" && apiErr.Email != email {
+		resp, err = fxaLoginAs(ctx, apiErr.Email, email, password, unblockCode)
+		if err != nil {
+			return nil, &emailCaseError{email: apiErr.Email, err: err}
 		}
-		return nil, err
 	}
-	return loginResp, nil
+	return resp, err
 }
 
-func fxaLoginAttempt(ctx context.Context, email, password, verificationMethod, unblockCode string) (*LoginResponse, error) {
+// fxaLoginAs signs in as email; a deployment that does not accept the
+// verification method is asked again without it.
+func fxaLoginAs(ctx context.Context, email, originalEmail, password, unblockCode string) (*LoginResponse, error) {
+	resp, err := fxaLoginAttempt(ctx, email, originalEmail, password, verificationMethodEmail2FA, unblockCode)
+	var apiErr *fxaAPIError
+	if errors.As(err, &apiErr) && apiErr.Errno == fxaErrnoInvalidParameter {
+		resp, err = fxaLoginAttempt(ctx, email, originalEmail, password, "", unblockCode)
+	}
+	if err != nil {
+		return nil, err
+	}
+	resp.Email = email
+	return resp, nil
+}
+
+func fxaLoginAttempt(ctx context.Context, email, originalEmail, password, verificationMethod, unblockCode string) (*LoginResponse, error) {
 	authPW, err := deriveAuthPW(email, password)
 	if err != nil {
 		return nil, fmt.Errorf("deriving authPW: %w", err)
@@ -156,6 +200,9 @@ func fxaLoginAttempt(ctx context.Context, email, password, verificationMethod, u
 	body := map[string]string{
 		"email":  email,
 		"authPW": hex.EncodeToString(authPW),
+	}
+	if originalEmail != "" {
+		body["originalLoginEmail"] = originalEmail
 	}
 	if verificationMethod != "" {
 		body["verificationMethod"] = verificationMethod

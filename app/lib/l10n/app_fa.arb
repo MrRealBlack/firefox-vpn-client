@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "فقط پروکسی",
   "noNetwork": "اتصال اینترنت برقرار نیست. اینترنت موبایل یا Wi-Fi را روشن کنید.",
-  "blockAds": "مسدود کردن تبلیغات"
+  "blockAds": "مسدود کردن تبلیغات",
+  "systemProxyTakenBy": "برنامه دیگری پروکسی سیستم را روی {address} گذاشته و ترافیک از VPN نمی‌رود.",
+  "systemProxyTakenOff": "برنامه دیگری پروکسی سیستم را خاموش کرده و ترافیک از VPN نمی‌رود.",
+  "setSystemProxyAgain": "دوباره تنظیم کن"
 }

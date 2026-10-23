@@ -209,6 +209,9 @@ func (s *signIn) signIn(ctx context.Context, d *Daemon, email, password string) 
 	})
 
 	resp, err := fxa.Login(ctx, email, password)
+	// Typed in another letter case than the account's: its own spelling from
+	// here on (the unblock code, the messages, the stored account).
+	email = fxa.SignedInEmail(email, resp, err)
 	var problem signInProblem
 	for attempt := 0; fxa.Errno(err) == fxa.ErrnoRequestBlocked && attempt < maxCodeAttempts; attempt++ {
 		if attempt == 0 {
@@ -223,6 +226,7 @@ func (s *signIn) signIn(ctx context.Context, d *Daemon, email, password string) 
 			return "", askErr
 		}
 		resp, err = fxa.LoginWithUnblockCode(ctx, email, password, code)
+		email = fxa.SignedInEmail(email, resp, err)
 	}
 	if err != nil {
 		return "", err

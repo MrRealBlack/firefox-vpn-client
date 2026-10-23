@@ -25,6 +25,8 @@ type managedSession struct {
 	// afterRefusal: the pass was fetched because Mozilla refused the one
 	// before (refusedAgain); a renewed pass clears it.
 	afterRefusal bool
+	// server is the address of the proxy server the session is on.
+	server string
 }
 
 type ControllerConfig struct {
@@ -41,18 +43,30 @@ type ControllerConfig struct {
 	// not the recommended location or the fastest one): a refusal that a
 	// new pass does not cure is then reported as LocationRefusedError.
 	ChosenLocation bool
+	// Server is the server ProxyURL points to, with its location data.
+	Server Candidate
+	// Location lists the servers of the selected location
+	// (LocationCandidates), and Failover moves the upstream among them
+	// when Server keeps failing. Both are unset for a server set by hand.
+	Location []Candidate
+	Failover *ServerFailover
 }
 
 type Controller struct {
 	// OnSessionRebuilt, when set, runs after a failed upstream session was
 	// replaced by a new one.
 	OnSessionRebuilt func()
+	// OnServerSwitched, when set, runs (renewMu held) after the failover
+	// moved the upstream to another server of the location.
+	OnServerSwitched func(Candidate)
 
 	guardian string
-	proxyURL *url.URL
 	timeout  time.Duration
 	// chosenLocation is ControllerConfig.ChosenLocation.
 	chosenLocation bool
+	// location and failover are ControllerConfig.Location and Failover.
+	location []Candidate
+	failover *ServerFailover
 
 	sessionFactory func(token string) (proxySession, error)
 	refreshSession func() error
@@ -74,6 +88,10 @@ type Controller struct {
 	statusFile string
 	closed     bool
 	done       chan struct{}
+	// server is the proxy server new sessions are opened to (guarded by
+	// mu; sessionFactory dials proxyURL); the failover changes both.
+	server   Candidate
+	proxyURL *url.URL
 
 	// Guarded by mu: the latest quota state and the outcome of the last
 	// renewal, reported in the status file without any secret.
@@ -93,23 +111,25 @@ type Controller struct {
 }
 
 func NewController(cfg ControllerConfig) (*Controller, error) {
-	var baseFactory func(token string) (proxySession, error)
+	var baseFactory func(target *url.URL, token string) (proxySession, error)
 	if cfg.UseH3 {
-		baseFactory = func(token string) (proxySession, error) {
-			return newH3ProxySession(cfg.ProxyURL, token, cfg.Timeout)
+		baseFactory = func(target *url.URL, token string) (proxySession, error) {
+			return newH3ProxySession(target, token, cfg.Timeout)
 		}
 	} else {
-		baseFactory = func(token string) (proxySession, error) {
-			return newH2ProxySession(cfg.ProxyURL, token, cfg.Timeout)
+		baseFactory = func(target *url.URL, token string) (proxySession, error) {
+			return newH2ProxySession(target, token, cfg.Timeout)
 		}
 	}
 	sessions := cfg.Sessions
 	if sessions < 1 {
 		sessions = defaultUpstreamConnections
 	}
-	factory := func(token string) (proxySession, error) {
+	// A pool stays on the server it was made for: after a failover, the
+	// slots it replenishes belong to a session being drained.
+	factory := func(target *url.URL, token string) (proxySession, error) {
 		if sessions == 1 {
-			return baseFactory(token)
+			return baseFactory(target, token)
 		}
 		var tokenMu sync.RWMutex
 		createToken := token
@@ -117,7 +137,7 @@ func NewController(cfg ControllerConfig) (*Controller, error) {
 			tokenMu.RLock()
 			currentToken := createToken
 			tokenMu.RUnlock()
-			return baseFactory(currentToken)
+			return baseFactory(target, currentToken)
 		}, func(newToken string) {
 			tokenMu.Lock()
 			createToken = newToken
@@ -125,20 +145,26 @@ func NewController(cfg ControllerConfig) (*Controller, error) {
 		})
 	}
 
-	session, err := factory(cfg.Pass.RawToken)
+	session, err := factory(cfg.ProxyURL, cfg.Pass.RawToken)
 	if err != nil {
 		return nil, err
 	}
 
+	server := cfg.Server
+	if server.Addr == "" {
+		server.Addr = cfg.ProxyURL.Host
+	}
 	controller := &Controller{
 		guardian:       cfg.Guardian,
 		proxyURL:       cfg.ProxyURL,
+		server:         server,
 		timeout:        cfg.Timeout,
-		sessionFactory: factory,
 		auth:           cfg.Auth,
 		statusFile:     cfg.StatusFile,
 		accounts:       cfg.Accounts,
 		chosenLocation: cfg.ChosenLocation,
+		location:       cfg.Location,
+		failover:       cfg.Failover,
 		quotaCheckNow:  make(chan struct{}, 1),
 		done:           make(chan struct{}),
 		usage:          cfg.Pass.Usage,
@@ -147,7 +173,14 @@ func NewController(cfg ControllerConfig) (*Controller, error) {
 			rawToken:  cfg.Pass.RawToken,
 			expiresAt: cfg.Pass.ExpiresAt(),
 			accepting: true,
+			server:    server.Addr,
 		},
+	}
+	controller.sessionFactory = func(token string) (proxySession, error) {
+		controller.mu.Lock()
+		target := controller.proxyURL
+		controller.mu.Unlock()
+		return factory(target, token)
 	}
 	controller.writeStatus("startup")
 	return controller, nil
@@ -196,6 +229,7 @@ func (c *Controller) openTunnel(authority, clientKey string) (net.Conn, error) {
 			if err == nil {
 				c.redialBackoff.opened()
 				c.passBackoff.opened()
+				c.failover.Worked(ms.server)
 				return &managedTunnelConn{
 					Conn:    conn,
 					release: release,
@@ -317,6 +351,7 @@ func (c *Controller) swapSession(newSession proxySession, rawToken string, expir
 		rawToken:  rawToken,
 		expiresAt: expiresAt,
 		accepting: true,
+		server:    c.server.Addr,
 	}
 	if old != nil {
 		old.accepting = false
@@ -397,6 +432,41 @@ func (c *Controller) Reconnect() error {
 	}
 	c.mu.Unlock()
 	return nil
+}
+
+// currentServer returns the server new sessions are opened to.
+func (c *Controller) currentServer() Candidate {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.server
+}
+
+// failOver counts err, a failure to open or keep a session on the server
+// from, against that server, and moves the controller to another server of
+// the location when the failover says so (ServerFailover.Failed). It
+// reports whether it moved. renewMu is held.
+func (c *Controller) failOver(from Candidate, err error) bool {
+	if c.failover == nil || err == nil || c.isClosed() {
+		return false
+	}
+	next, ok := c.failover.Failed(c.location, from, err)
+	if !ok {
+		return false
+	}
+	target, parseErr := NormalizeURL(next.Addr)
+	if parseErr != nil {
+		logx.Warn("cannot switch to the next upstream server proxy=%s err=%s", next.Addr, logx.Err(parseErr))
+		return false
+	}
+	c.mu.Lock()
+	c.server, c.proxyURL = next, target
+	c.mu.Unlock()
+	// The new server starts with the quick redial steps.
+	c.redialBackoff.reset()
+	if c.OnServerSwitched != nil {
+		c.OnServerSwitched(next)
+	}
+	return true
 }
 
 // CurrentToken returns the proxy pass of the current session.

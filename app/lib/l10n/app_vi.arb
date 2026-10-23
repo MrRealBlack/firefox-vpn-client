@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "Chỉ proxy",
   "noNetwork": "Không có kết nối internet. Hãy bật Wi-Fi hoặc dữ liệu di động.",
-  "blockAds": "Chặn quảng cáo"
+  "blockAds": "Chặn quảng cáo",
+  "systemProxyTakenBy": "Một chương trình khác đã đặt proxy hệ thống thành {address}, nên lưu lượng không đi qua VPN.",
+  "systemProxyTakenOff": "Một chương trình khác đã tắt proxy hệ thống, nên lưu lượng không đi qua VPN.",
+  "setSystemProxyAgain": "Đặt lại"
 }

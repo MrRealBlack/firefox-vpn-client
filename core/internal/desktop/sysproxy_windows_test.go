@@ -178,6 +178,57 @@ func TestSystemProxyModes(t *testing.T) {
 	}
 }
 
+// Another program (v2rayN, Clash) replacing this program's setting is
+// reported, never taken back by itself; the user's request takes it back,
+// and the other program's proxy becomes the one restored afterwards.
+func TestSystemProxyTakenByAnotherProgram(t *testing.T) {
+	k := useTestProxyKeys(t)
+	var reports []*service.SystemProxyTaken
+	sync := systemProxySync{report: func(taken *service.SystemProxyTaken) { reports = append(reports, taken) }}
+	running := trayStatus("running", config.SystemProxySet)
+	sync.update(running)
+	if len(reports) != 0 {
+		t.Fatalf("this program's own setting reported as taken: %v", reports)
+	}
+
+	other := proxySetting{enabled: true, server: "127.0.0.1:7890", override: "<local>"}
+	_ = writeProxySetting(k, other)
+	for i := 0; i < 3; i++ {
+		sync.checked = time.Time{} // as if takenCheck had passed
+		sync.update(running)
+	}
+	if p := setting(t); p != other {
+		t.Fatalf("the other program's setting was taken back by itself: %+v", p)
+	}
+	if len(reports) != 1 || reports[0] == nil || reports[0].By != "127.0.0.1:7890" {
+		t.Fatalf("reports %v; want one naming the other proxy", reports)
+	}
+
+	// Turned off by the other program: reported with no address.
+	_ = writeProxySetting(k, proxySetting{})
+	sync.checked = time.Time{}
+	sync.update(running)
+	if len(reports) != 2 || reports[1] == nil || reports[1].By != "" {
+		t.Fatalf("reports %v; want the proxy turned off", reports)
+	}
+
+	// The user asks to set it again.
+	_ = writeProxySetting(k, other)
+	again := trayStatus("running", config.SystemProxySet)
+	again.SystemProxyRetake = 1
+	sync.update(again)
+	if p := setting(t); p.server != "127.0.0.1:10810" || !p.enabled {
+		t.Fatalf("set again: %+v", p)
+	}
+	if last := reports[len(reports)-1]; last != nil {
+		t.Fatalf("taken back, yet reported as taken: %v", last)
+	}
+	sync.clear()
+	if p := setting(t); p != other {
+		t.Fatalf("the other program's setting comes back when this one stops: %+v", p)
+	}
+}
+
 // While auto-connect has not seen the connection work, set waits; it
 // applies once the attempt ends.
 func TestSystemProxyWaitsForAutoConnect(t *testing.T) {

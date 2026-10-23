@@ -174,6 +174,24 @@ func restoreSystemProxy(server string) error {
 	return nil
 }
 
+// systemProxyTaken reports whether another program replaced this
+// program's setting for the proxy at server, and what the setting points
+// at now: a setup script, another proxy, or "" when it turned the proxy
+// off.
+func systemProxyTaken(server string) (bool, string) {
+	p, err := readProxySetting()
+	if err != nil || p.isOurs(server) {
+		return false, ""
+	}
+	switch p[proxySchema+" mode"] {
+	case "'auto'":
+		return true, strings.Trim(p[proxySchema+" autoconfig-url"], "'")
+	case "'manual'":
+		return true, net.JoinHostPort(strings.Trim(p[proxySchema+".http host"], "'"), p[proxySchema+".http port"])
+	}
+	return true, ""
+}
+
 // clearSystemProxy turns the desktop's proxy off, whoever set it.
 func clearSystemProxy() error {
 	mode, err := gsettings("get", proxySchema, "mode")

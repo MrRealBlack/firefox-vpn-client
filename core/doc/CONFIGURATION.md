@@ -32,7 +32,7 @@ Selection lives in `proxy.ResolveWithStateAndCountry` and `selectProxyCandidate`
 5. Every location is eligible, including those the server list marks `locked` (Firefox shows them only under preconditions): Mozilla's proxy servers accept an ordinary account's pass on all of them (verified 2026-10-23 on all 34 locations, with exits in the expected countries). `proxy.allow_locked` is ignored; a file that still has it loads, and it is not written back.
 6. Without a country, the recommended location (`REC`, the anycast entry) is used when present. `REC` or `recommended` selects it explicitly; other country filters never match it.
 7. A country selects the first matching city in deterministic list order, and one of its servers at random. Without `REC` and with several countries, an explicit choice is required.
-8. Three recorded failures establishing a saved upstream clear that selection; a successful start resets the count.
+8. A server that fails three times in a row (to connect, or by breaking its sessions) is avoided for 15 minutes and replaced by another server of the same location: another server of its city, else of the location's next city; for the recommended location and `fastest`, the next server of the location the selection works on. The new server is saved as the selection, so a restart does not go back to the failed one; while a saved server is avoided, the next first wake selects another. Failures of the network, the account, or its pass do not count, and the country never changes; when every server of the location failed recently, the upstream stays and retries as before ([SESSIONS.md](SESSIONS.md#server-failover)).
 
 Should Mozilla start enforcing the lock, the server of a chosen location refuses the CONNECT (403 or 407) even with a new pass; the connection test then reports `location_refused` ([DASHBOARD.md](DASHBOARD.md#failure-codes)). Hostname persistence does not pin a physical server, network path, public IP, or address family.
 
@@ -45,7 +45,7 @@ Should Mozilla start enforcing the lock, the server of a chosen location refuses
 | `accounts/secret.key` | [accounts/password.go](../internal/accounts/password.go) | Random key that encrypts the stored passwords | Yes |
 | `accounts/<id>/account.json` | `accounts.Store` | Email, label, status, reason, retry time, last usage | No (personal) |
 | `state.json` | `accounts.Manager` | Active account id | No |
-| `selection.json` | Selection helpers | Saved upstream address, location metadata, failure count | No |
+| `selection.json` | Selection helpers, `proxy.ServerFailover` | Saved upstream address and location metadata | No |
 | `flags/xx.svg` | `Daemon.flag` (flags.go) | A country flag the program does not carry, downloaded once from flag-icons (jsDelivr `@main`, else GitHub; through Mozilla when the proxy is awake) when the dashboard or the app asks `GET /flags/xx.svg`. The web folder and the app carry only the flags of Mozilla's locations; a failed download is not tried again for 10 minutes | No |
 | `servers.json` | `Daemon.refreshLocations` | The last server list fetched from Mozilla's Remote Settings, as fetched (filtered again on use), and when. Loaded at start, so the locations show at once; used when a fetch fails; a connection whose pass is ready before the new list uses it instead of waiting (`serverlist.SaveCache`, `LoadCache`) | No |
 | `status.json` | `proxy.Controller` | Runtime status snapshot | No |
@@ -65,7 +65,7 @@ Loaded by `config.Load`, which fills omitted fields with defaults, validates val
 
 ### selection.json
 
-`proxySelectionState` defines `addr`, optional `country_name`, `country_code`, `city_name`, `city_code`, and `consecutive_failures`. See `loadProxySelection`, `SaveSelection`, and `RecordSelectionFailure`.
+`proxySelectionState` defines `addr` and optional `country_name`, `country_code`, `city_name`, and `city_code`. See `loadProxySelection` and `SaveSelection`. The first wake writes it after a successful connection; `ServerFailover.Failed` rewrites it when it moves the upstream to another server of the location. The failures counted toward that and the avoided servers are kept in memory only.
 
 ### status.json
 

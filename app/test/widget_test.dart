@@ -57,6 +57,12 @@ class FakeApi implements CoreApi {
   /// The status's `exit_mismatch`, as the core would send it.
   Map<String, Object?>? exitMismatch;
 
+  /// Another program's system proxy in place of the core's (`by`).
+  String? systemProxyTakenBy;
+
+  /// Times the app asked for set while set.
+  int retakes = 0;
+
   Map<String, Object?> get _lastTest => {
     'at': DateTime.now().toUtc().toIso8601String(),
     'ok': online,
@@ -104,6 +110,8 @@ class FakeApi implements CoreApi {
     'selection': location,
     if (connectFailure.isNotEmpty) 'connect_failure': connectFailure,
     if (exitMismatch != null) 'exit_mismatch': exitMismatch,
+    if (systemProxyTakenBy != null)
+      'system_proxy_taken': {'by': systemProxyTakenBy},
     if (noNetwork) 'no_network': true,
     'proxy': recommended
         ? {
@@ -147,7 +155,13 @@ class FakeApi implements CoreApi {
   });
 
   @override
-  Future<void> setSystemProxy(String mode) async => this.mode = mode;
+  Future<void> setSystemProxy(String mode) async {
+    if (mode == 'set' && this.mode == 'set') {
+      retakes++;
+      systemProxyTakenBy = null;
+    }
+    this.mode = mode;
+  }
 
   @override
   Future<void> setPower(bool on) async => this.on = on;
@@ -1450,6 +1464,52 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     core.dispose();
   }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+  testWidgets(
+    'another program taking the system proxy is shown, and taken back',
+    (tester) async {
+      stillMotion(tester);
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final api = FakeApi()..systemProxyTakenBy = '127.0.0.1:7890';
+      final core = CoreController(
+        () async => api,
+        pollInterval: const Duration(hours: 1),
+      );
+      await tester.pumpWidget(VpnApp(core: core, settings: AppSettings()));
+      core.start();
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Another program set the system proxy to'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Set it again'));
+      await tester.pumpAndSettle();
+      expect(api.retakes, 1);
+      expect(find.text('Set it again'), findsNothing);
+
+      // Turned off by the other program; not shown in Proxy mode.
+      api.systemProxyTakenBy = '';
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          "Another program turned the system proxy off, so traffic doesn't go through the VPN.",
+        ),
+        findsOneWidget,
+      );
+      api.mode = 'clear';
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(find.text('Set it again'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      core.dispose();
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
 
   testWidgets('the smallest windows keep everything inside', (tester) async {
     stillMotion(tester);

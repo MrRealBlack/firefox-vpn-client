@@ -602,38 +602,13 @@
               </div>
               <ul>
                 <li>v2rayN, v2rayNG, NekoBox: copy the link and import it from the clipboard, or add a SOCKS server with the address above.</li>
-                <li>Windows: the system proxy (below) sends the applications that follow Windows' proxy setting through the VPN without setting each one up.</li>
                 <li>Another device, such as a phone: set the SOCKS5 listen address to <code>0.0.0.0:10810</code> and a SOCKS5 username and password in Settings, then use this computer's network address instead of <code>127.0.0.1</code>.</li>
               </ul>
             </article>
 
-            <article class="card help-card wide" id="help-system-proxy">
-              <h3>Windows system proxy</h3>
-              <p>Most browsers (Chrome, Edge, and Firefox with its default "Use system proxy settings") and many Windows programs follow Windows' proxy setting. The tray icon's menu, the desktop app, or Settings, Local proxy, Mode, chooses one of two things for it, and the choice is kept for the next start:</p>
-              <dl class="help-modes">
-                <dt>Set system proxy</dt>
-                <dd>Windows' proxy setting points at this program while the proxy runs, so those applications go through the VPN without their own setup. When the program stops, the previous setting comes back.</dd>
-                <dt>Clear system proxy</dt>
-                <dd>Turns Windows' proxy setting off, once: only applications set up by hand (a browser extension, another proxy client) use the VPN. Also useful when another program left the setting pointing at a proxy that no longer runs. The default ("Proxy only").</dd>
-              </dl>
-            </article>
-
-            <article class="card help-card" id="help-tray">
-              <h3>Tray icon colors</h3>
-              <ul class="help-colors">
-                <li><i class="tray-green"></i>Green: connected</li>
-                <li><i class="tray-blue"></i>Blue: connected, Windows' proxy setting points at the VPN (Set system proxy)</li>
-                <li><i class="tray-amber"></i>Amber: starting, or waiting (no account yet, or every account waits for its quota)</li>
-                <li><i class="tray-red"></i>Red: error; the dashboard shows it</li>
-                <li><i class="tray-faded"></i>Faded: sleeping after a while without a connection (Settings → Proxy → Sleep when unused); the next connection wakes it</li>
-                <li><i class="tray-grey"></i>Grey: the service is not reachable</li>
-              </ul>
-              <p class="help-after">Hovering over the icon shows the state and the country.</p>
-            </article>
-
             <article class="card help-card" id="help-ports">
               <h3>Only ports 80, 443, 8080, and 8443</h3>
-              <p>Mozilla's proxy connects to the web ports <strong>80, 443, 8080, and 8443</strong> only. Every other port is refused by Mozilla's server, for example <code>http://203.0.113.5:9898/</code>, SSH (22), mail (25, 465, 587, 993), or DNS (53). This program cannot change that.</p>
+              <p>Mozilla's proxy connects to the web ports <strong>80, 443, 8080, and 8443</strong> only. Every other port is refused by Mozilla's server, for example <code>http://203.0.113.5:9898/</code>, SSH (22), mail (25, 465, 587, 993), or DNS (53). This program cannot change that, with one exception: git over SSH to GitHub goes to GitHub's SSH server on port 443 by itself.</p>
               <ul>
                 <li>Serve your own site on one of the four ports (8080 and 8443 are the usual choices).</li>
                 <li>Or let the browser reach that address directly: Firefox, Settings, Network Settings, <em>No proxy for</em>.</li>
@@ -645,31 +620,10 @@
               <p>Mozilla's proxy carries TCP connections. UDP does not go through it, so online games, voice and video calls in some applications, and other UDP traffic do not work through this proxy. Browsers are not affected: they use HTTP/2 over TCP when HTTP/3 is not available.</p>
             </article>
 
-            <article class="card help-card" id="help-quota">
-              <h3>Quota and several accounts</h3>
-              <p>Each Firefox Account has a monthly data quota, shown on Accounts. When the active account reaches the switch threshold (Settings, Accounts), the next account takes over without dropping connections. Add more accounts to have more data.</p>
-            </article>
-
-            <article class="card help-card" id="help-locations">
-              <h3>Every location</h3>
-              <p>Every location on Servers can be used with any account, including those Mozilla's server list marks as locked (Firefox shows them only under conditions). If Mozilla refuses a location you chose, the status says so; choose another location or the recommended one.</p>
-            </article>
-
-            <article class="card help-card" id="help-ip">
-              <h3>Shared public IP</h3>
-              <p>Many people share Mozilla's exit addresses, so some sites show a CAPTCHA or refuse VPN addresses. Overview shows the public IPv4 and IPv6 address; sites that support IPv6 see the IPv6 one.</p>
-            </article>
-
             <article class="card help-card" id="help-routing">
               <h3>Your country's sites directly (routing)</h3>
               <p>Optional, in Settings, Routing. The sites and networks of the chosen region (Iran by default; also China, Russia, Afghanistan, Turkey, Indonesia, or Brazil) then go directly through your own internet: faster, not refused for a foreign address, and without using the accounts' quota; everything else still goes through Mozilla. The lists of domains and networks are downloaded by themselves every 10 days. A site reached directly sees your real address.</p>
             </article>
-
-            <article class="card help-card" id="help-filtering">
-              <h3>Filtered networks</h3>
-              <p>When Mozilla's sign-in, Guardian, or server-list requests fail, set encrypted DNS in Settings, DNS (and test it there), or an API proxy in Settings, Network. Websites opened through the proxy are always resolved at Mozilla's exit.</p>
-            </article>
-
             <article class="card help-card" id="help-logs">
               <h3>Logs</h3>
               <p>The Logs page shows the live log. The files are in the data folder's <code>logs</code> folder, one per day, kept for seven days.</p>

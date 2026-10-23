@@ -161,7 +161,8 @@ func RunApp(paths service.DataPaths, verbose bool) error {
 	}
 
 	logx.Info("app: started pid=%d data_dir=%s", os.Getpid(), paths.Dir)
-	var sysproxy systemProxySync
+	// Another program replacing the system proxy shows in the status.
+	sysproxy := systemProxySync{report: d.SetSystemProxyTaken}
 	cleaned := make(chan struct{})
 	var cleanOnce sync.Once
 	cleanup := func() {

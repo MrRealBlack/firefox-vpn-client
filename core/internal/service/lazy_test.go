@@ -40,7 +40,10 @@ type lazyFixture struct {
 	// guardianFails makes Guardian answer 400, a failure not known to last
 	// (a 5xx would first use up the pass request's own retry budget).
 	guardianFails atomic.Bool
-	upstream      string
+	// deadServer, when set, is listed before the fixture upstream in the
+	// same city: an address where nothing listens.
+	deadServer atomic.Pointer[string]
+	upstream   string
 	// controlPlane is the installed control-plane transport.
 	controlPlane *lazyControlPlane
 }
@@ -105,11 +108,16 @@ func newLazyFixture(t *testing.T) *lazyFixture {
 	f.upstream = srv.Listener.Addr().String()
 	host, port, _ := net.SplitHostPort(f.upstream)
 
-	serverList := fmt.Sprintf(`{"data":[{"name":"Netherlands","code":"NL","cities":[{"name":"Amsterdam","code":"ams","servers":[{"hostname":%q,"port":%s}]}]}]}`, host, port)
 	f.controlPlane = &lazyControlPlane{handle: func(r *http.Request) (*http.Response, error) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Host == "firefox.settings.services.mozilla.com" && strings.HasSuffix(r.URL.Path, "/collections/vpn-serverlist/records"):
 			f.serverLists.Add(1)
+			servers := fmt.Sprintf(`{"hostname":%q,"port":%s}`, host, port)
+			if dead := f.deadServer.Load(); dead != nil {
+				deadHost, deadPort, _ := net.SplitHostPort(*dead)
+				servers = fmt.Sprintf(`{"hostname":%q,"port":%s},`, deadHost, deadPort) + servers
+			}
+			serverList := `{"data":[{"name":"Netherlands","code":"NL","cities":[{"name":"Amsterdam","code":"ams","servers":[` + servers + `]}]}]}`
 			return coreResponse(r, http.StatusOK, serverList, nil), nil
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/api/v1/fpn/token"):
 			f.passes.Add(1)
@@ -429,4 +437,42 @@ func noExitCheck(t *testing.T) {
 	old := exitCheckTimeout
 	exitCheckTimeout = 0
 	t.Cleanup(func() { exitCheckTimeout = old })
+}
+
+// A wake that keeps failing on the persisted server moves to another
+// server of the location after three failures, and saves it.
+func TestWakeMovesToAnotherServerOfTheLocation(t *testing.T) {
+	d, f := runLazyDaemon(t)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead := ln.Addr().String()
+	_ = ln.Close()
+	f.deadServer.Store(&dead)
+	if err := proxy.SaveSelection(d.paths.Selection, proxy.Candidate{Addr: dead, CountryCode: "NL", CountryName: "Netherlands", CityCode: "ams", CityName: "Amsterdam"}); err != nil {
+		t.Fatal(err)
+	}
+	client := newDashboardClient(t, d)
+	for i := 1; i <= 3; i++ {
+		if rec := client.do(http.MethodPost, "/api/test", nil); rec.Code == http.StatusOK {
+			t.Fatalf("test %d connected through a dead server: %s", i, rec.Body)
+		}
+		persisted, ok := proxy.PersistedSelection(d.paths.Selection, "")
+		if want := map[bool]string{false: dead, true: f.upstream}[i == 3]; !ok || persisted.Addr != want {
+			t.Fatalf("after failure %d persisted %q, want %q", i, persisted.Addr, want)
+		}
+	}
+	if !d.failover.Avoided(dead) {
+		t.Fatal("the dead server must be avoided")
+	}
+	// Client connections try the other server at once, without the wait
+	// that failed wakes leave.
+	view, _ := d.StatusView()
+	if err := lazyEcho(t, view.Proxy.Listen, "next server"); err != nil {
+		t.Fatalf("the next wake uses the other server: %v", err)
+	}
+	if view, _ = d.StatusView(); view.Proxy == nil || view.Proxy.Upstream != f.upstream || view.Proxy.CountryCode != "NL" {
+		t.Fatalf("connected: %+v", view.Proxy)
+	}
 }

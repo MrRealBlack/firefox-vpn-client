@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "Solo proxy",
   "noNetwork": "Sin conexión a internet. Active el Wi-Fi o los datos móviles.",
-  "blockAds": "Bloquear anuncios"
+  "blockAds": "Bloquear anuncios",
+  "systemProxyTakenBy": "Otro programa cambió el proxy del sistema a {address}, así que el tráfico no pasa por la VPN.",
+  "systemProxyTakenOff": "Otro programa desactivó el proxy del sistema, así que el tráfico no pasa por la VPN.",
+  "setSystemProxyAgain": "Volver a configurarlo"
 }

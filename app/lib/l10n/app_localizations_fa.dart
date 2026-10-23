@@ -1209,4 +1209,16 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get blockAds => 'مسدود کردن تبلیغات';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return 'برنامه دیگری پروکسی سیستم را روی $address گذاشته و ترافیک از VPN نمی‌رود.';
+  }
+
+  @override
+  String get systemProxyTakenOff =>
+      'برنامه دیگری پروکسی سیستم را خاموش کرده و ترافیک از VPN نمی‌رود.';
+
+  @override
+  String get setSystemProxyAgain => 'دوباره تنظیم کن';
 }

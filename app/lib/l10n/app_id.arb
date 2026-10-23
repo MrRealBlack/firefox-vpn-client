@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "Hanya proxy",
   "noNetwork": "Tidak ada koneksi internet. Nyalakan Wi-Fi atau data seluler.",
-  "blockAds": "Blokir iklan"
+  "blockAds": "Blokir iklan",
+  "systemProxyTakenBy": "Program lain mengubah proxy sistem ke {address}, jadi lalu lintas tidak melewati VPN.",
+  "systemProxyTakenOff": "Program lain mematikan proxy sistem, jadi lalu lintas tidak melewati VPN.",
+  "setSystemProxyAgain": "Atur lagi"
 }

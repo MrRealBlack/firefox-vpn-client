@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -133,6 +134,18 @@ func (o *RoutedOpener) OpenTunnel(authority string) (net.Conn, error) {
 	return o.OpenTunnelForClient(authority, "")
 }
 
+// throughMozilla is authority as it can go through Mozilla, which connects
+// to web ports only: git over SSH to GitHub (github.com:22) goes to
+// ssh.github.com:443, GitHub's SSH server on the HTTPS port, with the same
+// protocol and host keys.
+func throughMozilla(authority string) string {
+	if strings.EqualFold(authority, "github.com:22") {
+		logx.Debug("GitHub's SSH through port 443 target=%s", logx.Target(authority))
+		return "ssh.github.com:443"
+	}
+	return authority
+}
+
 // OpenTunnelForClient keeps the client affinity of the upstream pool.
 func (o *RoutedOpener) OpenTunnelForClient(authority, clientKey string) (net.Conn, error) {
 	if r := o.router.Load(); r != nil {
@@ -166,6 +179,7 @@ func (o *RoutedOpener) OpenTunnelForClient(authority, clientKey string) (net.Con
 		}
 	}
 	o.proxied.Add(1)
+	authority = throughMozilla(authority)
 	var conn net.Conn
 	var err error
 	if affinity, ok := o.upstream.(clientAffinityTunnelOpener); ok && clientKey != "" {

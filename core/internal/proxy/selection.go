@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -36,7 +37,6 @@ type proxySelectionState struct {
 	CountryCode string `json:"country_code,omitempty"`
 	CityName    string `json:"city_name,omitempty"`
 	CityCode    string `json:"city_code,omitempty"`
-	Failures    int    `json:"consecutive_failures,omitempty"`
 }
 
 func (p Candidate) CountryNameOrUnknown() string {
@@ -68,15 +68,21 @@ func (p Candidate) CityCodeOrUnknown() string {
 }
 
 func resolveProxy(proxyFlag string, countries []serverlist.Country) (Candidate, error) {
-	candidate, _, err := ResolveWithStateAndCountry(proxyFlag, "", countries, "")
+	candidate, _, err := ResolveWithStateAndCountry(proxyFlag, "", countries, "", nil)
 	return candidate, err
 }
 
 func resolveProxyWithState(proxyFlag string, countries []serverlist.Country, stateFile string) (Candidate, bool, error) {
-	return ResolveWithStateAndCountry(proxyFlag, "", countries, stateFile)
+	return ResolveWithStateAndCountry(proxyFlag, "", countries, stateFile, nil)
 }
 
-func ResolveWithStateAndCountry(proxyFlag, countryFilter string, countries []serverlist.Country, stateFile string) (Candidate, bool, error) {
+// ResolveWithStateAndCountry selects the upstream: proxyFlag when set,
+// else the persisted choice in stateFile when it suits countryFilter and is
+// still a list entry, else a server of the location (selectProxyCandidate).
+// avoided (nil: none) reports servers that failed recently
+// (ServerFailover.Avoided): a persisted one is replaced, and selection
+// skips them while the location has another.
+func ResolveWithStateAndCountry(proxyFlag, countryFilter string, countries []serverlist.Country, stateFile string, avoided func(addr string) bool) (Candidate, bool, error) {
 	if proxyFlag != "" {
 		if matched, ok := findProxyCandidate(proxyFlag, countries); ok {
 			matched.Addr = proxyFlag
@@ -88,7 +94,9 @@ func ResolveWithStateAndCountry(proxyFlag, countryFilter string, countries []ser
 	if stateFile != "" {
 		persisted, err := loadProxySelection(stateFile)
 		if err == nil {
-			if proxyCandidateMatchesCountry(persisted, countryFilter) {
+			if avoided != nil && avoided(persisted.Addr) && len(countries) > 0 {
+				logx.Info("persisted proxy failed recently; selecting another server of the location proxy=%s", persisted.Addr)
+			} else if proxyCandidateMatchesCountry(persisted, countryFilter) {
 				if matched, ok := findProxyCandidate(persisted.Addr, countries); ok {
 					matched.Addr = persisted.Addr
 					return matched, true, nil
@@ -109,36 +117,51 @@ func ResolveWithStateAndCountry(proxyFlag, countryFilter string, countries []ser
 		}
 	}
 
-	candidate, err := selectProxyCandidate(countries, countryFilter)
+	candidate, err := selectProxyCandidate(countries, countryFilter, avoided)
 	if err != nil {
 		return Candidate{}, false, err
 	}
 	return candidate, false, nil
 }
 
-func selectProxyCandidate(countries []serverlist.Country, countryFilter string) (Candidate, error) {
+// selectProxyCandidate picks a server of the location countryFilter
+// selects (locationMatcher) in its first city, skipping the servers
+// avoided reports (nil: none) unless the location has no other.
+func selectProxyCandidate(countries []serverlist.Country, countryFilter string, avoided func(addr string) bool) (Candidate, error) {
 	proxies := ConnectCandidates(countries)
 	if len(proxies) == 0 {
 		return Candidate{}, fmt.Errorf("no CONNECT proxies available from server list or persisted state; pass -country CODE or -proxy HOST:PORT")
 	}
-
-	// Every location is offered, including those the server list marks
-	// locked: Mozilla's servers accept an ordinary account's pass on them.
-	countryFilter = strings.TrimSpace(countryFilter)
-	if countryFilter != "" {
-		if candidate, ok := pickInFirstCity(proxies, func(c Candidate) bool {
-			return proxyCandidateMatchesCountry(c, countryFilter)
-		}); ok {
+	match, err := locationMatcher(proxies, countryFilter)
+	if err != nil {
+		return Candidate{}, err
+	}
+	if avoided != nil {
+		if candidate, ok := pickInFirstCity(proxies, func(c Candidate) bool { return match(c) && !avoided(c.Addr) }); ok {
 			return candidate, nil
 		}
-		return Candidate{}, fmt.Errorf("no CONNECT proxy found for country %q; available country codes: %s", countryFilter, availableCountryCodes(proxies))
 	}
-
-	// Without a configured country Firefox uses the recommended location.
-	if candidate, ok := pickInFirstCity(proxies, Candidate.IsRecommended); ok {
+	if candidate, ok := pickInFirstCity(proxies, match); ok {
 		return candidate, nil
 	}
+	return Candidate{}, fmt.Errorf("no CONNECT proxy found for country %q; available country codes: %s", strings.TrimSpace(countryFilter), availableCountryCodes(proxies))
+}
 
+// locationMatcher returns what selects the servers of the location for
+// countryFilter: the country's (or the recommended location's for REC and
+// "recommended"); without a filter the recommended location's, as in
+// Firefox, or every server when the list has a single country and no
+// recommended location. Every location is offered, including those the
+// server list marks locked: Mozilla's servers accept an ordinary
+// account's pass on them.
+func locationMatcher(proxies []Candidate, countryFilter string) (func(Candidate) bool, error) {
+	countryFilter = strings.TrimSpace(countryFilter)
+	if countryFilter != "" {
+		return func(c Candidate) bool { return proxyCandidateMatchesCountry(c, countryFilter) }, nil
+	}
+	if slices.ContainsFunc(proxies, Candidate.IsRecommended) {
+		return Candidate.IsRecommended, nil
+	}
 	selectedCountryCode := ""
 	for _, candidate := range proxies {
 		code := strings.ToUpper(strings.TrimSpace(candidate.CountryCode))
@@ -150,11 +173,29 @@ func selectProxyCandidate(countries []serverlist.Country, countryFilter string) 
 			continue
 		}
 		if code != selectedCountryCode {
-			return Candidate{}, fmt.Errorf("multiple VPN countries are available; pass -country CODE or -proxy HOST:PORT instead of selecting a random country (available: %s)", availableCountryCodes(proxies))
+			return nil, fmt.Errorf("multiple VPN countries are available; pass -country CODE or -proxy HOST:PORT instead of selecting a random country (available: %s)", availableCountryCodes(proxies))
 		}
 	}
-	candidate, _ := pickInFirstCity(proxies, func(Candidate) bool { return true })
-	return candidate, nil
+	return func(Candidate) bool { return true }, nil
+}
+
+// LocationCandidates lists, in server-list order, the servers of the
+// location countryFilter selects (locationMatcher): the servers that
+// ServerFailover moves the upstream among. It is empty when the filter
+// selects nothing.
+func LocationCandidates(countries []serverlist.Country, countryFilter string) []Candidate {
+	proxies := ConnectCandidates(countries)
+	match, err := locationMatcher(proxies, countryFilter)
+	if err != nil {
+		return nil
+	}
+	var location []Candidate
+	for _, c := range proxies {
+		if match(c) {
+			location = append(location, c)
+		}
+	}
+	return location
 }
 
 // pickInFirstCity picks, as Firefox's server list does, the first city
@@ -256,34 +297,6 @@ func SaveSelection(path string, candidate Candidate) error {
 		CityName:    candidate.CityName,
 		CityCode:    candidate.CityCode,
 	})
-}
-
-func RecordSelectionFailure(path string, candidate Candidate) (int, bool, error) {
-	state := proxySelectionState{
-		Addr:        candidate.Addr,
-		CountryName: candidate.CountryName,
-		CountryCode: candidate.CountryCode,
-		CityName:    candidate.CityName,
-		CityCode:    candidate.CityCode,
-	}
-	if data, err := os.ReadFile(path); err == nil {
-		var existing proxySelectionState
-		if json.Unmarshal(data, &existing) == nil {
-			existingAddr, existingErr := canonicalProxyAddr(existing.Addr)
-			candidateAddr, candidateErr := canonicalProxyAddr(candidate.Addr)
-			if existingErr == nil && candidateErr == nil && existingAddr == candidateAddr {
-				state = existing
-			}
-		}
-	}
-	state.Failures++
-	if state.Failures >= 3 {
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return state.Failures, false, err
-		}
-		return state.Failures, true, nil
-	}
-	return state.Failures, false, writeProxySelectionState(path, state)
 }
 
 func writeProxySelectionState(path string, state proxySelectionState) error {

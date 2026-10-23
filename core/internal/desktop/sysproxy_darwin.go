@@ -35,3 +35,7 @@ func setSystemProxy(server string) error { return macNetworkSetup.set(server) }
 func restoreSystemProxy(server string) error { return macNetworkSetup.restore(server) }
 
 func clearSystemProxy() error { return macNetworkSetup.clear() }
+
+// systemProxyTaken: another program's setting is not looked for on macOS,
+// where each network service has its own.
+func systemProxyTaken(string) (bool, string) { return false, "" }

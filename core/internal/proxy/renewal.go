@@ -475,10 +475,22 @@ func (c *Controller) replaceSessionLocked(failed *managedSession, cause error) (
 			if wait := c.redialBackoff.wait(redialSteps, now); wait > 0 {
 				return false, c.redialBackoff.coolingDown(wait)
 			}
+			from := c.currentServer()
 			err := c.redialLocked(token, expiresAt)
 			c.redialBackoff.record(now, cause, err)
 			if err == nil {
 				logx.Info("upstream proxy session redialed with the current proxy pass")
+				// A rebuild counts once against the server: a failed redial
+				// counts (dialSession), else the session it replaced, when
+				// that broke on the server. Past serverFailoverStrikes the
+				// next server of the location replaces the new session too.
+				if failed != nil && c.currentServer().Addr == from.Addr && c.failOver(from, cause) {
+					nextErr := c.redialLocked(token, expiresAt)
+					c.redialBackoff.record(now, cause, nextErr)
+					if nextErr != nil {
+						logx.Warn("opening a session on the next server of the location failed; the redialed session serves meanwhile err=%s", logx.Err(nextErr))
+					}
+				}
 			}
 			return false, err
 		}
@@ -523,7 +535,7 @@ func (c *Controller) redialablePass(failed *managedSession, now time.Time) (stri
 // Reconnect does; renewMu is held, so no renewal changes the pass
 // meanwhile. Whether the pass was fetched after a refusal carries over.
 func (c *Controller) redialLocked(token string, expiresAt time.Time) error {
-	session, err := c.sessionFactory(token)
+	session, err := c.dialSession(token)
 	if err != nil {
 		return err
 	}
@@ -539,6 +551,26 @@ func (c *Controller) redialLocked(token string, expiresAt time.Time) error {
 	}
 	c.mu.Unlock()
 	return nil
+}
+
+// dialSession opens a session with token to the current server; renewMu
+// is held. A failure that is the server's counts against it (failOver),
+// and when that moves the controller to another server of the location,
+// the new server is dialed at once.
+func (c *Controller) dialSession(token string) (proxySession, error) {
+	from := c.currentServer()
+	session, err := c.sessionFactory(token)
+	if err == nil || !c.failOver(from, err) {
+		return session, err
+	}
+	next := c.currentServer()
+	session, err = c.sessionFactory(token)
+	if err != nil {
+		c.failOver(next, err)
+		return nil, err
+	}
+	logx.Info("upstream proxy session opened on the next server of the location proxy=%s", next.Addr)
+	return session, nil
 }
 
 func (c *Controller) renewLocked(ctx context.Context) error {
@@ -606,7 +638,7 @@ func (c *Controller) adoptPass(pass *guardian.ProxyPassInfo) error {
 		logx.Debug("existing upstream session cannot accept renewed proxy pass; rebuilding err=%s", logx.Err(err))
 	}
 
-	session, err := c.sessionFactory(pass.RawToken)
+	session, err := c.dialSession(pass.RawToken)
 	if err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@ package desktop
 import (
 	"net"
 	"sync"
+	"time"
 
 	"github.com/armanlife/firefox-vpn-client/core/internal/config"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
@@ -24,7 +25,20 @@ type systemProxySync struct {
 	mu      sync.Mutex
 	applied string // the proxy address this program set, "" for none
 	mode    string // the last mode seen
+
+	// report, when set, tells the service about another program's setting
+	// in place of this program's, nil once this program's is back (watch).
+	report   func(*service.SystemProxyTaken)
+	reported *service.SystemProxyTaken
+	checked  time.Time // when watch last looked
+	// retake is the last system_proxy_retake seen; retakeSeen once one was.
+	retake     uint64
+	retakeSeen bool
 }
+
+// takenCheck is how often watch looks whether another program replaced
+// this program's setting.
+const takenCheck = 5 * time.Second
 
 // update carries out the mode for st (nil when the service is not
 // reachable).
@@ -73,6 +87,59 @@ func (s *systemProxySync) update(st *service.TrayStatus) {
 		}
 	}
 	s.applied = want
+	s.watch(st)
+}
+
+// watch looks, every takenCheck, whether another program replaced this
+// program's setting: VPN and proxy programs such as v2rayN, Clash, or
+// Hiddify set the system proxy when they connect, and may clear it when
+// they quit. It tells the service, and takes the setting back only when the
+// user asks (system_proxy_retake), never by itself: two programs that each
+// take it back would switch it every few seconds.
+func (s *systemProxySync) watch(st *service.TrayStatus) {
+	retake := false
+	if st != nil {
+		retake = s.retakeSeen && st.SystemProxyRetake != s.retake
+		s.retake, s.retakeSeen = st.SystemProxyRetake, true
+	}
+	if s.applied == "" {
+		s.setTaken(nil)
+		return
+	}
+	if !retake && time.Since(s.checked) < takenCheck {
+		return
+	}
+	s.checked = time.Now()
+	taken, by := systemProxyTaken(s.applied)
+	if taken && retake {
+		if err := setSystemProxy(s.applied); err != nil {
+			logx.Warn("setting the system proxy again failed err=%s", logx.Err(err))
+		} else {
+			logx.Info("system proxy set again at the user's request address=%s", s.applied)
+			taken = false
+		}
+	}
+	if taken {
+		s.setTaken(&service.SystemProxyTaken{By: by})
+	} else {
+		s.setTaken(nil)
+	}
+}
+
+// setTaken reports t to the service when it changed.
+func (s *systemProxySync) setTaken(t *service.SystemProxyTaken) {
+	if (t == nil && s.reported == nil) || (t != nil && s.reported != nil && *t == *s.reported) {
+		return
+	}
+	s.reported = t
+	if t != nil {
+		logx.Warn("another program changed the system proxy setting; applications no longer use this proxy by=%s", t.By)
+	} else {
+		logx.Info("the system proxy setting is this program's again")
+	}
+	if s.report != nil {
+		s.report(t)
+	}
 }
 
 // wantedSystemProxy is the local proxy's address for st (nil when the
@@ -110,6 +177,7 @@ func (s *systemProxySync) handOver(st *service.TrayStatus) {
 	}
 	s.applied = ""
 	s.mode = st.SystemProxy
+	s.setTaken(nil)
 }
 
 // active reports whether this program's setting is in place now.
@@ -130,6 +198,7 @@ func (s *systemProxySync) clear() {
 		logx.Warn("restoring the system proxy setting failed err=%s", logx.Err(err))
 	}
 	s.applied = ""
+	s.setTaken(nil)
 }
 
 // localProxyAddress is the address applications on this computer use for

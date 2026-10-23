@@ -150,6 +150,12 @@ type StatusView struct {
 	// system_proxy.mode itself (the tray, the app mode, the status
 	// screen), so a tray that only controls it leaves the setting alone.
 	SystemProxyByHost bool `json:"system_proxy_by_host"`
+	// SystemProxyTaken: another program (another VPN or proxy) replaced
+	// this program's system proxy, so applications no longer use it; set
+	// by the process applying the mode. SystemProxyRetake counts the user's
+	// requests to set it again.
+	SystemProxyTaken  *SystemProxyTaken `json:"system_proxy_taken,omitempty"`
+	SystemProxyRetake uint64            `json:"system_proxy_retake"`
 	// AutoConnecting: the app's auto-connect tests the connection, and the
 	// system proxy waits for a passed test (autoconnect.go).
 	AutoConnecting bool `json:"auto_connecting,omitempty"`
@@ -200,6 +206,8 @@ func (d *Daemon) StatusView() (StatusView, error) {
 	}
 	view.SystemProxySupported = runtime.GOOS == "windows" || d.SystemProxySupported
 	view.SystemProxyByHost = d.SystemProxySupported
+	view.SystemProxyTaken = d.systemProxyTaken.Load()
+	view.SystemProxyRetake = d.systemProxyRetakes.Load()
 	view.Notices = d.notices.Since(time.Now().Add(-noticeWindow))
 	engine := d.engine
 	if engine != nil {
@@ -701,13 +709,32 @@ func (s *dashboardServer) handleOpenFolder(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]string{"result": "asked the tray icon"})
 }
 
-// SetSystemProxy stores system_proxy.mode.
+// SystemProxyTaken is another program's setting in place of this program's
+// system proxy: By is the proxy address or setup script it points at, ""
+// when it turned the system proxy off.
+type SystemProxyTaken struct {
+	By string `json:"by"`
+}
+
+// SetSystemProxyTaken records another program's setting in place of this
+// program's system proxy, or nil once this program's is back; the process
+// applying the mode reports it.
+func (d *Daemon) SetSystemProxyTaken(t *SystemProxyTaken) {
+	d.systemProxyTaken.Store(t)
+}
+
+// SetSystemProxy stores system_proxy.mode. Set again while set asks to take
+// the system proxy back from a program that replaced it.
 func (d *Daemon) SetSystemProxy(mode string) error {
 	d.endAutoConnect()
 	cfg := d.config()
 	if cfg.SystemProxy.Mode == mode {
+		if mode == config.SystemProxySet {
+			d.systemProxyRetakes.Add(1)
+		}
 		return nil
 	}
+	d.systemProxyTaken.Store(nil)
 	cfg.SystemProxy.Mode = mode
 	if _, err := d.updateSettings(cfg, nil); err != nil {
 		return err

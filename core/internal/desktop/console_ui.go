@@ -278,6 +278,8 @@ func (ui *consoleUI) startOwn() error {
 	ui.own = d
 	ui.backend = daemonBackend{d: d}
 	ui.status = nil
+	// No sync runs before the goroutine below starts it.
+	ui.sysproxy.report = d.SetSystemProxyTaken
 	ui.stopSync = func() {
 		cancel()
 		<-syncDone

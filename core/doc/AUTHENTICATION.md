@@ -27,8 +27,9 @@ Accounts are added from the dashboard ([DASHBOARD.md](DASHBOARD.md)) or with `-a
 | Confirmation by link (legacy servers) | `need_email_link` | none; the person confirms they opened it |
 | Sign-in blocked as unusual (errno 125) | `need_unblock_code` | `POST /account/login/send_unblock_code`, then login with `unblockCode` |
 | Fastly image CAPTCHA during any call | `need_captcha` | answered inside the challenge solver through `fxa.WithCaptchaSolver` |
+| Email typed in another letter case than the account's (errno 120) | none | login again with the email the error names, and the typed one as `originalLoginEmail` |
 
-Wrong codes can be retried up to five times. The terminal `-add-account` supports email codes and confirmation links only.
+The password's key stretching uses the email exactly as the account has it, so FxA refuses another letter case and names the account's own spelling; `fxa.Login` repeats the sign-in once with it, as Firefox does, and the account is stored under that spelling (`fxa.SignedInEmail`). Wrong codes can be retried up to five times. The terminal `-add-account` supports email codes and confirmation links only.
 
 After verification, `fxa.OAuthToken` issues offline OAuth credentials, the account is stored (an existing account with the same email is updated and becomes ready), its quota is read, and the account manager reloads. The session token and password are discarded.
 
@@ -156,6 +157,7 @@ Do not disable production TLS validation to work around a challenge or local int
 
 - `TestAccountPool*`, `TestDashboardSignInWithEmailCode`: account failover and the dashboard sign-in flow.
 - `TestLoginWithUnblockCodeSendsCode`, `TestVerifyTOTPReportsRejectedCode`, `TestAnswerChallengeAsksCaptchaSolver`: unblock codes, TOTP, and CAPTCHA answers.
+- `TestLoginCorrectsTheEmailCase`: an email in another letter case is signed in with the account's own spelling.
 - `TestNewFxaAPIErrorParsesErrno`: typed account error parsing.
 - `TestAnchorProxyPassClaims*`, `TestFetchProxyPassSendsNoCacheAndAnchorsExpiry`: Guardian claim-time anchoring.
 - `TestHTTPErrorClassifiesStatus`, `TestParseProxyUsage`, `TestFxaAPIErrorClassifiesReauthRequired`: status, quota, and sign-in classification.

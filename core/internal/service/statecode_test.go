@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/armanlife/firefox-vpn-client/core/internal/accounts"
+	"github.com/armanlife/firefox-vpn-client/core/internal/config"
 )
 
 // waitCode waits until /api/status reports the state code, and returns the
@@ -98,5 +99,35 @@ func TestStartFailureHasCode(t *testing.T) {
 	}
 	if state["address"] != "127.0.0.1:not-a-port" {
 		t.Fatalf("start failed without the proxy's address: %v", state)
+	}
+}
+
+// Another program's setting in place of the system proxy shows in the
+// status; asking for set while set asks to take it back, and a mode change
+// forgets it.
+func TestSystemProxyTakenShowsInTheStatus(t *testing.T) {
+	d := newTestDaemon(t)
+	if err := d.SetSystemProxy(config.SystemProxySet); err != nil {
+		t.Fatal(err)
+	}
+	d.SetSystemProxyTaken(&SystemProxyTaken{By: "127.0.0.1:7890"})
+	view, err := d.StatusView()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.SystemProxyTaken == nil || view.SystemProxyTaken.By != "127.0.0.1:7890" || view.SystemProxyRetake != 0 {
+		t.Fatalf("taken %+v retake %d", view.SystemProxyTaken, view.SystemProxyRetake)
+	}
+	if err := d.SetSystemProxy(config.SystemProxySet); err != nil {
+		t.Fatal(err)
+	}
+	if view, _ = d.StatusView(); view.SystemProxyRetake != 1 {
+		t.Fatalf("set again: retake %d, want 1", view.SystemProxyRetake)
+	}
+	if err := d.SetSystemProxy(config.SystemProxyClear); err != nil {
+		t.Fatal(err)
+	}
+	if view, _ = d.StatusView(); view.SystemProxyTaken != nil {
+		t.Fatalf("still taken after clear: %+v", view.SystemProxyTaken)
 	}
 }

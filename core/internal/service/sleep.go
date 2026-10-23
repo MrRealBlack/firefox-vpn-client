@@ -191,6 +191,7 @@ func (d *Daemon) wake(e *proxyEngine, why wakeReason) error {
 	}
 	started := time.Now()
 	first := !e.connected
+	server, _ := e.selection()
 	var controller *proxy.Controller
 	var err error
 	if first {
@@ -204,6 +205,11 @@ func (d *Daemon) wake(e *proxyEngine, why wakeReason) error {
 		e.idle.mu.Lock()
 		e.idle.wakeFailures++
 		wait := proxy.WakeRetryDelay(err, e.idle.wakeFailures, now)
+		if e.selected.Addr != server.Addr {
+			// The failover moved to another server of the location (only
+			// the server's own failures do): the next wake tries it at once.
+			e.idle.wakeFailures, wait = 0, 0
+		}
 		e.idle.wakeErr, e.idle.wakeCode, e.idle.wakeFailedAt = err, code, now
 		e.idle.wakeRetryAt, e.idle.wakeLasting = now.Add(wait), proxy.LastingWakeFailure(err, now)
 		e.idle.mu.Unlock()

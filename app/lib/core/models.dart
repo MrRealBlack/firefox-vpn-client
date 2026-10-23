@@ -344,6 +344,10 @@ class CoreStatus {
       canExit = _bool(j['can_exit']),
       systemProxy = _str(j['system_proxy']),
       systemProxySupported = _bool(j['system_proxy_supported']),
+      systemProxyTakenBy = switch (_mapOrNull(j['system_proxy_taken'])) {
+        final m? => _str(m['by']),
+        null => null,
+      },
       autoConnecting = _bool(j['auto_connecting']),
       connectFailure = _str(j['connect_failure']),
       selection = _str(j['selection']),
@@ -376,6 +380,11 @@ class CoreStatus {
 
   bool get systemProxySet => systemProxy == 'set';
   final bool systemProxySupported;
+
+  /// Another program (another VPN or proxy) replaced the system proxy the
+  /// core set: the proxy or setup script it points at now, "" when it
+  /// turned the proxy off; null while the core's setting is in place.
+  final String? systemProxyTakenBy;
 
   /// The app's auto-connect tests the connection; the system proxy waits
   /// for a passed test.

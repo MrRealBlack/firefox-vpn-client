@@ -114,6 +114,45 @@ class _RecommendedLocationButton extends StatelessWidget {
   );
 }
 
+/// An amber box when another program (another VPN or proxy) replaced the
+/// system proxy the core set, so applications no longer use the VPN; the
+/// button takes it back. The core never does that by itself.
+class _SystemProxyTakenNote extends StatelessWidget {
+  const _SystemProxyTakenNote({required this.core, required this.by});
+
+  final CoreController core;
+
+  /// What the system proxy points at now; empty when it was turned off.
+  final String by;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ProblemBox(
+            text: by.isEmpty
+                ? l.systemProxyTakenOff
+                : l.systemProxyTakenBy(ltr(by)),
+            color: StatusColors.busy,
+            icon: Icons.warning_amber_rounded,
+          ),
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: () =>
+                runShowingErrors(context, () => core.setSystemProxy('set')),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(l.setSystemProxyAgain),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// An amber box when the public IP is in another country than the chosen
 /// one: a hint, not an error; the connection works.
 class _ExitMismatchNote extends StatelessWidget {
@@ -433,6 +472,8 @@ class _DesktopHome extends StatelessWidget {
             (gaveUp && isLocationRefused(status.connectFailure)))
           _RecommendedLocationButton(core: core),
         if (connected && mismatch != null) _ExitMismatchNote(text: mismatch),
+        if (status.systemProxySet && status.systemProxyTakenBy != null)
+          _SystemProxyTakenNote(core: core, by: status.systemProxyTakenBy!),
         if (status.state.proxyPortBlocked) ...[
           const SizedBox(height: 12),
           Center(
@@ -968,6 +1009,15 @@ class _PhoneHome extends StatelessWidget {
                 _RecommendedLocationButton(core: core),
               if (connected && mismatch != null)
                 problem(_ExitMismatchNote(text: mismatch)),
+              if (canSwitch &&
+                  status.systemProxySet &&
+                  status.systemProxyTakenBy != null)
+                problem(
+                  _SystemProxyTakenNote(
+                    core: core,
+                    by: status.systemProxyTakenBy!,
+                  ),
+                ),
               if (status.state.proxyPortBlocked) ...[
                 const SizedBox(height: 12),
                 Center(

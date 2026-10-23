@@ -55,6 +55,9 @@ type TrayStatus struct {
 	// SystemProxyByHost: the process serving the folder applies the mode
 	// itself.
 	SystemProxyByHost bool `json:"system_proxy_by_host"`
+	// SystemProxyRetake rises when the user asks to set the system proxy
+	// again after another program replaced it.
+	SystemProxyRetake uint64 `json:"system_proxy_retake"`
 	// AutoConnecting: the system proxy waits for auto-connect's test.
 	AutoConnecting bool `json:"auto_connecting"`
 	// OpenFolderRequest rises when the dashboard asks to open the data

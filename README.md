@@ -124,3 +124,14 @@ $ sudo firefox-vpn
   ────────────────────────────────────────────────────────────────────────────
   Enter a number [0-10]:
 ```
+
+## Known limitations
+
+<details>
+<summary>What Mozilla's servers do not carry</summary>
+
+- **TCP only, no UDP:** voice and video calls in some apps, online games, and other UDP traffic do not go through. Browsers and most apps work normally.
+- **Web ports only:** Mozilla connects only to ports 80, 443, 8080, and 8443. Other ports, such as mail (25, 465, 587, 993) and SSH (22), are refused. Git over SSH to GitHub is the exception: it goes through port 443 by itself.
+- **Android notifications:** Google's push service uses port 5228, so with the VPN on, some apps' notifications (WhatsApp, Telegram, and others) may arrive only when the app is opened.
+
+</details>

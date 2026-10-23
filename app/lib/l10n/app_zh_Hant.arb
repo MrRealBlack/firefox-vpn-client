@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "僅代理",
   "noNetwork": "沒有網路連線。請開啟 Wi-Fi 或行動數據。",
-  "blockAds": "封鎖廣告"
+  "blockAds": "封鎖廣告",
+  "systemProxyTakenBy": "另一個程式將系統代理改為 {address}，流量不再經過 VPN。",
+  "systemProxyTakenOff": "另一個程式關閉了系統代理，流量不再經過 VPN。",
+  "setSystemProxyAgain": "重新設定"
 }

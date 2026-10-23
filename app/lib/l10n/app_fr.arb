@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "Proxy uniquement",
   "noNetwork": "Pas de connexion Internet. Activez le Wi-Fi ou les données mobiles.",
-  "blockAds": "Bloquer les publicités"
+  "blockAds": "Bloquer les publicités",
+  "systemProxyTakenBy": "Un autre programme a réglé le proxy système sur {address} ; le trafic ne passe donc plus par le VPN.",
+  "systemProxyTakenOff": "Un autre programme a désactivé le proxy système ; le trafic ne passe donc plus par le VPN.",
+  "setSystemProxyAgain": "Le régler à nouveau"
 }

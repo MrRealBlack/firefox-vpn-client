@@ -117,6 +117,9 @@ void main() {
         rtl.noNetwork,
         rtl.waitingForNetwork,
         rtl.proxyStartFailed('10810'),
+        rtl.systemProxyTakenBy('127.0.0.1:7890'),
+        rtl.systemProxyTakenOff,
+        rtl.setSystemProxyAgain,
         rtl.proxyPortInUse('10810'),
       ];
       for (final text in texts) {

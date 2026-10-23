@@ -71,6 +71,37 @@ func TestRoutedOpenerFollowsRules(t *testing.T) {
 	}
 }
 
+// Mozilla refuses port 22: git over SSH to GitHub goes through to GitHub's
+// SSH server on port 443; other SSH targets, and a direct route, keep
+// their address.
+func TestGitHubSSHGoesThroughPort443(t *testing.T) {
+	t.Parallel()
+
+	upstream := &recordingOpener{}
+	routed := NewRoutedOpener(upstream)
+	var dialed []string
+	routed.dial = func(_ context.Context, _, address string) (net.Conn, error) {
+		dialed = append(dialed, address)
+		return nil, errors.New("direct in the test")
+	}
+	for _, target := range []string{"github.com:22", "GitHub.com:22", "example.com:22", "github.com:443"} {
+		_, _ = routed.OpenTunnel(target)
+	}
+	want := []string{"ssh.github.com:443", "ssh.github.com:443", "example.com:22", "github.com:443"}
+	if !slices.Equal(upstream.targets, want) {
+		t.Fatalf("through Mozilla %v, want %v", upstream.targets, want)
+	}
+	router, err := routing.New(routing.Config{Direct: []string{"domain:github.com"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	routed.SetRouter(router)
+	_, _ = routed.OpenTunnel("github.com:22")
+	if !slices.Equal(dialed, []string{"github.com:22"}) {
+		t.Fatalf("direct dials %v; a direct route keeps port 22", dialed)
+	}
+}
+
 // Bytes are counted per route, and the speed is the average of the last
 // seconds.
 func TestTrafficCountsBytesAndSpeed(t *testing.T) {

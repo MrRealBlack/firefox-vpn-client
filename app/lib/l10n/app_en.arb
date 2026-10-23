@@ -756,5 +756,16 @@
   "@noNetwork": {
     "description": "Shown at once, in red, when the phone has neither Wi-Fi nor mobile data."
   },
-  "blockAds": "Block ads"
+  "blockAds": "Block ads",
+  "systemProxyTakenBy": "Another program set the system proxy to {address}, so traffic doesn't go through the VPN.",
+  "@systemProxyTakenBy": {
+    "description": "The home page when another program (another VPN or proxy) replaced the system proxy the app set (status system_proxy_taken).",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "systemProxyTakenOff": "Another program turned the system proxy off, so traffic doesn't go through the VPN.",
+  "setSystemProxyAgain": "Set it again"
 }

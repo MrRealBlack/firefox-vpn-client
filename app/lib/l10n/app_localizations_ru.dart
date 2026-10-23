@@ -1222,4 +1222,16 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get blockAds => 'Блокировать рекламу';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return 'Другая программа переключила системный прокси на $address, поэтому трафик идёт не через VPN.';
+  }
+
+  @override
+  String get systemProxyTakenOff =>
+      'Другая программа выключила системный прокси, поэтому трафик идёт не через VPN.';
+
+  @override
+  String get setSystemProxyAgain => 'Настроить снова';
 }

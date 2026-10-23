@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "Yalnız proksi",
   "noNetwork": "İnternet bağlantısı yoxdur. Wi-Fi və ya mobil datanı yandırın.",
-  "blockAds": "Reklamları blokla"
+  "blockAds": "Reklamları blokla",
+  "systemProxyTakenBy": "Başqa proqram sistem proksisini {address} ünvanına qoydu, ona görə trafik VPN-dən keçmir.",
+  "systemProxyTakenOff": "Başqa proqram sistem proksisini söndürdü, ona görə trafik VPN-dən keçmir.",
+  "setSystemProxyAgain": "Yenidən qur"
 }

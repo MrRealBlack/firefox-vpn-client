@@ -142,6 +142,28 @@ func restoreSystemProxy(server string) error {
 	return nil
 }
 
+// systemProxyTaken reports whether another program replaced this
+// program's setting for the proxy at server, and what the setting points
+// at now: a setup script (which Windows uses first), another proxy, or ""
+// when it turned the proxy off.
+func systemProxyTaken(server string) (bool, string) {
+	k, err := registry.OpenKey(registry.CURRENT_USER, internetSettingsKey, registry.QUERY_VALUE)
+	if err != nil {
+		return false, ""
+	}
+	defer k.Close()
+	p := readProxySetting(k)
+	switch {
+	case p.script != "":
+		return true, p.script
+	case p.isOurs(server):
+		return false, ""
+	case p.enabled:
+		return true, p.server
+	}
+	return true, ""
+}
+
 // clearSystemProxy turns the user's system proxy off: no proxy server and
 // no setup script, whoever set them (v2rayN's "Clear system proxy").
 func clearSystemProxy() error {

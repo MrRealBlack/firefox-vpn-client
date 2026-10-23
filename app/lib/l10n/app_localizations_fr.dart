@@ -1224,4 +1224,16 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get blockAds => 'Bloquer les publicités';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return 'Un autre programme a réglé le proxy système sur $address ; le trafic ne passe donc plus par le VPN.';
+  }
+
+  @override
+  String get systemProxyTakenOff =>
+      'Un autre programme a désactivé le proxy système ; le trafic ne passe donc plus par le VPN.';
+
+  @override
+  String get setSystemProxyAgain => 'Le régler à nouveau';
 }

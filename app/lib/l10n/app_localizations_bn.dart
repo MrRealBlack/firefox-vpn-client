@@ -1216,4 +1216,16 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get blockAds => 'বিজ্ঞাপন ব্লক করুন';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return 'অন্য একটি প্রোগ্রাম সিস্টেম প্রক্সি $address-এ বদলে দিয়েছে, তাই ট্রাফিক VPN দিয়ে যাচ্ছে না।';
+  }
+
+  @override
+  String get systemProxyTakenOff =>
+      'অন্য একটি প্রোগ্রাম সিস্টেম প্রক্সি বন্ধ করে দিয়েছে, তাই ট্রাফিক VPN দিয়ে যাচ্ছে না।';
+
+  @override
+  String get setSystemProxyAgain => 'আবার সেট করুন';
 }

@@ -44,6 +44,21 @@ func Message(err error) string {
 	return err.Error()
 }
 
+// SignedInEmail is the email for the rest of a sign-in begun with typed:
+// the account's own spelling when FxA corrected its letter case, whether
+// the sign-in then succeeded or failed for another reason (such as a block
+// that wants an unblock code); else typed.
+func SignedInEmail(typed string, resp *LoginResponse, err error) string {
+	if resp != nil && resp.Email != "" {
+		return resp.Email
+	}
+	var caseErr *emailCaseError
+	if errors.As(err, &caseErr) {
+		return caseErr.email
+	}
+	return typed
+}
+
 // LoginWithUnblockCode repeats a blocked sign-in with the unblock code that
 // SendUnblockCode had emailed.
 func LoginWithUnblockCode(ctx context.Context, email, password, unblockCode string) (*LoginResponse, error) {

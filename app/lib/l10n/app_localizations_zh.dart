@@ -1172,6 +1172,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get blockAds => '拦截广告';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return '另一个程序将系统代理改为 $address，流量不再经过 VPN。';
+  }
+
+  @override
+  String get systemProxyTakenOff => '另一个程序关闭了系统代理，流量不再经过 VPN。';
+
+  @override
+  String get setSystemProxyAgain => '重新设置';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -2342,4 +2353,15 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get blockAds => '封鎖廣告';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return '另一個程式將系統代理改為 $address，流量不再經過 VPN。';
+  }
+
+  @override
+  String get systemProxyTakenOff => '另一個程式關閉了系統代理，流量不再經過 VPN。';
+
+  @override
+  String get setSystemProxyAgain => '重新設定';
 }

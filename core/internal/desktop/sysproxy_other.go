@@ -9,3 +9,5 @@ func setSystemProxy(string) error { return nil }
 func restoreSystemProxy(string) error { return nil }
 
 func clearSystemProxy() error { return nil }
+
+func systemProxyTaken(string) (bool, string) { return false, "" }

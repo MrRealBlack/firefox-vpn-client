@@ -113,11 +113,16 @@ type Daemon struct {
 	store        *accounts.Store
 	mgr          *accounts.Manager
 	pool         *proxy.AccountPool
-	signins      *signInRegistry
-	restart      chan struct{}
-	stop         chan struct{}
-	stopOnce     sync.Once
-	finished     chan struct{}
+	// failover moves the upstream to another server of the location when
+	// one keeps failing. It outlives engines, so a server that failed stays
+	// avoided across wakes and settings changes; a new process starts from
+	// the persisted choice, which the switch updated.
+	failover *proxy.ServerFailover
+	signins  *signInRegistry
+	restart  chan struct{}
+	stop     chan struct{}
+	stopOnce sync.Once
+	finished chan struct{}
 	// LocalToken authorizes local clients (the tray) without the dashboard
 	// login; it is regenerated at every start and stored in the data folder.
 	localToken string
@@ -141,6 +146,14 @@ type Daemon struct {
 	// folderRequests counts requests to open the data folder; the tray
 	// opens it when the count in the status rises.
 	folderRequests atomic.Uint64
+	// systemProxyRetakes counts requests to set the system proxy again
+	// after another program replaced it (SetSystemProxy with the mode
+	// already set); the process applying the mode does it when the count in
+	// the status rises.
+	systemProxyRetakes atomic.Uint64
+	// systemProxyTaken is another program's setting in place of this
+	// program's system proxy, nil while this program's is in place.
+	systemProxyTaken atomic.Pointer[SystemProxyTaken]
 
 	mu  sync.Mutex
 	cfg config.Config
@@ -213,6 +226,7 @@ func NewDaemon(paths DataPaths, forceVerbose bool) (*Daemon, error) {
 		store:        store,
 		mgr:          mgr,
 		pool:         proxy.NewAccountPool(store, mgr),
+		failover:     proxy.NewServerFailover(paths.Selection),
 		restart:      make(chan struct{}, 1),
 		stop:         make(chan struct{}),
 		finished:     make(chan struct{}),

@@ -1217,4 +1217,16 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get blockAds => 'Chặn quảng cáo';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return 'Một chương trình khác đã đặt proxy hệ thống thành $address, nên lưu lượng không đi qua VPN.';
+  }
+
+  @override
+  String get systemProxyTakenOff =>
+      'Một chương trình khác đã tắt proxy hệ thống, nên lưu lượng không đi qua VPN.';
+
+  @override
+  String get setSystemProxyAgain => 'Đặt lại';
 }

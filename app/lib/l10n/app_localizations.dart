@@ -2186,6 +2186,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Block ads'**
   String get blockAds;
+
+  /// The home page when another program (another VPN or proxy) replaced the system proxy the app set (status system_proxy_taken).
+  ///
+  /// In en, this message translates to:
+  /// **'Another program set the system proxy to {address}, so traffic doesn\'t go through the VPN.'**
+  String systemProxyTakenBy(String address);
+
+  /// No description provided for @systemProxyTakenOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Another program turned the system proxy off, so traffic doesn\'t go through the VPN.'**
+  String get systemProxyTakenOff;
+
+  /// No description provided for @setSystemProxyAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Set it again'**
+  String get setSystemProxyAgain;
 }
 
 class _AppLocalizationsDelegate

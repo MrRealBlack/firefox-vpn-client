@@ -1215,4 +1215,16 @@ class AppLocalizationsAz extends AppLocalizations {
 
   @override
   String get blockAds => 'Reklamları blokla';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return 'Başqa proqram sistem proksisini $address ünvanına qoydu, ona görə trafik VPN-dən keçmir.';
+  }
+
+  @override
+  String get systemProxyTakenOff =>
+      'Başqa proqram sistem proksisini söndürdü, ona görə trafik VPN-dən keçmir.';
+
+  @override
+  String get setSystemProxyAgain => 'Yenidən qur';
 }

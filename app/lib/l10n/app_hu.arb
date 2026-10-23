@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "Csak proxy",
   "noNetwork": "Nincs internetkapcsolat. Kapcsolja be a Wi-Fit vagy a mobiladatot.",
-  "blockAds": "Hirdetések tiltása"
+  "blockAds": "Hirdetések tiltása",
+  "systemProxyTakenBy": "Egy másik program a rendszerproxyt erre állította: {address}, így a forgalom nem a VPN-en megy.",
+  "systemProxyTakenOff": "Egy másik program kikapcsolta a rendszerproxyt, így a forgalom nem a VPN-en megy.",
+  "setSystemProxyAgain": "Beállítás újra"
 }

@@ -182,7 +182,7 @@ func (d *Daemon) connectEngine(e *proxyEngine) (*proxy.Controller, error) {
 	if fastest {
 		country = d.resolveFastestCountry(pass.RawToken)
 	}
-	selected, fromState, err := proxy.ResolveWithStateAndCountry(server, country, countries, d.paths.Selection)
+	selected, fromState, err := proxy.ResolveWithStateAndCountry(server, country, countries, d.paths.Selection, d.failover.Avoided)
 	if err != nil {
 		return nil, fmt.Errorf("selecting proxy: %w", err)
 	}
@@ -208,6 +208,13 @@ func (d *Daemon) connectEngine(e *proxyEngine) (*proxy.Controller, error) {
 	upstream := e.upstream
 	upstream.ProxyURL = proxyURL
 	upstream.ChosenLocation = chosenCountry(cfg.Proxy)
+	upstream.Server = selected
+	if server == "" {
+		// A server set by hand stays; a selected one may move within its
+		// location when it keeps failing.
+		upstream.Location = proxy.LocationCandidates(countries, country)
+		upstream.Failover = d.failover
+	}
 	withPass := upstream
 	withPass.Auth, withPass.Pass = auth, pass
 	controller, err := proxy.NewController(withPass)
@@ -222,10 +229,11 @@ func (d *Daemon) connectEngine(e *proxyEngine) (*proxy.Controller, error) {
 		}
 	}
 	if err != nil {
-		if fromState {
-			if failures, cleared, recordErr := proxy.RecordSelectionFailure(d.paths.Selection, selected); recordErr == nil && cleared {
-				logx.Warn("persisted proxy failed repeatedly; selection cleared proxy=%s failures=%d", selected.Addr, failures)
-			}
+		// A server that keeps failing to connect gives way to another of
+		// the location, saved as the persisted choice that the next wake
+		// selects.
+		if next, ok := upstream.Failover.Failed(upstream.Location, selected, err); ok {
+			e.serverSwitched(next)
 		}
 		return nil, fmt.Errorf("establishing upstream proxy session: %w", err)
 	}
@@ -247,8 +255,8 @@ func (d *Daemon) connectEngine(e *proxyEngine) (*proxy.Controller, error) {
 }
 
 // reconnectEngine wakes an engine that was connected before: a new pass
-// and session for the same server, without selecting or measuring again.
-// idle.wakeMu is held.
+// and session for the same server (or the one the failover moved to),
+// without selecting or measuring again. idle.wakeMu is held.
 func (d *Daemon) reconnectEngine(e *proxyEngine) (*proxy.Controller, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), proxy.PassRenewTimeout)
 	auth, pass, err := d.pool.AcquirePass(ctx, e.upstream.Guardian)
@@ -256,9 +264,32 @@ func (d *Daemon) reconnectEngine(e *proxyEngine) (*proxy.Controller, error) {
 	if err != nil {
 		return nil, err
 	}
+	if e.upstream.Failover != nil {
+		if selected, _ := e.selection(); selected.Addr != "" && selected.Addr != e.upstream.Server.Addr {
+			if proxyURL, err := proxy.NormalizeURL(selected.Addr); err == nil {
+				e.upstream.Server, e.upstream.ProxyURL = selected, proxyURL
+			}
+		}
+	}
 	cfg := e.upstream
 	cfg.Auth, cfg.Pass = auth, pass
-	return proxy.NewController(cfg)
+	controller, err := proxy.NewController(cfg)
+	if err != nil {
+		if next, ok := cfg.Failover.Failed(cfg.Location, cfg.Server, err); ok {
+			e.serverSwitched(next)
+		}
+		return nil, err
+	}
+	return controller, nil
+}
+
+// serverSwitched makes next, where the failover moved the upstream, the
+// engine's server: the status shows it and the next wake connects to it
+// (reconnectEngine).
+func (e *proxyEngine) serverSwitched(next proxy.Candidate) {
+	e.idle.mu.Lock()
+	e.selected, e.selectionSource = next, "server_failover"
+	e.idle.mu.Unlock()
 }
 
 // runController makes controller the engine's upstream and starts its
@@ -271,6 +302,7 @@ func (d *Daemon) runController(engine *proxyEngine, controller *proxy.Controller
 			d.autoTest(engine, "session rebuilt")
 		}
 	}
+	controller.OnServerSwitched = engine.serverSwitched
 	engine.idle.mu.Lock()
 	if engine.idle.stopped {
 		engine.idle.mu.Unlock()

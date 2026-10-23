@@ -258,7 +258,7 @@ main { padding: .5rem 2rem 2.5rem; max-width: 1280px; width: 100%; }
 .notice-hosts code { font: .84rem var(--mono); padding: .05rem .4rem; border-radius: 5px; background: var(--surface-3); color: var(--text); overflow-wrap: anywhere; }
 .notice-close { position: absolute; top: .5rem; right: .5rem; font-size: 1.1rem; }
 /* Help */
-.help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.1rem; align-items: start; }
+.help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.1rem; align-items: stretch; }
 .help-card { scroll-margin-top: 1rem; transition: box-shadow .3s, border-color .3s; }
 .help-card h3 { margin: 0 0 .55rem; font-size: 1rem; }
 .help-card p, .help-card li { color: var(--muted); font-size: .9rem; line-height: 1.55; }
@@ -287,20 +287,6 @@ main { padding: .5rem 2rem 2.5rem; max-width: 1280px; width: 100%; }
 .help-field > span { font-size: .82rem; font-weight: 600; color: var(--muted); }
 .help-field code { overflow-wrap: anywhere; padding: .35rem .55rem; }
 @media (max-width: 760px) { .help-field { grid-template-columns: 1fr auto; } .help-field > span { grid-column: 1 / -1; } }
-.help-modes { display: grid; grid-template-columns: 13rem 1fr; gap: .45rem 1rem; margin: .7rem 0 0; }
-.help-modes dt { font-weight: 650; font-size: .9rem; color: var(--text); }
-.help-modes dd { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.55; }
-@media (max-width: 760px) { .help-modes { grid-template-columns: 1fr; } .help-modes dd { margin-bottom: .4rem; } }
-.help-colors { list-style: none; padding-left: 0 !important; }
-.help-colors i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: .55rem; vertical-align: -1px; }
-/* The tray icon's colors (trayicon.go). */
-.help-colors .tray-green { background: #2ea043; }
-.help-colors .tray-blue { background: #2563eb; }
-.help-colors .tray-amber { background: #d98e04; }
-.help-colors .tray-red { background: #d03a2f; }
-.help-colors .tray-grey { background: #8a8f98; }
-.help-colors .tray-faded { background: #2ea043; opacity: .4; }
-.help-after { margin-top: .6rem; }
 .help-card.flash { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 .pill {

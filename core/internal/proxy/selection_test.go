@@ -1,8 +1,6 @@
 package proxy
 
 import (
-	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -148,7 +146,7 @@ func TestSelectProxyCandidateRequiresExplicitCountry(t *testing.T) {
 		},
 	}
 
-	_, err := selectProxyCandidate(countries, "")
+	_, err := selectProxyCandidate(countries, "", nil)
 	if err == nil || !strings.Contains(err.Error(), "multiple VPN countries") {
 		t.Fatalf("expected explicit-country error, got %v", err)
 	}
@@ -182,7 +180,7 @@ func TestSelectProxyCandidateFiltersCountry(t *testing.T) {
 	}
 
 	for _, filter := range []string{"US", "united states"} {
-		got, err := selectProxyCandidate(countries, filter)
+		got, err := selectProxyCandidate(countries, filter, nil)
 		if err != nil {
 			t.Fatalf("selectProxyCandidate(%q) returned error: %v", filter, err)
 		}
@@ -273,7 +271,7 @@ func TestResolveProxyReplacesPersistedSelectionForConfiguredCountry(t *testing.T
 		}},
 	}}
 
-	got, fromState, err := ResolveWithStateAndCountry("", "FR", countries, path)
+	got, fromState, err := ResolveWithStateAndCountry("", "FR", countries, path, nil)
 	if err != nil {
 		t.Fatalf("resolveProxyWithStateAndCountry returned error: %v", err)
 	}
@@ -285,33 +283,8 @@ func TestResolveProxyReplacesPersistedSelectionForConfiguredCountry(t *testing.T
 	}
 }
 
-func TestPersistedProxyRequiresThreeStartupFailuresBeforeRemoval(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), "proxy-selection.json")
-	candidate := Candidate{Addr: "stable.example:443"}
-	if err := SaveSelection(path, candidate); err != nil {
-		t.Fatalf("saveProxySelection returned error: %v", err)
-	}
-	for want := 1; want <= 3; want++ {
-		failures, cleared, err := RecordSelectionFailure(path, candidate)
-		if err != nil {
-			t.Fatalf("recordProxySelectionFailure %d returned error: %v", want, err)
-		}
-		if failures != want {
-			t.Fatalf("expected %d failures, got %d", want, failures)
-		}
-		if cleared != (want == 3) {
-			t.Fatalf("unexpected cleared=%v after %d failures", cleared, want)
-		}
-	}
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected persisted proxy state to be removed, got %v", err)
-	}
-}
-
 func TestSelectProxyCandidateDefaultsToRecommendedLocation(t *testing.T) {
-	got, err := selectProxyCandidate(liveShapedCountries(), "")
+	got, err := selectProxyCandidate(liveShapedCountries(), "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,21 +295,21 @@ func TestSelectProxyCandidateDefaultsToRecommendedLocation(t *testing.T) {
 
 func TestSelectProxyCandidateChoosesLockedCountry(t *testing.T) {
 	// GB is marked locked in the server list; it is chosen like any other.
-	got, err := selectProxyCandidate(liveShapedCountries(), "GB")
+	got, err := selectProxyCandidate(liveShapedCountries(), "GB", nil)
 	if err != nil || got.Addr != "gb.example:2499" || got.CountryCode != "GB" {
 		t.Fatalf("expected the GB proxy, got %#v %v", got, err)
 	}
 }
 
 func TestSelectProxyCandidateUnknownCountryListsLockedCodes(t *testing.T) {
-	_, err := selectProxyCandidate(liveShapedCountries(), "ZZ")
+	_, err := selectProxyCandidate(liveShapedCountries(), "ZZ", nil)
 	if err == nil || !strings.Contains(err.Error(), "US,GB,") {
 		t.Fatalf("expected an error listing every country code, got %v", err)
 	}
 }
 
 func TestSelectProxyCandidateCountryFilterSkipsRecommendedRecord(t *testing.T) {
-	got, err := selectProxyCandidate(liveShapedCountries(), "US")
+	got, err := selectProxyCandidate(liveShapedCountries(), "US", nil)
 	if err != nil || got.Addr != "us.example:2499" {
 		t.Fatalf("expected the US proxy, got %#v %v", got, err)
 	}
@@ -347,7 +320,7 @@ func TestResolveProxyKeepsPersistedLockedSelection(t *testing.T) {
 	if err := SaveSelection(path, Candidate{Addr: "gb.example:2499", CountryCode: "GB"}); err != nil {
 		t.Fatal(err)
 	}
-	got, fromState, err := ResolveWithStateAndCountry("", "GB", liveShapedCountries(), path)
+	got, fromState, err := ResolveWithStateAndCountry("", "GB", liveShapedCountries(), path, nil)
 	if err != nil || !fromState || got.Addr != "gb.example:2499" || got.CountryName != "United Kingdom" {
 		t.Fatalf("expected the persisted locked selection to be reused, got %#v fromState=%v err=%v", got, fromState, err)
 	}

@@ -14,7 +14,7 @@ Use this guide after the [development workflow](DEVELOPMENT.md). It maps common 
 Prefer symbol searches to hardcoded line ranges:
 
 ```powershell
-rg -n 'ResolveWithStateAndCountry|RecordSelectionFailure' internal/proxy internal/service
+rg -n 'ResolveWithStateAndCountry|ServerFailover' internal/proxy internal/service
 rg -n 'UpdateToken|updateCurrentSessionToken|adoptPass' cmd/firefox-vpn-core
 rg -n '^func Test' -g '*_test.go' .
 ```
@@ -36,9 +36,9 @@ Do not add command-line flags for settings; flags are reserved for the data fold
 
 ## Change server selection or persisted choice
 
-Start with `serverlist.Fetch`, `serverlist.Filter`, and the record models in [internal/serverlist](../internal/serverlist/serverlist.go), then inspect `ConnectCandidates`, `ResolveWithStateAndCountry`, `selectProxyCandidate`, the selection load/save/failure helpers ([internal/proxy/selection.go](../internal/proxy/selection.go)), and `startEngine` ([internal/service/engine.go](../internal/service/engine.go)). The dashboard's location list comes from `handleLocations`.
+Start with `serverlist.Fetch`, `serverlist.Filter`, and the record models in [internal/serverlist](../internal/serverlist/serverlist.go), then inspect `ConnectCandidates`, `ResolveWithStateAndCountry`, `selectProxyCandidate`, `locationMatcher`, `LocationCandidates`, the selection load/save helpers ([internal/proxy/selection.go](../internal/proxy/selection.go)), the server failover ([internal/proxy/failover.go](../internal/proxy/failover.go); `failOver` and `dialSession` in the controller), and `connectEngine` and `reconnectEngine` ([internal/service/engine.go](../internal/service/engine.go)). The dashboard's location list comes from `handleLocations`.
 
-Preserve exact-server versus country exclusivity, deterministic selection, best-effort saved hostname reuse, country mismatch handling, and the startup-failure threshold. Use `TestResolveProxy*`, `TestSelectProxyCandidate*`, `TestFilter*`, and `TestPersistedProxyRequiresThreeStartupFailuresBeforeRemoval`.
+Preserve exact-server versus country exclusivity, deterministic city order, best-effort saved hostname reuse, country mismatch handling, and the failover's limits: only the server's own failures count, a failover stays in the location, and a server set by hand never moves ([SESSIONS.md](SESSIONS.md#server-failover)). Use `TestResolveProxy*`, `TestSelectProxyCandidate*`, `TestFilter*`, the failover tests in `failover_test.go`, and `TestWakeMovesToAnotherServerOfTheLocation`.
 
 ## Change account failover
 

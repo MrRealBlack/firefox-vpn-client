@@ -1225,4 +1225,16 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get blockAds => 'Hirdetések tiltása';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return 'Egy másik program a rendszerproxyt erre állította: $address, így a forgalom nem a VPN-en megy.';
+  }
+
+  @override
+  String get systemProxyTakenOff =>
+      'Egy másik program kikapcsolta a rendszerproxyt, így a forgalom nem a VPN-en megy.';
+
+  @override
+  String get setSystemProxyAgain => 'Beállítás újra';
 }

@@ -343,5 +343,8 @@
   "modeVpn": "VPN",
   "modeProxyOnly": "Yalnızca proxy",
   "noNetwork": "İnternet bağlantısı yok. Wi-Fi'yi veya mobil veriyi açın.",
-  "blockAds": "Reklamları engelle"
+  "blockAds": "Reklamları engelle",
+  "systemProxyTakenBy": "Başka bir program sistem proxy'sini {address} olarak değiştirdi, bu yüzden trafik VPN'den geçmiyor.",
+  "systemProxyTakenOff": "Başka bir program sistem proxy'sini kapattı, bu yüzden trafik VPN'den geçmiyor.",
+  "setSystemProxyAgain": "Yeniden ayarla"
 }

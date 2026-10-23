@@ -1232,4 +1232,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get blockAds => 'حظر الإعلانات';
+
+  @override
+  String systemProxyTakenBy(String address) {
+    return 'غيّر برنامج آخر بروكسي النظام إلى $address، لذا لا تمر حركة المرور عبر VPN.';
+  }
+
+  @override
+  String get systemProxyTakenOff =>
+      'أوقف برنامج آخر بروكسي النظام، لذا لا تمر حركة المرور عبر VPN.';
+
+  @override
+  String get setSystemProxyAgain => 'اضبطه مرة أخرى';
 }

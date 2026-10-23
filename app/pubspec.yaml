@@ -2,7 +2,7 @@ name: firefox_vpn
 description: "Cross-platform shell for the Go VPN core"
 publish_to: 'none'
 
-version: 1.0.2+116
+version: 1.0.3+117
 
 environment:
   sdk: ^3.13.5
