@@ -122,6 +122,26 @@ Sources: `internal/resolver` (servers, racing, cache), `internal/service/network
 - Never resolve SOCKS target names locally; they belong to the exit.
 - Tests use local DoH or UDP servers and replace `systemDNS`; they must not query public resolvers.
 
+## Change the TUN mode
+
+Sources: core side `internal/desktop/tun.go` (`tunSync`: dial, hello, update an older service, open, bind, route, close), `internal/service/tun.go` (the mode, its SOCKS listener, the status), `internal/egress` (the core's own sockets), `internal/netstate` (ignores the TUN adapter); service side `cmd/firefox-vpn-tun`, `internal/tunservice` (sessions, update; installing in `service_windows.go`, `service_linux.go` (systemd), `service_darwin.go` (launchd); elevating in `client_*.go`; DNS kept in the TUN by `filters_*.go`, on macOS through `macdns.go`), `internal/tunstack` (the only sing-tun importer; Linux's table and rules in `options_linux.go`), `internal/wfp`, `internal/tun` (FakeDNS); protocol `internal/tunapi` (the named pipe, the Unix socket).
+
+- The core stays unprivileged: anything that needs the system's rights belongs in the service, and the core never elevates. Keep every outgoing socket of the core bound outside the TUN while it runs (`egress.Dialer`, `egress.Control`, `egress.ListenUDP`), or its connections loop back into its own proxy.
+- A protocol change raises `tunapi.Protocol` (and `MinProtocol` when old peers can no longer be served); `update` and `uninstall` must stay understood in every version, so any app can replace or remove any service.
+- Keep cleanup tied to the core's connection to the service, the WFP session dynamic, and the open-then-route order (the core binds and reconnects before routes exist). What a crash of the service leaves (Linux's rules, macOS' DNS settings) is undone when it starts again: note anything new it changes before changing it.
+- On Linux and macOS the socket is open to every user: the service answers a client only after `tunapi.Allowed` (root, or a user who installed it), and the client trusts only a socket served by root.
+- The service accepts updates signed with its key only ([Development](DEVELOPMENT.md#signing-key)); never weaken `readSigned`.
+- Update [OPERATOR.md](OPERATOR.md#tun-mode), the app's texts (proposed to the user first), and the tests in [TESTING.md](TESTING.md); the gVisor tests need `-tags with_gvisor`. A change to routes, DNS, or the channel on Linux or macOS runs the end-to-end test too (`e2e_test.go`; CI runs it on its Linux and macOS computers).
+
+## Change the app's updates
+
+Sources: `internal/update` (download, check, `Apply`, swap, the update folder), `internal/service/update.go` (API, download transports), `internal/desktop/app.go` (the updater, the reconnect, the TUN service refresh), `internal/signing`, `tools/sign`; the app's `app/lib/core/updates.dart`; CI's release job signs `SHA256SUMS.txt`.
+
+- Install only what the signed list names, and only a newer version; re-check the package before installing. Never run the release's Setup for an update (its rollback keeps replaced files).
+- Never touch `user-data`, the portable marker, or Setup's uninstaller, nor anything in the app's folder that the new version does not replace; every failure must leave the old version whole and runnable.
+- The release files' names and `SHA256SUMS.txt.sig` are a contract with the apps already installed: a change there breaks their updates.
+- Update [OPERATOR.md](OPERATOR.md#app-updates-windows), [DASHBOARD.md](DASHBOARD.md) for the API, and [TESTING.md](TESTING.md).
+
 ## Change status, persistence, or logs
 
 Find the writer and every reader before changing a field: `status.json` is read by external health checks; the dashboard uses `/api/status`. Account files, `config.json`, `state.json`, and `selection.json` have separate owners ([CONFIGURATION.md](CONFIGURATION.md)). Preserve existing-file compatibility and non-secret output. Log messages reach the dashboard; keep tokens and passwords out of them.
@@ -135,6 +155,7 @@ Find the writer and every reader before changing a field: `status.json` is read 
 | Accounts, failover, config fields | [MULTI-ACCOUNT.md](MULTI-ACCOUNT.md) |
 | Dashboard pages, API, security | [DASHBOARD.md](DASHBOARD.md) |
 | Tray icon, status screen | [OPERATOR.md](OPERATOR.md) |
+| TUN mode, app updates | [OPERATOR.md](OPERATOR.md), [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Locks, admission/draining, transport/pool behavior | [SESSIONS.md](SESSIONS.md) |
 | Data-folder files, selection rules, status contract | [CONFIGURATION.md](CONFIGURATION.md) |
 | Running, systemd install, troubleshooting | [OPERATOR.md](OPERATOR.md) |

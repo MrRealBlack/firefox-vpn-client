@@ -9,7 +9,9 @@ import '../core/core_controller.dart';
 import '../core/updates.dart';
 import '../core/core_process.dart';
 import '../core/models.dart';
+import '../core/tun_service.dart';
 import '../l10n/app_localizations.dart';
+import '../ui/connection_mode.dart';
 import '../ui/widgets.dart';
 import 'close_dialog.dart';
 import 'desktop_bridge.dart';
@@ -25,6 +27,7 @@ class DesktopIntegration {
     required this.process,
     required this.navigatorKey,
     this.startHidden = false,
+    this.autostarted = false,
     this.manageAutostart = true,
   }) : _hidden = startHidden;
 
@@ -33,8 +36,12 @@ class DesktopIntegration {
   final CoreProcess process;
   final GlobalKey<NavigatorState> navigatorKey;
 
-  /// Started at sign-in: the window stays in the tray.
+  /// The window stays in the tray: started at sign-in, or by an update in
+  /// the tray.
   final bool startHidden;
+
+  /// Started at sign-in ([startHidden] too): it may connect by itself.
+  final bool autostarted;
 
   /// Whether this copy owns the Run entry; not for a copy started with
   /// another data folder (development and tests).
@@ -48,7 +55,7 @@ class DesktopIntegration {
   );
 
   // Menu ids.
-  static const _open = 1, _set = 2, _clear = 3, _quit = 4;
+  static const _open = 1, _set = 2, _clear = 3, _quit = 4, _tun = 5;
 
   String _lastTray = '';
   bool _closing = false;
@@ -71,6 +78,10 @@ class DesktopIntegration {
     // A version found before this start was announced then.
     _notifiedUpdate = settings.updateVersion;
     Updates.available.addListener(_notifyUpdate);
+    Updates.quitApp = quit;
+    Updates.windowHidden = () => _hidden;
+    // An install at the start that did not happen: connect as usual.
+    Updates.installingAtStart.addListener(_onChange);
     core.addListener(_onChange);
     settings.addListener(_updateTray);
     settings.addListener(_applyAutostart);
@@ -119,6 +130,23 @@ class DesktopIntegration {
 
   String? _notifiedUpdate;
 
+  /// What the update before this start did was told.
+  bool _toldUpdateResult = false;
+
+  /// After an update that started the app in the tray: whether it
+  /// installed (the home page says so otherwise).
+  void _notifyUpdateResult() {
+    if (_toldUpdateResult) return;
+    final last = core.status?.update?.last;
+    if (!core.connected || core.status == null) return;
+    _toldUpdateResult = true;
+    if (last == null || !_hidden) return;
+    _bridge.notify(
+      _l.appTitle,
+      last.ok ? _l.updateDone(last.to) : _l.updateRolledBack(last.to),
+    );
+  }
+
   /// A newer version found while the window is in the tray (the home page
   /// shows it otherwise): one notification per version, unless closed.
   void _notifyUpdate() {
@@ -135,15 +163,17 @@ class DesktopIntegration {
   void _onChange() {
     _autoConnect();
     _notifyChanges();
+    _notifyUpdateResult();
     _updateTray();
   }
 
   /// Started with the computer and set to connect: turns the proxy on once,
   /// as soon as the core answers with it off. The core waits for a network
-  /// and, with the system proxy set, for a connection that works.
+  /// and, with the system proxy set, for a connection that works. Not while
+  /// a new version installs at the start: the new version connects.
   void _autoConnect() {
-    if (_autoConnectDone) return;
-    if (!startHidden || !settings.autostart || !settings.autoConnect) {
+    if (_autoConnectDone || Updates.installingAtStart.value) return;
+    if (!autostarted || !settings.autostart || !settings.autoConnect) {
       _autoConnectDone = true;
       return;
     }
@@ -158,10 +188,11 @@ class DesktopIntegration {
     final status = core.status;
     if (status == null || !core.connected) return;
     final l = _l;
-    // Off while Windows does not use the proxy, as the home page says.
+    // Off while the computer's apps do not use the VPN, as the home page
+    // says.
     final phase =
         status.state.phase == Phase.running &&
-            (!status.systemProxySet || status.autoConnecting)
+            (!status.computerUsesVpn || status.autoConnecting)
         ? Phase.unknown
         : status.state.phase;
     final account = status.activeAccount?.id;
@@ -243,21 +274,32 @@ class DesktopIntegration {
       if (connected && place.isNotEmpty) place,
     ].join(' · ');
     final canSet = connected && status.systemProxySupported;
+    // TUN mode also where the desktop has no system proxy setting.
+    final canTun = connected && status.tunSupported;
     final items = [
       TrayItem(_open, l.trayOpen),
       const TrayItem.separator(),
       TrayItem(
         _clear,
         l.trayProxyOnly,
-        enabled: canSet,
-        checked: canSet && !status.systemProxySet,
+        enabled: canSet || canTun,
+        checked:
+            (canSet || canTun) && !status.systemProxySet && !status.tunMode,
       ),
-      TrayItem(
-        _set,
-        l.traySetSystemProxy,
-        enabled: canSet,
-        checked: canSet && status.systemProxySet,
-      ),
+      if (status?.systemProxySupported ?? true)
+        TrayItem(
+          _set,
+          l.traySetSystemProxy,
+          enabled: canSet,
+          checked: canSet && status.systemProxySet,
+        ),
+      if (canTun)
+        TrayItem(
+          _tun,
+          l.trayTunMode,
+          enabled: !core.installingTun,
+          checked: status.tunMode,
+        ),
       const TrayItem.separator(),
       TrayItem(_quit, l.trayQuit),
     ];
@@ -292,9 +334,28 @@ class DesktopIntegration {
         core.setSystemProxy('set').catchError((_) {});
       case _clear:
         core.setSystemProxy('clear').catchError((_) {});
+      case _tun:
+        _chooseTun();
       case _quit:
         quit();
     }
+  }
+
+  /// TUN mode from the tray: with the window open, as on the home page (it
+  /// says why an install did not happen); hidden, installing the service
+  /// first when needed, without a word but the system's prompt.
+  Future<void> _chooseTun() async {
+    final context = navigatorKey.currentContext;
+    if (!_hidden && context != null && context.mounted) {
+      await chooseConnectionMode(context, core, 'tun');
+      return;
+    }
+    if (!(core.status?.tun?.installed ?? false) &&
+        await core.installTunService(prompt: _l.tunInstallPrompt)
+            is! TunServiceDone) {
+      return;
+    }
+    await core.setSystemProxy('tun').catchError((_) {});
   }
 
   Future<void> _onClose() async {

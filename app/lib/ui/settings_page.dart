@@ -9,12 +9,22 @@ import '../core/core_api.dart';
 import '../core/core_controller.dart';
 import '../core/models.dart';
 import '../core/ports.dart';
+import '../core/tun_service.dart';
+import '../desktop/desktop_bridge.dart';
 import '../l10n/app_localizations.dart';
 import '../platform.dart';
 import 'bypass_apps_page.dart';
+import 'connection_mode.dart';
 import 'format.dart';
 import 'port_dialog.dart';
 import 'widgets.dart';
+
+/// The program file the user picks in the system's open dialog (title, the
+/// kind of file); tests replace it.
+Future<String?> Function(String title, String label) pickProgramFile = (
+  title,
+  label,
+) => DesktopBridge.pickProgram(title: title, label: label);
 
 /// The DNS presets the web dashboard offers (core/internal/service/web/app.js).
 const _dnsPresets = <String, List<String>>{
@@ -56,16 +66,27 @@ class SettingsPage extends StatefulWidget {
 }
 
 /// The groups of settings, each on its own page.
-enum SettingsSection { general, connection, dns, routing, accounts, advanced }
+enum SettingsSection {
+  general,
+  connection,
+  dns,
+  routing,
+  tun,
+  accounts,
+  advanced,
+}
 
-/// Each section's icon and name, in the order the lists show them.
+/// Each section's icon and name, in the order the lists show them; TUN
+/// settings where the computer has the TUN mode ([tun]).
 List<(SettingsSection, IconData, String)> settingsSections(
-  AppLocalizations l,
-) => [
+  AppLocalizations l, {
+  bool tun = false,
+}) => [
   (SettingsSection.general, Icons.tune_rounded, l.sectionGeneral),
   (SettingsSection.connection, Icons.computer_rounded, l.sectionConnection),
   (SettingsSection.dns, Icons.dns_rounded, l.sectionDns),
   (SettingsSection.routing, Icons.alt_route_rounded, l.sectionRouting),
+  if (tun) (SettingsSection.tun, Icons.vpn_lock_rounded, l.sectionTun),
   (SettingsSection.accounts, Icons.swap_horiz_rounded, l.sectionAccounts),
   // The app's port and the web dashboard: computers only.
   if (!Platform.isAndroid)
@@ -155,6 +176,30 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
   );
 
+  /// Removes the TUN service; in TUN mode the core first goes back to proxy
+  /// only, so the computer is not left without its connection mode.
+  Future<void> _removeTunService() async {
+    final l = AppLocalizations.of(context);
+    if (_core.status?.tunMode ?? false) {
+      if (!await runShowingErrors(
+        context,
+        () => _core.setSystemProxy('clear'),
+      )) {
+        return;
+      }
+    }
+    final result = await _core.removeTunService(prompt: l.tunRemovePrompt);
+    if (!mounted) return;
+    switch (result) {
+      case TunServiceDone():
+        showError(context, l.tunServiceRemoved);
+      case TunServiceCancelled():
+        break;
+      case TunServiceFailed(:final error):
+        showError(context, l.tunRemoveFailed(error));
+    }
+  }
+
   Future<void> _changePort(
     String listen,
     Future<void> Function(int port) apply,
@@ -213,13 +258,22 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  /// The TUN settings have something to show: the programs that skip the
+  /// VPN (Windows and Linux).
+  bool get _hasTunSection {
+    final status = _core.status;
+    return (status?.tunSupported ?? false) &&
+        (status?.tun?.programsSupported ?? false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final s = widget.settings;
-    final sections = settingsSections(l);
-    final open = _open;
+    final sections = settingsSections(l, tun: _hasTunSection);
+    // The TUN mode went away (another core): back to the list.
+    final open = sections.any((e) => e.$1 == _open) ? _open : null;
     return ListenableBuilder(
       listenable: s,
       builder: (context, _) {
@@ -279,6 +333,7 @@ class _SettingsPageState extends State<SettingsPage> {
               switch (open) {
                 SettingsSection.connection => _connection(l),
                 SettingsSection.routing => _routing(l),
+                SettingsSection.tun => _tun(l),
                 SettingsSection.dns => _dns(l),
                 SettingsSection.accounts => _accounts(l),
                 _ => _advanced(l),
@@ -382,6 +437,18 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
+        // Where the app installs its updates itself (the Windows app's
+        // core says so).
+        if (_core.status?.update != null)
+          _Row(
+            icon: Icons.system_update_alt_rounded,
+            label: l.autoUpdate,
+            value: l.autoUpdateHint,
+            child: Switch(
+              value: s.autoUpdate,
+              onChanged: (v) => s.update(autoUpdate: v),
+            ),
+          ),
       ],
     ),
   );
@@ -440,16 +507,22 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
-              if (status != null && status.systemProxySupported)
+              // Proxy only, and what else this computer has: a desktop
+              // without a system proxy setting may still have TUN.
+              if (status != null &&
+                  (status.systemProxySupported || status.tunSupported))
                 _Choice<String>(
                   icon: Icons.tune_rounded,
                   title: l.connectionMode,
-                  value: status.systemProxySet ? 'set' : 'clear',
-                  onChanged: (v) =>
-                      runShowingErrors(context, () => _core.setSystemProxy(v)),
+                  value: connectionModeShown(status),
+                  onChanged: _core.installingTun
+                      ? null
+                      : (v) => chooseConnectionMode(context, _core, v),
                   options: [
                     ('clear', l.modeProxy, null),
-                    ('set', l.systemProxy, null),
+                    if (status.systemProxySupported)
+                      ('set', l.systemProxy, null),
+                    if (status.tunSupported) ('tun', l.modeTun, null),
                   ],
                 ),
               _PortRow(
@@ -680,6 +753,231 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
+  /// The programs that skip the VPN (the core's tun.programs), in order;
+  /// path is where one was chosen from ("" for a name typed by hand). Only
+  /// the name decides, so one that moved still matches.
+  List<({String name, bool udpOnly, String path})> get _programs => [
+    for (final p in (_get(['tun', 'programs']) as List<Object?>? ?? const []))
+      if (p is Map<String, Object?> && p['name'] is String)
+        (
+          name: p['name'] as String,
+          udpOnly: p['udp_only'] == true,
+          path: p['path'] as String? ?? '',
+        ),
+  ];
+
+  Future<bool> _savePrograms(
+    List<({String name, bool udpOnly, String path})> programs,
+  ) => _save({
+    ['tun', 'programs']: [
+      for (final p in programs)
+        {
+          'name': p.name,
+          if (p.udpOnly) 'udp_only': true,
+          if (p.path.isNotEmpty) 'path': p.path,
+        },
+    ],
+  });
+
+  /// Adds a program by its file name (or a pattern with *), all its traffic
+  /// skipping the VPN, with where it was chosen from; one already there
+  /// stays as it is.
+  Future<void> _addProgramNamed(String name, {String path = ''}) async {
+    name = name.trim().split(RegExp(r'[/\\]')).last;
+    final programs = _programs;
+    if (name.isEmpty ||
+        programs.any((p) => p.name.toLowerCase() == name.toLowerCase())) {
+      return;
+    }
+    await _savePrograms([
+      ...programs,
+      (name: name, udpOnly: false, path: path.trim()),
+    ]);
+  }
+
+  /// A program from the system's open dialog.
+  Future<void> _addProgramFile() async {
+    final l = AppLocalizations.of(context);
+    String? path;
+    try {
+      path = await pickProgramFile(l.addProgram, l.programFiles);
+    } on PlatformException catch (e) {
+      if (mounted) showError(context, e.message ?? e.code);
+      return;
+    }
+    if (path != null && mounted) await _addProgramNamed(path, path: path);
+  }
+
+  /// A program from the ones running now, which the core lists.
+  Future<void> _addRunningProgram() async {
+    List<RunningProgram>? running;
+    final ok = await runShowingErrors(context, () async {
+      running = await _core.call((api) => api.runningPrograms());
+    });
+    final list = running;
+    if (!ok || list == null || !mounted) return;
+    final picked = await showDialog<RunningProgram>(
+      context: context,
+      builder: (_) => _RunningProgramsDialog(
+        programs: list,
+        added: {for (final p in _programs) p.name.toLowerCase()},
+      ),
+    );
+    if (picked != null && mounted) {
+      await _addProgramNamed(picked.name, path: picked.path);
+    }
+  }
+
+  /// A program by a name the user types, * for any text.
+  Future<void> _addProgramByName() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => const _ProgramNameDialog(),
+    );
+    if (name != null && mounted) await _addProgramNamed(name);
+  }
+
+  /// Asks first: a click by mistake would cost the administrator's prompt
+  /// to put the service back.
+  Future<void> _confirmRemoveTunService() async {
+    final l = AppLocalizations.of(context);
+    final colors = Theme.of(context).colorScheme;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(Icons.delete_outline_rounded, color: colors.error),
+        title: Text(l.removeTunService),
+        content: SizedBox(width: 380, child: Text(l.removeTunServiceHint)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: colors.error,
+              foregroundColor: colors.onError,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l.remove),
+          ),
+        ],
+      ),
+    );
+    if (yes == true && mounted) await _removeTunService();
+  }
+
+  Widget _tun(AppLocalizations l) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final s = widget.settings;
+    final tun = _core.status?.tun;
+    final programsHere = tun?.programsSupported ?? false;
+    final programs = _programs;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (programsHere) ...[
+          Panel(
+            title: l.sectionTun,
+            icon: Icons.vpn_lock_rounded,
+            // The home page's card when a program's call or game was
+            // refused.
+            child: _Row(
+              icon: Icons.call_rounded,
+              label: l.udpNoticeSetting,
+              child: Switch(
+                value: s.udpNotice,
+                onChanged: (v) => s.update(udpNotice: v),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Panel(
+            title: l.tunPrograms,
+            icon: Icons.apps_rounded,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l.tunProgramsHint,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+                const SizedBox(height: 8),
+                if (programs.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 4,
+                    ),
+                    child: Text(
+                      l.tunProgramsEmpty,
+                      style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+                    ),
+                  ),
+                for (final p in programs)
+                  _ProgramRow(
+                    name: p.name,
+                    path: p.path,
+                    udpOnly: p.udpOnly,
+                    onMode: _saving
+                        ? null
+                        : (udpOnly) => _savePrograms([
+                            for (final q in programs)
+                              q.name == p.name
+                                  ? (
+                                      name: q.name,
+                                      udpOnly: udpOnly,
+                                      path: q.path,
+                                    )
+                                  : q,
+                          ]),
+                    onRemove: _saving
+                        ? null
+                        : () => _savePrograms([
+                            for (final q in programs)
+                              if (q.name != p.name) q,
+                          ]),
+                  ),
+                // Three ways: what runs now (the names the TUN sees), a
+                // file, or a name with *.
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: MenuAnchor(
+                    menuChildren: [
+                      MenuItemButton(
+                        leadingIcon: const Icon(Icons.apps_rounded),
+                        onPressed: _addRunningProgram,
+                        child: Text(l.addRunningProgram),
+                      ),
+                      MenuItemButton(
+                        leadingIcon: const Icon(Icons.folder_open_rounded),
+                        onPressed: _addProgramFile,
+                        child: Text(l.addProgramFile),
+                      ),
+                      MenuItemButton(
+                        leadingIcon: const Icon(Icons.edit_rounded),
+                        onPressed: _addProgramByName,
+                        child: Text(l.addProgramName),
+                      ),
+                    ],
+                    builder: (context, menu, _) => TextButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => menu.isOpen ? menu.close() : menu.open(),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: Text(l.addProgram),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _accounts(AppLocalizations l) => Panel(
     title: l.sectionAccounts,
     icon: Icons.people_outline_rounded,
@@ -801,31 +1099,74 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _advanced(AppLocalizations l) {
+    final theme = Theme.of(context);
+    final error = theme.colorScheme.error;
     final appListen = _str(['dashboard', 'listen']);
     final dashboard = CoreLocator.listenUri(appListen).replace(path: '/app/');
-    return Panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _PortRow(
-            icon: Icons.hub_outlined,
-            label: l.appPort,
-            listen: appListen,
-            onChange: () => _changePort(appListen, _core.setAppPort),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PortRow(
+                icon: Icons.hub_outlined,
+                label: l.appPort,
+                listen: appListen,
+                onChange: () => _changePort(appListen, _core.setAppPort),
+              ),
+              _Row(
+                icon: Icons.dashboard_outlined,
+                label: l.webDashboard,
+                // An address reads left to right in a right-to-left language.
+                value: ltr('$dashboard'),
+                child: const Icon(Icons.open_in_new_rounded, size: 20),
+                onTap: () => runShowingErrors(
+                  context,
+                  () async => openUrl('${await _core.dashboardLink()}'),
+                ),
+              ),
+            ],
           ),
-          _Row(
-            icon: Icons.dashboard_outlined,
-            label: l.webDashboard,
-            // An address reads left to right in a right-to-left language.
-            value: ltr('$dashboard'),
-            child: const Icon(Icons.open_in_new_rounded, size: 20),
-            onTap: () => runShowingErrors(
-              context,
-              () async => openUrl('${await _core.dashboardLink()}'),
+        ),
+        // The TUN mode's service, which no uninstaller removes from a
+        // portable copy on Windows, or on Linux and macOS: here, out of the
+        // way, red, and asked first, since it is rarely meant.
+        if (_core.status?.tun?.installed ?? false) ...[
+          const SizedBox(height: 16),
+          Panel(
+            title: l.removeTunService,
+            icon: Icons.delete_outline_rounded,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l.removeTunServiceHint,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: error,
+                      side: BorderSide(color: error),
+                    ),
+                    onPressed: _core.removingTun || _core.installingTun
+                        ? null
+                        : _confirmRemoveTunService,
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    label: Text(l.remove),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -852,6 +1193,131 @@ String _shortDuration(String go) {
   return s;
 }
 
+/// The values to choose from in a dialog in the middle of the window, one
+/// radio button each, with its line from [hints]; null when cancelled.
+Future<T?> _pickOne<T>(
+  BuildContext context, {
+  required String title,
+  required T value,
+  required List<(T, String, TextStyle?)> options,
+  List<String>? hints,
+}) => showDialog<T>(
+  context: context,
+  builder: (context) => AlertDialog(
+    title: Text(title),
+    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+    content: SizedBox(
+      width: 360,
+      child: SingleChildScrollView(
+        child: RadioGroup<T>(
+          groupValue: value,
+          onChanged: (v) => Navigator.pop(context, v),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (i, (v, label, style)) in options.indexed)
+                RadioListTile<T>(
+                  value: v,
+                  title: Text(label, style: style),
+                  subtitle: hints == null ? null : Text(hints[i]),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(AppLocalizations.of(context).cancel),
+      ),
+    ],
+  ),
+);
+
+/// A program that skips the VPN: its file name and the path it was chosen
+/// from, left to right from the left in every language (file names read
+/// so), then how much of it skips the VPN, which a tap changes, and a
+/// remove button.
+class _ProgramRow extends StatelessWidget {
+  const _ProgramRow({
+    required this.name,
+    required this.path,
+    required this.udpOnly,
+    required this.onMode,
+    required this.onRemove,
+  });
+
+  final String name;
+  final String path;
+  final bool udpOnly;
+  final ValueChanged<bool>? onMode;
+  final VoidCallback? onRemove;
+
+  Future<void> _chooseMode(BuildContext context) async {
+    final l = AppLocalizations.of(context);
+    final picked = await _pickOne<bool>(
+      context,
+      title: ltr(name),
+      value: udpOnly,
+      options: [(false, l.tunProgramAll, null), (true, l.tunProgramUdp, null)],
+      hints: [l.tunProgramAllHint, l.tunProgramUdpHint],
+    );
+    if (picked != null && picked != udpOnly) onMode?.call(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        textDirection: TextDirection.ltr,
+        children: [
+          Icon(Icons.apps_rounded, color: muted),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              textDirection: TextDirection.ltr,
+              children: [
+                Text(
+                  name,
+                  textDirection: TextDirection.ltr,
+                  style: theme.textTheme.bodyLarge,
+                ),
+                if (path.isNotEmpty)
+                  Tooltip(
+                    message: path,
+                    child: Text(
+                      path,
+                      textDirection: TextDirection.ltr,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onMode == null ? null : () => _chooseMode(context),
+            child: Text(udpOnly ? l.tunProgramUdp : l.tunProgramAll),
+          ),
+          IconButton(
+            tooltip: l.remove,
+            icon: const Icon(Icons.close_rounded),
+            onPressed: onRemove,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// A choice among a few values, shown as the current one; a tap opens the
 /// values in a dialog in the middle of the window (not a menu at the
 /// control), one radio button each.
@@ -874,37 +1340,11 @@ class _Choice<T> extends StatelessWidget {
   final ValueChanged<T>? onChanged;
 
   Future<void> _open(BuildContext context) async {
-    final picked = await showDialog<T>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        contentPadding: const EdgeInsets.symmetric(vertical: 12),
-        content: SizedBox(
-          width: 360,
-          child: SingleChildScrollView(
-            child: RadioGroup<T>(
-              groupValue: value,
-              onChanged: (v) => Navigator.pop(context, v),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final (v, label, style) in options)
-                    RadioListTile<T>(
-                      value: v,
-                      title: Text(label, style: style),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(AppLocalizations.of(context).cancel),
-          ),
-        ],
-      ),
+    final picked = await _pickOne<T>(
+      context,
+      title: title,
+      value: value,
+      options: options,
     );
     if (picked != null && picked != value) onChanged?.call(picked);
   }
@@ -970,6 +1410,175 @@ class _Row extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The programs running now, to pick one that skips the VPN, by the file
+/// name the TUN sees, with a search; the ones already chosen are marked.
+class _RunningProgramsDialog extends StatefulWidget {
+  const _RunningProgramsDialog({required this.programs, required this.added});
+
+  final List<RunningProgram> programs;
+
+  /// The chosen programs' names, in lower case.
+  final Set<String> added;
+
+  @override
+  State<_RunningProgramsDialog> createState() => _RunningProgramsDialogState();
+}
+
+class _RunningProgramsDialogState extends State<_RunningProgramsDialog> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final q = _query.trim().toLowerCase();
+    final shown = [
+      for (final p in widget.programs)
+        if (q.isEmpty ||
+            p.name.toLowerCase().contains(q) ||
+            p.path.toLowerCase().contains(q))
+          p,
+    ];
+    return AlertDialog(
+      title: Text(l.addProgram),
+      contentPadding: const EdgeInsets.only(top: 12),
+      content: SizedBox(
+        width: 480,
+        height: 420,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: TextField(
+                autofocus: true,
+                // Program names read left to right, from the left.
+                textDirection: TextDirection.ltr,
+                textAlign: TextAlign.left,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  hintText: l.search,
+                ),
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: widget.programs.isEmpty
+                  ? Center(
+                      child: Text(
+                        l.runningProgramsEmpty,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: muted,
+                        ),
+                      ),
+                    )
+                  // Names and paths read left to right, from the left, in
+                  // every language.
+                  : Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: ListView(
+                        children: [
+                          for (final p in shown)
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              leading: Icon(
+                                widget.added.contains(p.name.toLowerCase())
+                                    ? Icons.check_rounded
+                                    : Icons.apps_rounded,
+                              ),
+                              title: Text(p.name),
+                              subtitle: Tooltip(
+                                message: p.path,
+                                child: Text(
+                                  p.path,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              enabled: !widget.added.contains(
+                                p.name.toLowerCase(),
+                              ),
+                              onTap: () => Navigator.pop(context, p),
+                            ),
+                        ],
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l.cancel),
+        ),
+      ],
+    );
+  }
+}
+
+/// A program's file name typed by hand, or a pattern with *.
+class _ProgramNameDialog extends StatefulWidget {
+  const _ProgramNameDialog();
+
+  @override
+  State<_ProgramNameDialog> createState() => _ProgramNameDialogState();
+}
+
+class _ProgramNameDialogState extends State<_ProgramNameDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isNotEmpty) Navigator.pop(context, name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(l.addProgram),
+      content: SizedBox(
+        width: 400,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          // A file name reads left to right, from the left, in every
+          // language.
+          textDirection: TextDirection.ltr,
+          textAlign: TextAlign.left,
+          decoration: InputDecoration(
+            hintText: 'steam.exe',
+            helperText: l.programNameHint,
+            helperMaxLines: 3,
+          ),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _submit(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l.cancel),
+        ),
+        FilledButton(
+          onPressed: _controller.text.trim().isEmpty ? null : _submit,
+          child: Text(l.addProgram),
+        ),
+      ],
     );
   }
 }

@@ -608,7 +608,7 @@
 
             <article class="card help-card" id="help-ports">
               <h3>Only ports 80, 443, 8080, and 8443</h3>
-              <p>Mozilla's proxy connects to the web ports <strong>80, 443, 8080, and 8443</strong> only. Every other port is refused by Mozilla's server, for example <code>http://203.0.113.5:9898/</code>, SSH (22), mail (25, 465, 587, 993), or DNS (53). This program cannot change that, with one exception: git over SSH to GitHub goes to GitHub's SSH server on port 443 by itself.</p>
+              <p>Mozilla's proxy connects to the web ports <strong>80, 443, 8080, and 8443</strong> only. Every other port is refused by Mozilla's server, for example <code>http://203.0.113.5:9898/</code>, SSH (22), or mail (25, 465, 587, 993). This program cannot change that, with two exceptions: git over SSH to GitHub goes to GitHub's SSH server on port 443 by itself, and DNS (53) sent through the proxy is answered by this program, with DNS over HTTPS through Mozilla.</p>
               <ul>
                 <li>Serve your own site on one of the four ports (8080 and 8443 are the usual choices).</li>
                 <li>Or let the browser reach that address directly: Firefox, Settings, Network Settings, <em>No proxy for</em>.</li>
@@ -618,6 +618,11 @@
             <article class="card help-card" id="help-udp">
               <h3>TCP only, no UDP</h3>
               <p>Mozilla's proxy carries TCP connections. UDP does not go through it, so online games, voice and video calls in some applications, and other UDP traffic do not work through this proxy. Browsers are not affected: they use HTTP/2 over TCP when HTTP/3 is not available.</p>
+            </article>
+
+            <article class="card help-card" id="help-loop">
+              <h3>The program's own connections come back to it</h3>
+              <p>Another program sends this program's own traffic into its proxy, so it cannot reach Mozilla and nothing connects. In PassWall2 on a router, turn Localhost Proxy off. In another VPN program's TUN mode (v2rayN, Clash, sing-box), let firefox-vpn-core connect directly, with a process rule.</p>
             </article>
 
             <article class="card help-card" id="help-routing">

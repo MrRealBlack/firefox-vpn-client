@@ -179,7 +179,7 @@ func (t *Tunnel) forwardTCP(r *tcp.ForwarderRequest, dial Dialer, allow Allow, d
 		}
 		r.Complete(false)
 		ep.SocketOptions().SetKeepAlive(true)
-		relay(gonet.NewTCPConn(&wq, ep), upstream)
+		Relay(gonet.NewTCPConn(&wq, ep), upstream)
 	}()
 }
 

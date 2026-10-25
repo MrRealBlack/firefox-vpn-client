@@ -950,6 +950,46 @@ class AppLocalizationsBn extends AppLocalizations {
   }
 
   @override
+  String get updateNow => 'আপডেট করুন';
+
+  @override
+  String updateDownloading(String version) {
+    return 'সংস্করণ $version ডাউনলোড হচ্ছে…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return 'সংস্করণ $version ইনস্টলের জন্য প্রস্তুত।';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return 'সংস্করণ $version ইনস্টল হচ্ছে। অ্যাপটি বন্ধ হয়ে আবার খুলবে।';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return 'সংস্করণ $version-এ আপডেট করা গেল না।';
+  }
+
+  @override
+  String updateDone(String version) {
+    return 'সংস্করণ $version-এ আপডেট হয়েছে।';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return 'সংস্করণ $version-এ আপডেট শেষ হয়নি, তাই অ্যাপটি আগের সংস্করণে ফিরে গেছে।';
+  }
+
+  @override
+  String get autoUpdate => 'স্বয়ংক্রিয়ভাবে আপডেট করুন';
+
+  @override
+  String get autoUpdateHint =>
+      'নতুন সংস্করণ ব্যাকগ্রাউন্ডে ডাউনলোড হয় এবং পরের বার অ্যাপ খুললে ইনস্টল হয়।';
+
+  @override
   String get repoNotSet => 'GitHub রিপোজিটরি এখনও সেট করা হয়নি।';
 
   @override
@@ -1108,15 +1148,11 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'শুধু যেসব অ্যাপে প্রক্সি সেট করা আছে সেগুলোই এর মধ্য দিয়ে যায়; Windows-এর সেটিংস বদলায় না।';
+      'শুধু যেসব অ্যাপে প্রক্সি সেট করা আছে সেগুলোই এর মধ্য দিয়ে যায়।';
 
   @override
   String get modeSystemProxyHint =>
       'Windows ও বেশিরভাগ অ্যাপ প্রক্সি দিয়ে যায়।';
-
-  @override
-  String get modeProxyHintOther =>
-      'শুধু যেসব অ্যাপে প্রক্সি সেট করা আছে সেগুলোই এর মধ্য দিয়ে যায়; সিস্টেমের সেটিংস বদলায় না।';
 
   @override
   String get modeSystemProxyHintOther =>
@@ -1228,4 +1264,156 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'আবার সেট করুন';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return '$os-এর সব ট্রাফিক VPN দিয়ে যায়।';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting => 'TUN সার্ভিস ইনস্টল করার অনুমতির অপেক্ষা…';
+
+  @override
+  String get tunInstallCancelled =>
+      'TUN মোডের জন্য একবার অ্যাডমিনিস্ট্রেটর অনুমতি লাগে। অনুমতি দেওয়া হয়নি, তাই মোড বদলায়নি।';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'TUN সার্ভিস ইনস্টল করা যায়নি: $error';
+  }
+
+  @override
+  String get tunStarting => 'TUN মোড চালু হচ্ছে…';
+
+  @override
+  String get tunFailed => 'TUN মোড চালু হয়নি। আবার চেষ্টা করা হচ্ছে…';
+
+  @override
+  String get tunLost => 'TUN মোড হঠাৎ বন্ধ হয়ে গেছে। আবার চেষ্টা করা হচ্ছে…';
+
+  @override
+  String get tunNotRunning => 'TUN সার্ভিস চলছে না। আবার চেষ্টা করা হচ্ছে…';
+
+  @override
+  String get tunMissing => 'TUN সার্ভিস ইনস্টল করা নেই।';
+
+  @override
+  String get tunOutdated =>
+      'TUN সার্ভিস এই অ্যাপের চেয়ে পুরোনো। TUN মোড ব্যবহার করতে এটি আবার ইনস্টল করুন।';
+
+  @override
+  String get tunAppOutdated =>
+      'TUN সার্ভিস এই অ্যাপের চেয়ে নতুন। TUN মোড ব্যবহার করতে অ্যাপটি আপডেট করুন।';
+
+  @override
+  String get tunBusy => 'Firefox VPN-এর অন্য একটি কপি TUN মোড ব্যবহার করছে।';
+
+  @override
+  String get tunInstall => 'ইনস্টল করুন';
+
+  @override
+  String get tunInstallAgain => 'আবার ইনস্টল করুন';
+
+  @override
+  String get trayTunMode => 'TUN মোড (সব অ্যাপ)';
+
+  @override
+  String get removeTunService => 'TUN সার্ভিস সরান';
+
+  @override
+  String get removeTunServiceHint =>
+      'TUN মোড যে সিস্টেম সার্ভিস ব্যবহার করে তা সরিয়ে দেয়। আবার TUN বেছে নিলে এটি আবার ইনস্টল হয়।';
+
+  @override
+  String get tunServiceRemoved => 'TUN সার্ভিস সরানো হয়েছে।';
+
+  @override
+  String get tunInstallPrompt =>
+      'Firefox VPN TUN মোডের জন্য সার্ভিসটি ইনস্টল করতে চায়।';
+
+  @override
+  String get tunRemovePrompt => 'Firefox VPN TUN মোডের সার্ভিসটি সরাতে চায়।';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'TUN সার্ভিস সরানো যায়নি: $error';
+  }
+
+  @override
+  String get sectionTun => 'TUN সেটিংস';
+
+  @override
+  String get tunPrograms => 'VPN এড়িয়ে চলা প্রোগ্রাম';
+
+  @override
+  String get tunProgramsHint =>
+      'এগুলো Mozilla দিয়ে নয়, সরাসরি সংযোগ করে। শুধু VPN ছাড়া চলে এমন প্রোগ্রামের জন্য।';
+
+  @override
+  String get tunProgramsEmpty => 'এখনও কোনো প্রোগ্রাম নেই।';
+
+  @override
+  String get addProgram => 'প্রোগ্রাম যোগ করুন';
+
+  @override
+  String get programFiles => 'প্রোগ্রাম';
+
+  @override
+  String get tunProgramAll => 'সব ট্রাফিক';
+
+  @override
+  String get tunProgramAllHint => 'পুরো প্রোগ্রাম সরাসরি সংযোগ করে।';
+
+  @override
+  String get tunProgramUdp => 'শুধু UDP';
+
+  @override
+  String get tunProgramUdpHint => 'শুধু এর UDP সরাসরি যায়; বাকিটা VPN দিয়ে।';
+
+  @override
+  String get udpNoticeSetting => 'আটকে যাওয়া UDP-র নোটিশ';
+
+  @override
+  String udpNoticeBody(String program) {
+    return '$program কল করতে বা অনলাইনে খেলতে চেয়েছিল, কিন্তু TUN মোডে এই ট্রাফিক (UDP) VPN দিয়ে যেতে পারে না।';
+  }
+
+  @override
+  String get udpNoticeAction => 'এর UDP সরাসরি পাঠান';
+
+  @override
+  String get dontShowAgain => 'আর দেখাবেন না';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program: এর UDP এখন সরাসরি সংযোগ করে।';
+  }
+
+  @override
+  String get addRunningProgram => 'চলমান প্রোগ্রাম থেকে';
+
+  @override
+  String get addProgramFile => 'ফাইল বেছে নিন…';
+
+  @override
+  String get addProgramName => 'নাম লিখুন…';
+
+  @override
+  String get programNameHint =>
+      'প্রোগ্রামের ফাইলের নাম, যেমন steam.exe; * মানে যেকোনো লেখা (steam* মানে Steam-এর সব প্রোগ্রাম)।';
+
+  @override
+  String get runningProgramsEmpty => 'আর কোনো প্রোগ্রাম চলছে না।';
 }

@@ -37,7 +37,11 @@ type SOCKSServer struct {
 	Auth *socksCredentials
 	// Notices, when set, collects requests refused because of a limit, for
 	// the dashboard.
-	Notices          *Notices
+	Notices *Notices
+	// Allow, when set, refuses at once a target (host, port) it rejects,
+	// without trying it: the TUN mode's rule for the ports Mozilla's proxy
+	// does not carry.
+	Allow            func(host, port string) bool
 	upstream         tunnelOpener
 	handshakeTimeout time.Duration
 	idleTimeout      time.Duration
@@ -126,6 +130,13 @@ func (s *SOCKSServer) handleConn(conn net.Conn) {
 		_ = conn.SetDeadline(time.Time{})
 	}
 	logx.Debug("SOCKS5 CONNECT requested client=%s target=%s", clientAddr, logx.Target(target))
+	if s.Allow != nil {
+		if host, port, err := net.SplitHostPort(target); err != nil || !s.Allow(host, port) {
+			logx.Debug("SOCKS5 CONNECT refused at once: Mozilla's proxy does not carry the port client=%s target=%s", clientAddr, logx.Target(target))
+			_ = writeSOCKSReply(conn, socksReplyNotAllow, nil)
+			return
+		}
+	}
 
 	upstreamConn, err := s.openTarget(conn, target, clientAddr)
 	if err != nil {
@@ -371,6 +382,9 @@ func mapUpstreamError(err error) byte {
 	}
 	return socksReplyFailure
 }
+
+// ServeConn serves one client, as ServeSOCKS serves each it accepts.
+func (s *SOCKSServer) ServeConn(conn net.Conn) { s.handleConn(conn) }
 
 // ServeSOCKS accepts clients until the listener is closed, backing off on
 // transient accept errors.

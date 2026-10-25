@@ -70,16 +70,71 @@ type Config struct {
 	// SystemProxy is separate from Proxy so that switching it does not
 	// restart the proxy.
 	SystemProxy SystemProxy `json:"system_proxy"`
+	Tun         Tun         `json:"tun"`
 	Logging     Logging     `json:"logging"`
 }
 
-// SystemProxy is what the tray icon or the app mode does with Windows'
-// proxy setting, in the signed-in user's session (v2rayN's two choices):
+// Tun is the TUN mode's own settings (system_proxy.mode "tun").
+type Tun struct {
+	// Programs skip the VPN while the TUN runs: the TUN service sends their
+	// traffic directly, outside it (Windows and Linux).
+	Programs []TunProgram `json:"programs"`
+}
+
+// TunProgram is a program that skips the VPN.
+type TunProgram struct {
+	// Name is its executable's file name (steam.exe), compared without
+	// case, so that it holds after an update moves the program's folder;
+	// or a pattern with * (any text) and ? (one character): steam* is every
+	// Steam program (tunapi.MatchProgram).
+	Name string `json:"name"`
+	// UDPOnly sends only its UDP directly (Mozilla does not carry UDP); its
+	// TCP still goes through the VPN.
+	UDPOnly bool `json:"udp_only,omitempty"`
+	// Path is where the program was when it was chosen, for the settings
+	// to show; only Name decides, so a program that moved still matches.
+	Path string `json:"path,omitempty"`
+}
+
+// MaxTunPrograms bounds tun.programs.
+const MaxTunPrograms = 200
+
+// CleanTunPrograms keeps each program once (the first), by its file name
+// without a folder (a name given with its folder keeps it as its path), and
+// drops empty names.
+func CleanTunPrograms(programs []TunProgram) []TunProgram {
+	out := make([]TunProgram, 0, len(programs))
+	seen := map[string]bool{}
+	for _, p := range programs {
+		name, path := strings.TrimSpace(p.Name), strings.TrimSpace(p.Path)
+		if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+			if path == "" {
+				path = name
+			}
+			name = name[i+1:]
+		}
+		key := strings.ToLower(name)
+		if name == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, TunProgram{Name: name, UDPOnly: p.UDPOnly, Path: path})
+	}
+	return out
+}
+
+// SystemProxy is how the computer's apps reach the proxy, the desktop
+// app's connection mode: what the tray icon or the app mode does with
+// Windows' proxy setting, in the signed-in user's session (v2rayN's two
+// choices), or the TUN mode:
 //
 //	set    point it at the local proxy (HTTP on the SOCKS5 port) while the
 //	       proxy runs, and restore the previous one when it stops
 //	clear  turn the system proxy off, once when chosen (a setting this
 //	       program made is restored first)
+//	tun    leave the setting alone (restoring this program's) and send every
+//	       app's TCP through the TUN service (cmd/firefox-vpn-tun) while the
+//	       proxy is on; only the desktop app's core does it
 type SystemProxy struct {
 	Mode string `json:"mode"`
 }
@@ -88,6 +143,7 @@ type SystemProxy struct {
 const (
 	SystemProxySet   = "set"
 	SystemProxyClear = "clear"
+	SystemProxyTun   = "tun"
 )
 
 // Routing sends chosen destinations directly through the local network, or
@@ -239,6 +295,7 @@ func Default() Config {
 		// Proxy only until the user chooses the system proxy; the choice is
 		// kept here.
 		SystemProxy: SystemProxy{Mode: SystemProxyClear},
+		Tun:         Tun{Programs: []TunProgram{}},
 		Routing: Routing{
 			Region:         routing.RegionIran,
 			Direct:         routing.RegionRules(routing.RegionIran),
@@ -353,6 +410,7 @@ func Load(path string) (cfg Config, created bool, err error) {
 	if cfg.Routing.Block == nil {
 		cfg.Routing.Block = []string{}
 	}
+	cfg.Tun.Programs = CleanTunPrograms(cfg.Tun.Programs)
 	// Version 1 added the region's preset rules by itself; they are in
 	// the Direct list now, where the user can change them.
 	if cfg.Version < 2 {
@@ -476,9 +534,20 @@ func (c Config) Validate() error {
 		return errors.New("routing.update_interval must be at least 1h")
 	}
 	switch c.SystemProxy.Mode {
-	case SystemProxySet, SystemProxyClear:
+	case SystemProxySet, SystemProxyClear, SystemProxyTun:
 	default:
-		return fmt.Errorf("system_proxy.mode %q is not supported; it must be %q or %q", c.SystemProxy.Mode, SystemProxySet, SystemProxyClear)
+		return fmt.Errorf("system_proxy.mode %q is not supported; it must be %q, %q, or %q", c.SystemProxy.Mode, SystemProxySet, SystemProxyClear, SystemProxyTun)
+	}
+	if len(c.Tun.Programs) > MaxTunPrograms {
+		return fmt.Errorf("tun.programs holds at most %d programs", MaxTunPrograms)
+	}
+	for _, p := range c.Tun.Programs {
+		if p.Name == "" || len(p.Name) > 255 || strings.ContainsAny(p.Name, "/\\\x00") {
+			return fmt.Errorf("tun.programs: %q is not a program's file name", p.Name)
+		}
+		if len(p.Path) > 4096 || strings.ContainsRune(p.Path, 0) {
+			return fmt.Errorf("tun.programs: the path of %q is not a path", p.Name)
+		}
 	}
 	return nil
 }

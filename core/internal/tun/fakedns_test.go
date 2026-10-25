@@ -80,7 +80,7 @@ func TestFakeDNSKeepsLocalhost(t *testing.T) {
 }
 
 func TestFakeDNSReusesAddressesAndForgetsOldNames(t *testing.T) {
-	f := newFakeDNS(4) // offsets 1 and 2
+	f := newFakeDNS(1, 4) // offsets 1 and 2
 	_, a := answers(t, f, "a.test.", dnsmessage.TypeA)
 	answers(t, f, "b.test.", dnsmessage.TypeA)
 	_, c := answers(t, f, "c.test.", dnsmessage.TypeA)
@@ -92,6 +92,54 @@ func TestFakeDNSReusesAddressesAndForgetsOldNames(t *testing.T) {
 	}
 	if _, ok := f.Target(netip.AddrPortFrom(netip.MustParseAddr("198.19.255.200"), 80)); ok {
 		t.Fatal("an unknown fake address must not be dialed")
+	}
+}
+
+// The desktop's FakeDNS keeps the adapter's own addresses out, also when
+// the range wraps, so a connection to them is refused like a forgotten
+// fake address.
+func TestDesktopFakeDNSKeepsTheAdapterAddressesOut(t *testing.T) {
+	f := NewDesktopFakeDNS()
+	_, a := answers(t, f, "first.test.", dnsmessage.TypeA)
+	if a[0] != netip.MustParseAddr("198.18.0.4") {
+		t.Fatalf("the first address is %s, want 198.18.0.4", a[0])
+	}
+	small := newFakeDNS(4, 7) // offsets 4 and 5
+	small.fixed = f.fixed
+	for _, name := range []string{"a.test.", "b.test.", "c.test."} {
+		_, got := answers(t, small, name, dnsmessage.TypeA)
+		if DesktopNet.Contains(got[0]) {
+			t.Fatalf("%s got the adapter's address %s", name, got[0])
+		}
+	}
+	for _, addr := range []string{"198.18.0.1", "198.18.0.2"} {
+		if _, ok := f.Target(netip.AddrPortFrom(netip.MustParseAddr(addr), 853)); ok {
+			t.Fatalf("a connection to the adapter's %s would be sent on", addr)
+		}
+	}
+}
+
+// Windows' network check gets Microsoft's real answer, in both families,
+// and keeps no fake address.
+func TestDesktopFakeDNSAnswersTheNetworkCheckForReal(t *testing.T) {
+	f := NewDesktopFakeDNS()
+	_, a := answers(t, f, "dns.msftncsi.com.", dnsmessage.TypeA)
+	if len(a) != 1 || a[0] != netip.MustParseAddr("131.107.255.255") {
+		t.Fatalf("A: %v", a)
+	}
+	b, err := f.Answer(query(t, "dns.msftncsi.com.", dnsmessage.TypeAAAA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m dnsmessage.Message
+	if err := m.Unpack(b); err != nil || len(m.Answers) != 1 {
+		t.Fatalf("AAAA: %+v %v", m, err)
+	}
+	if r, ok := m.Answers[0].Body.(*dnsmessage.AAAAResource); !ok || netip.AddrFrom16(r.AAAA) != netip.MustParseAddr("fd3e:4f5a:5b81::1") {
+		t.Fatalf("AAAA: %+v", m.Answers[0])
+	}
+	if _, a := answers(t, NewFakeDNS(), "dns.msftncsi.com.", dnsmessage.TypeA); !IsFake(a[0]) {
+		t.Fatal("the phone's FakeDNS has no fixed names")
 	}
 }
 

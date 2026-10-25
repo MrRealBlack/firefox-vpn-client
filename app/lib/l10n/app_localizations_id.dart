@@ -950,6 +950,46 @@ class AppLocalizationsId extends AppLocalizations {
   }
 
   @override
+  String get updateNow => 'Perbarui';
+
+  @override
+  String updateDownloading(String version) {
+    return 'Mengunduh versi $version…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return 'Versi $version siap dipasang.';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return 'Memasang versi $version. Aplikasi akan tertutup lalu terbuka lagi.';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return 'Gagal memperbarui ke versi $version.';
+  }
+
+  @override
+  String updateDone(String version) {
+    return 'Diperbarui ke versi $version.';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return 'Pembaruan ke versi $version tidak selesai, jadi aplikasi kembali ke versi sebelumnya.';
+  }
+
+  @override
+  String get autoUpdate => 'Perbarui otomatis';
+
+  @override
+  String get autoUpdateHint =>
+      'Versi baru diunduh di latar belakang dan dipasang saat aplikasi dibuka berikutnya.';
+
+  @override
   String get repoNotSet => 'Repositori GitHub belum diatur.';
 
   @override
@@ -1108,15 +1148,11 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'Hanya aplikasi yang diatur memakai proxy yang lewat proxy; pengaturan Windows tidak diubah.';
+      'Hanya aplikasi yang diatur memakai proxy yang lewat proxy.';
 
   @override
   String get modeSystemProxyHint =>
       'Windows dan sebagian besar aplikasi lewat proxy.';
-
-  @override
-  String get modeProxyHintOther =>
-      'Hanya aplikasi yang diatur memakai proxy yang lewat proxy; pengaturan sistem tidak diubah.';
 
   @override
   String get modeSystemProxyHintOther =>
@@ -1228,4 +1264,157 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'Atur lagi';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return 'Semua lalu lintas $os lewat VPN.';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting => 'Menunggu izin untuk memasang layanan TUN…';
+
+  @override
+  String get tunInstallCancelled =>
+      'Mode TUN memerlukan izin administrator sekali. Izin tidak diberikan, jadi mode tidak berubah.';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'Tidak dapat memasang layanan TUN: $error';
+  }
+
+  @override
+  String get tunStarting => 'Menyalakan mode TUN…';
+
+  @override
+  String get tunFailed => 'Mode TUN tidak dapat menyala. Mencoba lagi…';
+
+  @override
+  String get tunLost => 'Mode TUN berhenti tiba-tiba. Mencoba lagi…';
+
+  @override
+  String get tunNotRunning => 'Layanan TUN tidak berjalan. Mencoba lagi…';
+
+  @override
+  String get tunMissing => 'Layanan TUN belum dipasang.';
+
+  @override
+  String get tunOutdated =>
+      'Layanan TUN lebih lama dari aplikasi ini. Pasang lagi untuk memakai mode TUN.';
+
+  @override
+  String get tunAppOutdated =>
+      'Layanan TUN lebih baru dari aplikasi ini. Perbarui aplikasi untuk memakai mode TUN.';
+
+  @override
+  String get tunBusy => 'Salinan lain Firefox VPN sedang memakai mode TUN.';
+
+  @override
+  String get tunInstall => 'Pasang';
+
+  @override
+  String get tunInstallAgain => 'Pasang lagi';
+
+  @override
+  String get trayTunMode => 'Mode TUN (semua aplikasi)';
+
+  @override
+  String get removeTunService => 'Hapus layanan TUN';
+
+  @override
+  String get removeTunServiceHint =>
+      'Menghapus layanan sistem yang dipakai mode TUN. Memilih TUN lagi akan memasangnya kembali.';
+
+  @override
+  String get tunServiceRemoved => 'Layanan TUN telah dihapus.';
+
+  @override
+  String get tunInstallPrompt =>
+      'Firefox VPN ingin memasang layanan untuk mode TUN.';
+
+  @override
+  String get tunRemovePrompt => 'Firefox VPN ingin menghapus layanan mode TUN.';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'Tidak dapat menghapus layanan TUN: $error';
+  }
+
+  @override
+  String get sectionTun => 'Pengaturan TUN';
+
+  @override
+  String get tunPrograms => 'Program yang melewati VPN';
+
+  @override
+  String get tunProgramsHint =>
+      'Terhubung langsung, tidak lewat Mozilla. Hanya untuk program yang berfungsi tanpa VPN.';
+
+  @override
+  String get tunProgramsEmpty => 'Belum ada program.';
+
+  @override
+  String get addProgram => 'Tambah program';
+
+  @override
+  String get programFiles => 'Program';
+
+  @override
+  String get tunProgramAll => 'Semua lalu lintas';
+
+  @override
+  String get tunProgramAllHint => 'Seluruh program terhubung langsung.';
+
+  @override
+  String get tunProgramUdp => 'Hanya UDP';
+
+  @override
+  String get tunProgramUdpHint =>
+      'Hanya UDP-nya yang terhubung langsung; sisanya lewat VPN.';
+
+  @override
+  String get udpNoticeSetting => 'Pemberitahuan UDP yang diblokir';
+
+  @override
+  String udpNoticeBody(String program) {
+    return '$program mencoba melakukan panggilan atau bermain online, tetapi dalam mode TUN lalu lintas itu (UDP) tidak bisa lewat VPN.';
+  }
+
+  @override
+  String get udpNoticeAction => 'Kirim UDP-nya langsung';
+
+  @override
+  String get dontShowAgain => 'Jangan tampilkan lagi';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program: UDP-nya kini terhubung langsung.';
+  }
+
+  @override
+  String get addRunningProgram => 'Dari program yang berjalan';
+
+  @override
+  String get addProgramFile => 'Pilih file…';
+
+  @override
+  String get addProgramName => 'Ketik nama…';
+
+  @override
+  String get programNameHint =>
+      'Nama file program, misalnya steam.exe; * berarti teks apa saja (steam* adalah semua program Steam).';
+
+  @override
+  String get runningProgramsEmpty => 'Tidak ada program lain yang berjalan.';
 }

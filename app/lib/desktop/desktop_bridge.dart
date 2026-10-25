@@ -110,6 +110,17 @@ class DesktopBridge {
   static Future<void> openUrl(String url) =>
       _channel.invokeMethod('openUrl', url);
 
+  /// The program file the user picks in the system's open dialog titled
+  /// [title] (on Windows an .exe, of the kind [label] names), or null
+  /// (Windows and Linux).
+  static Future<String?> pickProgram({
+    required String title,
+    required String label,
+  }) => _channel.invokeMethod<String>('pickProgram', {
+    'title': title,
+    'label': label,
+  });
+
   Future<void> show() => _channel.invokeMethod('show');
 
   Future<void> hide() => _channel.invokeMethod('hide');

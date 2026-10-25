@@ -2,13 +2,22 @@
 # Builds the Linux desktop app with its core, for this machine's processor
 # (amd64 or arm64), into dist/Firefox-VPN-<version>-Linux-<arch>.tar.gz: a
 # firefox-vpn folder with firefox-vpn (the Flutter app), core/firefox-vpn-core
-# (the Go core, which the app starts with -app), and Flutter's lib/ and
-# data/. "install.sh desktop" installs it for the current user. The version
-# is "major.minor.patch" from app/pubspec.yaml.
+# (the Go core, which the app starts with -app), core/firefox-vpn-tun (the
+# TUN mode's service, which the app installs as a systemd service the first
+# time the mode is chosen), and Flutter's lib/ and data/. "install.sh
+# desktop" installs it for the current user. The version is
+# "major.minor.patch" from app/pubspec.yaml.
+#
+# Updates of an installed TUN service must be signed (Ed25519): with a
+# signing key (FIREFOX_VPN_SIGNING_KEY, CI's secret, or the file named by
+# FIREFOX_VPN_SIGNING_KEY_FILE), the service accepts updates signed with it,
+# and core/firefox-vpn-tun.sig is written beside it. Without one it takes no
+# updates: a newer one is installed again, with the administrator prompt.
 #
 # Needs Flutter, GTK 3 headers, clang, cmake, ninja, and pkg-config
-# (Ubuntu: clang cmake ninja-build pkg-config libgtk-3-dev), and Go for the
-# core, unless CORE names a firefox-vpn-core built for this processor.
+# (Ubuntu: clang cmake ninja-build pkg-config libgtk-3-dev), and Go (for
+# the TUN service, and for the core unless CORE names a firefox-vpn-core
+# built for this processor).
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,6 +29,14 @@ case "$(uname -m)" in
   aarch64 | arm64) flutter_arch=arm64 arch=arm64 ;;
   *) echo "no Flutter build for $(uname -m)" >&2; exit 1 ;;
 esac
+module=github.com/armanlife/firefox-vpn-client/core
+
+public=""
+if [ -n "${FIREFOX_VPN_SIGNING_KEY:-}${FIREFOX_VPN_SIGNING_KEY_FILE:-}" ]; then
+  public="$(cd "$root/core" && go run ./tools/sign -public)"
+else
+  echo "warning: no signing key (FIREFOX_VPN_SIGNING_KEY or FIREFOX_VPN_SIGNING_KEY_FILE): this build's TUN service takes no updates" >&2
+fi
 
 (cd "$root/app" && flutter pub get && flutter build linux --release --no-pub --dart-define=APP_VERSION="$version")
 
@@ -31,9 +48,14 @@ if [ -n "${CORE:-}" ]; then
   install -D -m 0755 "$CORE" "$app/core/firefox-vpn-core"
 else
   (cd "$root/core" && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
-    -ldflags "-s -w -X github.com/armanlife/firefox-vpn-client/core/internal/version.Current=$version" \
+    -ldflags "-s -w -X $module/internal/version.Current=$version" \
     -o "$app/core/firefox-vpn-core" ./cmd/firefox-vpn-core)
 fi
+tunflags="-s -w -X $module/internal/version.Current=$version"
+[ -z "$public" ] || tunflags="$tunflags -X $module/internal/signing.Key=$public"
+(cd "$root/core" && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -tags with_gvisor -trimpath \
+  -ldflags "$tunflags" -o "$app/core/firefox-vpn-tun" ./cmd/firefox-vpn-tun)
+[ -z "$public" ] || (cd "$root/core" && go run ./tools/sign "$app/core/firefox-vpn-tun")
 install -m 0644 "$root/LICENSE" "$app/LICENSE"
 
 mkdir -p "$root/dist"

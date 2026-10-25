@@ -6,6 +6,7 @@ import 'core_api.dart';
 import 'remote_flags.dart';
 import 'models.dart';
 import 'ports.dart';
+import 'tun_service.dart';
 
 /// Connects to the core, polls its status and accounts, and runs the
 /// user's actions. It holds no VPN logic: every decision is the core's.
@@ -16,7 +17,16 @@ class CoreController extends ChangeNotifier {
     this.moveStoppedCore,
     this.retryStoppedCore,
     this.turnOn,
+    this.tunService,
   });
+
+  /// Installs and removes the TUN mode's service (Windows); null elsewhere.
+  final TunService? tunService;
+
+  /// The TUN service is being installed or removed: Windows may be showing
+  /// its administrator prompt.
+  bool installingTun = false;
+  bool removingTun = false;
 
   /// Turns the proxy on or off where the app has a switch for the whole
   /// proxy (Android, which has no system proxy); null elsewhere.
@@ -185,6 +195,42 @@ class CoreController extends ChangeNotifier {
     }
   });
 
+  /// Installs the TUN service, with the system's administrator prompt;
+  /// [prompt] is its reason on macOS.
+  Future<TunServiceResult> installTunService({String? prompt}) =>
+      _tunService(() => tunService!.install(prompt: prompt), installing: true);
+
+  /// Removes the TUN service; [prompt] is the reason macOS' administrator
+  /// prompt shows when the service does not run.
+  Future<TunServiceResult> removeTunService({String? prompt}) => _tunService(
+    () => tunService!.uninstall(prompt: prompt),
+    installing: false,
+  );
+
+  Future<TunServiceResult> _tunService(
+    Future<TunServiceResult> Function() run, {
+    required bool installing,
+  }) async {
+    if (tunService == null) {
+      return const TunServiceFailed('the TUN mode is not available here');
+    }
+    if (installing) {
+      installingTun = true;
+    } else {
+      removingTun = true;
+    }
+    notifyListeners();
+    try {
+      return await run();
+    } finally {
+      installingTun = removingTun = false;
+      if (!_disposed) {
+        notifyListeners();
+        unawaited(refresh());
+      }
+    }
+  }
+
   /// Turns the proxy on or off ([turnOn] on the phone, the core's API on the
   /// computer) and waits, briefly, until the core reports it.
   Future<void> setOn(bool on) => _act(() async {
@@ -223,6 +269,15 @@ class CoreController extends ChangeNotifier {
 
   /// Turns the proxy on by itself, for an app started with the computer.
   Future<void> autoConnect() => _act(() => _require().autoConnect());
+
+  /// Starts downloading [version] of the app (the Windows app's core).
+  Future<void> downloadUpdate(String version) =>
+      _act(() => _require().downloadUpdate(version));
+
+  /// Installs the downloaded [version]; the app ([pid]) quits once this
+  /// returns, and starts again with [args].
+  Future<void> installUpdate(String version, int pid, List<String> args) =>
+      _act(() => _require().installUpdate(version, pid, args));
 
   /// The core's config.json as raw JSON.
   Future<Map<String, Object?>> settings() => _require().settings();

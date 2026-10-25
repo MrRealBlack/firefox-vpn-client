@@ -56,6 +56,11 @@ MAC_APP="Firefox VPN.app"
 MAC_AGENT="$HOME/Library/LaunchAgents/com.arman.firefoxvpn.plist"
 MAC_DATA="$HOME/Library/Application Support/Firefox VPN Client"
 
+# The TUN mode's service, which the app installs for the whole computer the
+# first time the mode is chosen (core/cmd/firefox-vpn-tun).
+TUN_LINUX="/opt/firefox-vpn-tun/firefox-vpn-tun"
+TUN_MAC="/Library/Application Support/Firefox VPN TUN/firefox-vpn-tun"
+
 # Colors and symbols when the output is a terminal (and NO_COLOR is not
 # set); plain text otherwise, for logs and automation.
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
@@ -353,8 +358,9 @@ command_menu() {
   menu_line "firefox-vpn add-account" "Add a Firefox Account"
   menu_line "firefox-vpn list-accounts" "Accounts and their quota"
   menu_line "firefox-vpn set-dashboard-login" "The panel's username and password"
+  menu_line "firefox-vpn update" "Update to the newest version"
   printf '  %s%s%s\n' "$DIM" "$(rule $width)" "$OFF"
-  log "Update or remove: run the install command again."
+  log "Remove: run the install command again."
   printf '\n'
 }
 
@@ -367,6 +373,7 @@ install_linux_app() {
   tar -xzf "$tmp/$file" -C "$tmp"
   [ -f "$tmp/firefox-vpn/firefox-vpn" ] || die "not a Firefox VPN archive"
   chmod 0755 "$tmp/firefox-vpn/firefox-vpn" "$tmp/firefox-vpn/core/firefox-vpn-core"
+  if [ -f "$tmp/firefox-vpn/core/firefox-vpn-tun" ]; then chmod 0755 "$tmp/firefox-vpn/core/firefox-vpn-tun"; fi
 
   # A running copy keeps its open files; the new one replaces the folder.
   mkdir -p "$(dirname "$APP_DIR")"
@@ -439,7 +446,17 @@ install_desktop() {
 }
 
 remove_desktop() {
-  local data
+  local data tun="$TUN_LINUX"
+  if [ "$OS" = "Darwin" ]; then tun="$TUN_MAC"; fi
+  # The TUN service goes with the app: the running service removes itself
+  # without a prompt; else it asks for the administrator's permission.
+  if [ -x "$tun" ]; then
+    if "$tun" uninstall; then
+      ok "removed the TUN service"
+    else
+      warn "the TUN service is still installed; remove it with: \"$tun\" uninstall"
+    fi
+  fi
   if [ "$OS" = "Darwin" ]; then
     osascript -e 'quit app "Firefox VPN"' >/dev/null 2>&1 || true
     rm -rf "/Applications/$MAC_APP" "$HOME/Applications/$MAC_APP"

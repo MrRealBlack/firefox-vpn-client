@@ -1761,6 +1761,60 @@ abstract class AppLocalizations {
   /// **'Could not check for updates: {error}'**
   String updateCheckFailed(String error);
 
+  /// No description provided for @updateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get updateNow;
+
+  /// No description provided for @updateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading version {version}…'**
+  String updateDownloading(String version);
+
+  /// No description provided for @updateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} is ready to install.'**
+  String updateReady(String version);
+
+  /// No description provided for @updateInstalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Installing version {version}. The app will close and open again.'**
+  String updateInstalling(String version);
+
+  /// No description provided for @updateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update to version {version}.'**
+  String updateFailed(String version);
+
+  /// No description provided for @updateDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated to version {version}.'**
+  String updateDone(String version);
+
+  /// No description provided for @updateRolledBack.
+  ///
+  /// In en, this message translates to:
+  /// **'The update to version {version} didn\'t finish, so the app went back to the previous version.'**
+  String updateRolledBack(String version);
+
+  /// No description provided for @autoUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update automatically'**
+  String get autoUpdate;
+
+  /// No description provided for @autoUpdateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'New versions download in the background and install the next time the app opens.'**
+  String get autoUpdateHint;
+
   /// No description provided for @repoNotSet.
   ///
   /// In en, this message translates to:
@@ -2034,7 +2088,7 @@ abstract class AppLocalizations {
   /// No description provided for @modeProxyHint.
   ///
   /// In en, this message translates to:
-  /// **'Only apps set up to use the proxy go through it; Windows is left as it is.'**
+  /// **'Only apps set up to use the proxy go through it.'**
   String get modeProxyHint;
 
   /// No description provided for @modeSystemProxyHint.
@@ -2042,12 +2096,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Windows and most apps go through the proxy.'**
   String get modeSystemProxyHint;
-
-  /// No description provided for @modeProxyHintOther.
-  ///
-  /// In en, this message translates to:
-  /// **'Only apps set up to use the proxy go through it; the system\'s settings stay as they are.'**
-  String get modeProxyHintOther;
 
   /// No description provided for @modeSystemProxyHintOther.
   ///
@@ -2204,6 +2252,276 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Set it again'**
   String get setSystemProxyAgain;
+
+  /// The connection mode that sends every app through the VPN with a TUN adapter (system_proxy.mode tun).
+  ///
+  /// In en, this message translates to:
+  /// **'TUN'**
+  String get modeTun;
+
+  /// Under the TUN mode on the home page; os is osWindows, osLinux, or osMacos.
+  ///
+  /// In en, this message translates to:
+  /// **'All {os} traffic goes through the VPN.'**
+  String modeTunHint(String os);
+
+  /// No description provided for @osWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows'**
+  String get osWindows;
+
+  /// No description provided for @osLinux.
+  ///
+  /// In en, this message translates to:
+  /// **'Linux'**
+  String get osLinux;
+
+  /// No description provided for @osMacos.
+  ///
+  /// In en, this message translates to:
+  /// **'macOS'**
+  String get osMacos;
+
+  /// No description provided for @tunInstallWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for permission to install the TUN service…'**
+  String get tunInstallWaiting;
+
+  /// No description provided for @tunInstallCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'TUN mode needs administrator permission once. It wasn\'t given, so the mode didn\'t change.'**
+  String get tunInstallCancelled;
+
+  /// No description provided for @tunInstallFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t install the TUN service: {error}'**
+  String tunInstallFailed(String error);
+
+  /// No description provided for @tunStarting.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting TUN mode…'**
+  String get tunStarting;
+
+  /// No description provided for @tunFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'TUN mode couldn\'t start. Trying again…'**
+  String get tunFailed;
+
+  /// No description provided for @tunLost.
+  ///
+  /// In en, this message translates to:
+  /// **'TUN mode stopped unexpectedly. Trying again…'**
+  String get tunLost;
+
+  /// No description provided for @tunNotRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'The TUN service isn\'t running. Trying again…'**
+  String get tunNotRunning;
+
+  /// No description provided for @tunMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The TUN service isn\'t installed.'**
+  String get tunMissing;
+
+  /// No description provided for @tunOutdated.
+  ///
+  /// In en, this message translates to:
+  /// **'The TUN service is older than this app. Install it again to use TUN mode.'**
+  String get tunOutdated;
+
+  /// No description provided for @tunAppOutdated.
+  ///
+  /// In en, this message translates to:
+  /// **'The TUN service is newer than this app. Update the app to use TUN mode.'**
+  String get tunAppOutdated;
+
+  /// No description provided for @tunBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Another copy of Firefox VPN is using TUN mode.'**
+  String get tunBusy;
+
+  /// No description provided for @tunInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get tunInstall;
+
+  /// No description provided for @tunInstallAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Install again'**
+  String get tunInstallAgain;
+
+  /// No description provided for @trayTunMode.
+  ///
+  /// In en, this message translates to:
+  /// **'TUN mode (all apps)'**
+  String get trayTunMode;
+
+  /// No description provided for @removeTunService.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the TUN service'**
+  String get removeTunService;
+
+  /// No description provided for @removeTunServiceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Removes the system service that TUN mode uses. Choosing TUN again installs it again.'**
+  String get removeTunServiceHint;
+
+  /// No description provided for @tunServiceRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'The TUN service was removed.'**
+  String get tunServiceRemoved;
+
+  /// macOS: the reason its administrator password prompt shows when the app installs the TUN mode's service.
+  ///
+  /// In en, this message translates to:
+  /// **'Firefox VPN wants to install the service for TUN mode.'**
+  String get tunInstallPrompt;
+
+  /// macOS: the reason its administrator password prompt shows when the app removes the TUN mode's service while the service does not run.
+  ///
+  /// In en, this message translates to:
+  /// **'Firefox VPN wants to remove the service for TUN mode.'**
+  String get tunRemovePrompt;
+
+  /// No description provided for @tunRemoveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t remove the TUN service: {error}'**
+  String tunRemoveFailed(String error);
+
+  /// The computer's settings section for TUN mode, after Routing.
+  ///
+  /// In en, this message translates to:
+  /// **'TUN settings'**
+  String get sectionTun;
+
+  /// No description provided for @tunPrograms.
+  ///
+  /// In en, this message translates to:
+  /// **'Programs that bypass the VPN'**
+  String get tunPrograms;
+
+  /// No description provided for @tunProgramsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'They connect directly, not through Mozilla. Only for programs that work without a VPN.'**
+  String get tunProgramsHint;
+
+  /// No description provided for @tunProgramsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No programs yet.'**
+  String get tunProgramsEmpty;
+
+  /// No description provided for @addProgram.
+  ///
+  /// In en, this message translates to:
+  /// **'Add program'**
+  String get addProgram;
+
+  /// The kind of file the program picker shows (on Windows, .exe files).
+  ///
+  /// In en, this message translates to:
+  /// **'Programs'**
+  String get programFiles;
+
+  /// No description provided for @tunProgramAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All traffic'**
+  String get tunProgramAll;
+
+  /// No description provided for @tunProgramAllHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The whole program connects directly.'**
+  String get tunProgramAllHint;
+
+  /// No description provided for @tunProgramUdp.
+  ///
+  /// In en, this message translates to:
+  /// **'UDP only'**
+  String get tunProgramUdp;
+
+  /// No description provided for @tunProgramUdpHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only its UDP connects directly; the rest goes through the VPN.'**
+  String get tunProgramUdpHint;
+
+  /// No description provided for @udpNoticeSetting.
+  ///
+  /// In en, this message translates to:
+  /// **'Notice when UDP is blocked'**
+  String get udpNoticeSetting;
+
+  /// A card on the home page in TUN mode when a program's UDP was refused.
+  ///
+  /// In en, this message translates to:
+  /// **'{program} tried to make a call or play online, but in TUN mode that traffic (UDP) can\'t go through the VPN.'**
+  String udpNoticeBody(String program);
+
+  /// No description provided for @udpNoticeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send its UDP directly'**
+  String get udpNoticeAction;
+
+  /// No description provided for @dontShowAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t show again'**
+  String get dontShowAgain;
+
+  /// No description provided for @udpDirectAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'{program}: its UDP now connects directly.'**
+  String udpDirectAdded(String program);
+
+  /// TUN settings, Add program: the first of three ways (then a file, then a name).
+  ///
+  /// In en, this message translates to:
+  /// **'From running programs'**
+  String get addRunningProgram;
+
+  /// No description provided for @addProgramFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a file…'**
+  String get addProgramFile;
+
+  /// No description provided for @addProgramName.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a name…'**
+  String get addProgramName;
+
+  /// No description provided for @programNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A program\'s file name, such as steam.exe; * stands for any text (steam* is every Steam program).'**
+  String get programNameHint;
+
+  /// No description provided for @runningProgramsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No other programs are running.'**
+  String get runningProgramsEmpty;
 }
 
 class _AppLocalizationsDelegate

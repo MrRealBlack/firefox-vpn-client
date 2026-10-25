@@ -20,6 +20,11 @@ SELF="${SELF:-$0}"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 BIN_PATH="$INSTALL_DIR/firefox-vpn-core"
 DATA_DIR="$INSTALL_DIR/user-data"
+# update runs the release's installer, which downloads the newest core,
+# keeps the data folder (accounts, settings, logins), and replaces this
+# command too; RELEASES_URL/latest leads to the newest release's tag.
+INSTALLER_URL="${INSTALLER_URL:-https://raw.githubusercontent.com/armanlife/firefox-vpn-client/main/install.sh}"
+RELEASES_URL="${RELEASES_URL:-https://github.com/armanlife/firefox-vpn-client/releases}"
 
 # The command being run, for the messages.
 COMMAND_NAME="${1:-}"
@@ -47,6 +52,7 @@ Without a command, on a terminal, a menu offers them by number.
 
 Commands:
   install              Install or update the binary and the service, then start it
+  update               Update to the newest release, keeping the accounts and settings
   uninstall            Stop and remove the service (PURGE=1 also deletes $INSTALL_DIR)
   status               Show the service state and the runtime status file
   start                Start the service
@@ -94,7 +100,7 @@ build_binary() {
   fi
   # Installed as the firefox-vpn command (install.sh), with no source tree.
   [ -d "$(repo_root)/cmd/firefox-vpn-core" ] ||
-    die "to update, run the install command again: curl -fsSL https://raw.githubusercontent.com/armanlife/firefox-vpn-client/main/install.sh | bash"
+    die "no source tree to build from; to update, run: sudo $NAME update"
   command -v go >/dev/null 2>&1 || die "Go is not installed; install Go or pass BINARY=path/to/firefox-vpn-core"
   log "building from $(repo_root)"
   (cd "$(repo_root)" && CGO_ENABLED=0 go build -trimpath -o "$out" ./cmd/firefox-vpn-core)
@@ -159,6 +165,55 @@ cmd_install() {
   log "dashboard: http://127.0.0.1:10820/app/ (add accounts there, or: sudo $SELF add-account)"
 }
 
+# latest_version: the newest release's version (1.2.3), from where its
+# latest link leads; empty when GitHub cannot be reached.
+latest_version() {
+  local url=""
+  if command -v curl >/dev/null 2>&1; then
+    url="$(curl -fsSI -o /dev/null -w '%{redirect_url}' --max-time 20 "$RELEASES_URL/latest" 2>/dev/null || true)"
+  elif command -v wget >/dev/null 2>&1; then
+    # wget names the address twice, the second time with " [following]".
+    url="$(wget -S --spider --max-redirect=0 -T 20 "$RELEASES_URL/latest" 2>&1 |
+      sed -n 's/^ *[Ll]ocation: *\([^ ]*\).*/\1/p' | tr -d '\r' | head -n 1 || true)"
+  fi
+  case "$url" in
+    */tag/v*) printf '%s\n' "${url##*/tag/v}" ;;
+  esac
+}
+
+# newer <a> <b>: whether version a (major.minor.patch) is newer than b.
+newer() {
+  [ "$1" != "$2" ] && [ "$(printf '%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
+}
+
+# cmd_update: the newest release, through its installer, unless the one
+# installed is as new. Failures return: in the menu, errexit is off.
+cmd_update() {
+  need_root
+  [ -x "$BIN_PATH" ] || die "not installed; install it with: curl -fsSL $INSTALLER_URL | sudo bash"
+  local current latest script
+  current="$("$BIN_PATH" -version 2>/dev/null || true)"
+  latest="$(latest_version)"
+  if [ -n "$latest" ] && ! newer "$latest" "$current"; then
+    done_ok "Already the newest version ($current)."
+    return 0
+  fi
+  if [ -n "$latest" ]; then
+    printf '  Updating %s to %s\n' "${current:-the installed version}" "$latest"
+  else
+    printf '  GitHub did not say which version is the newest; updating anyway\n'
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    script="$(curl -fsSL --retry 3 "$INSTALLER_URL")" || script=""
+  elif command -v wget >/dev/null 2>&1; then
+    script="$(wget -qO- "$INSTALLER_URL")" || script=""
+  fi
+  [ -n "$script" ] || { done_fail "Could not download the installer: $INSTALLER_URL"; return 1; }
+  local -a vars=(INSTALL_DIR="$INSTALL_DIR" SERVICE_NAME="$SERVICE_NAME" SERVICE_USER="$SERVICE_USER")
+  [ -z "$latest" ] || vars+=(VERSION="v$latest")
+  env "${vars[@]}" bash -c "$script" install.sh server
+}
+
 cmd_uninstall() {
   need_root
   systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
@@ -203,7 +258,7 @@ cmd_status() {
 # arguments on a terminal; it runs the one picked.
 menu() {
   local reply
-  local -a cmds=(status start stop restart enable disable logs add-account list-accounts set-dashboard-login)
+  local -a cmds=(status start stop restart enable disable logs add-account list-accounts set-dashboard-login update)
   local -a labels=(
     "Status"
     "Start"
@@ -215,6 +270,7 @@ menu() {
     "Add a Firefox Account"
     "List the accounts and their quota"
     "Set the panel's username and password"
+    "Update to the newest version"
   )
   local i
   # Back to the menu after each command, until 0.
@@ -252,6 +308,7 @@ menu() {
 main() {
 case "${1:-}" in
   install) cmd_install ;;
+  update) cmd_update ;;
   uninstall) cmd_uninstall ;;
   status) cmd_status ;;
   logs) journalctl -u "${SERVICE_NAME}.service" -f ;;

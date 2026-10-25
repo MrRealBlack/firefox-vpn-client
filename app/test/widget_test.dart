@@ -3,13 +3,17 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:firefox_vpn/app_info.dart';
 import 'package:firefox_vpn/app_settings.dart';
 import 'package:firefox_vpn/core/core_api.dart';
 import 'package:firefox_vpn/core/core_controller.dart';
 import 'package:firefox_vpn/core/models.dart';
+import 'package:firefox_vpn/core/tun_service.dart';
+import 'package:firefox_vpn/core/updates.dart';
 import 'package:firefox_vpn/desktop/close_dialog.dart';
 import 'package:firefox_vpn/l10n/app_localizations.dart';
 import 'package:firefox_vpn/ui/app.dart';
+import 'package:firefox_vpn/ui/settings_page.dart' show pickProgramFile;
 import 'package:firefox_vpn/ui/signin_dialog.dart';
 import 'package:firefox_vpn/ui/widgets.dart';
 
@@ -63,6 +67,10 @@ class FakeApi implements CoreApi {
   /// Times the app asked for set while set.
   int retakes = 0;
 
+  /// The TUN mode is offered (Windows), and the status's `tun`.
+  bool tunSupported = false;
+  Map<String, Object?>? tun;
+
   Map<String, Object?> get _lastTest => {
     'at': DateTime.now().toUtc().toIso8601String(),
     'ok': online,
@@ -105,13 +113,16 @@ class FakeApi implements CoreApi {
         : on
         ? {'phase': 'running', 'message': ''}
         : {'phase': 'off', 'message': 'Proxy off'},
-    'system_proxy': systemProxySupported ? mode : 'clear',
+    'system_proxy': systemProxySupported || tunSupported ? mode : 'clear',
     'system_proxy_supported': systemProxySupported,
     'selection': location,
     if (connectFailure.isNotEmpty) 'connect_failure': connectFailure,
     if (exitMismatch != null) 'exit_mismatch': exitMismatch,
     if (systemProxyTakenBy != null)
       'system_proxy_taken': {'by': systemProxyTakenBy},
+    if (tunSupported) 'tun_supported': true,
+    if (tunSupported && tun != null) 'tun': tun,
+    if (update != null) 'update': update,
     if (noNetwork) 'no_network': true,
     'proxy': recommended
         ? {
@@ -165,6 +176,29 @@ class FakeApi implements CoreApi {
 
   @override
   Future<void> setPower(bool on) async => this.on = on;
+
+  /// The status's `update` (the Windows app's own update), and what the app
+  /// asked of it.
+  Map<String, Object?>? update;
+  final downloads = <String>[];
+  final installs = <(String, List<String>)>[];
+
+  @override
+  Future<void> downloadUpdate(String version) async {
+    downloads.add(version);
+    update = {
+      'state': 'downloading',
+      'version': version,
+      'done': 30,
+      'total': 100,
+    };
+  }
+
+  @override
+  Future<void> installUpdate(String version, int pid, List<String> args) async {
+    installs.add((version, args));
+    update = {'state': 'installing', 'version': version};
+  }
 
   @override
   Future<RoutingInfo> routing() async => RoutingInfo.fromJson({
@@ -225,6 +259,14 @@ class FakeApi implements CoreApi {
   @override
   Future<void> saveSettings(Map<String, Object?> config) async =>
       this.config = config;
+
+  /// The programs running on the computer (GET /api/tun/programs).
+  List<Map<String, Object?>> running = [];
+
+  @override
+  Future<List<RunningProgram>> runningPrograms() async => [
+    for (final p in running) RunningProgram.fromJson(p),
+  ];
 
   /// The email of the last sign-in started.
   String signInEmail = '';
@@ -1554,4 +1596,704 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     core.dispose();
   }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+  group('updates', () {
+    const page = 'https://github.com/o/r/releases/tag/v9.9.9';
+
+    Future<(FakeApi, CoreController, AppSettings)> pumpUpdates(
+      WidgetTester tester, {
+      Map<String, Object?>? update,
+      List<String> args = const [],
+      bool autoUpdate = true,
+      Release? found,
+    }) async {
+      stillMotion(tester);
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = FakeApi()..update = update;
+      final core = CoreController(
+        () async => api,
+        pollInterval: const Duration(hours: 1),
+      );
+      final settings = AppSettings()..autoUpdate = autoUpdate;
+      Updates.start(core, settings, args: args);
+      Updates.available.value = found;
+      await tester.pumpWidget(VpnApp(core: core, settings: settings));
+      core.start();
+      await tester.pump();
+      await tester.pump();
+      return (api, core, settings);
+    }
+
+    Future<void> done(WidgetTester tester, CoreController core) async {
+      Updates.reset();
+      await tester.pumpWidget(const SizedBox());
+      core.dispose();
+    }
+
+    testWidgets('a copy that does not update itself offers the download', (
+      tester,
+    ) async {
+      final (_, core, _) = await pumpUpdates(
+        tester,
+        found: const Release('9.9.9', page),
+      );
+      expect(find.text('Version 9.9.9 is available.'), findsOneWidget);
+      expect(find.text('Download'), findsOneWidget);
+      expect(find.text('Update'), findsNothing);
+      await done(tester, core);
+    });
+
+    testWidgets('Update downloads the version, then installs it and quits', (
+      tester,
+    ) async {
+      final (api, core, _) = await pumpUpdates(
+        tester,
+        update: {'state': 'idle'},
+        autoUpdate: false,
+        found: const Release('9.9.9', page),
+      );
+      var quit = 0;
+      Updates.quitApp = () async => quit++;
+      expect(find.text('Version 9.9.9 is available.'), findsOneWidget);
+      await tester.tap(find.text('Update'));
+      await tester.pump();
+      await tester.pump();
+      expect(api.downloads, ['9.9.9']);
+      expect(find.text('Downloading version 9.9.9…'), findsOneWidget);
+      final bar = tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator),
+      );
+      expect(bar.value, closeTo(0.3, 0.001));
+      // Downloaded: it installs at once, as asked, and the app quits.
+      api.update = {'state': 'ready', 'version': '9.9.9'};
+      await core.refresh();
+      await tester.pump();
+      expect(api.installs.single.$1, '9.9.9');
+      expect(api.installs.single.$2, isEmpty);
+      expect(quit, 1);
+      await tester.pump();
+      expect(
+        find.text(
+          'Installing version 9.9.9. The app will close and open again.',
+        ),
+        findsOneWidget,
+      );
+      await done(tester, core);
+    });
+
+    testWidgets('a version downloaded before installs at the start', (
+      tester,
+    ) async {
+      var quit = 0;
+      Updates.quitApp = () async => quit++;
+      final (api, core, _) = await pumpUpdates(
+        tester,
+        update: {'state': 'ready', 'version': '9.9.9'},
+        args: ['--autostart', '--data-dir=elsewhere'],
+      );
+      // With the app's own arguments, and before it connects.
+      expect(api.installs.single.$1, '9.9.9');
+      expect(api.installs.single.$2, ['--autostart']);
+      expect(Updates.installingAtStart.value, isTrue);
+      expect(quit, 1);
+      await done(tester, core);
+    });
+
+    testWidgets('right after a failed update the start installs nothing', (
+      tester,
+    ) async {
+      final (api, core, _) = await pumpUpdates(
+        tester,
+        update: {
+          'state': 'ready',
+          'version': '9.9.9',
+          'last': {
+            'from': '9.9.8',
+            'to': '9.9.9',
+            'ok': false,
+            'error': 'moving the old data aside: in use',
+          },
+        },
+        found: const Release('9.9.9', page),
+      );
+      expect(api.installs, isEmpty);
+      expect(Updates.installingAtStart.value, isFalse);
+      expect(
+        find.text(
+          "The update to version 9.9.9 didn't finish, so the app went back "
+          'to the previous version.',
+        ),
+        findsOneWidget,
+      );
+      await done(tester, core);
+    });
+
+    testWidgets('without automatic updates nothing installs by itself', (
+      tester,
+    ) async {
+      final (api, core, _) = await pumpUpdates(
+        tester,
+        update: {'state': 'ready', 'version': '9.9.9'},
+        autoUpdate: false,
+        found: const Release('9.9.9', page),
+      );
+      expect(api.installs, isEmpty);
+      expect(find.text('Version 9.9.9 is ready to install.'), findsOneWidget);
+      // Nor does a version found download.
+      Updates.found(const Release('9.9.10', page));
+      await tester.pump();
+      expect(api.downloads, isEmpty);
+      await done(tester, core);
+    });
+
+    testWidgets('with automatic updates a version found downloads once', (
+      tester,
+    ) async {
+      final (api, core, _) = await pumpUpdates(
+        tester,
+        update: {'state': 'idle'},
+      );
+      Updates.found(const Release('9.9.9', page));
+      await tester.pump();
+      expect(api.downloads, ['9.9.9']);
+      // It failed: not again until the next start.
+      api.update = {
+        'state': 'failed',
+        'version': '9.9.9',
+        'error': 'the signature does not match',
+      };
+      await core.refresh();
+      await tester.pump();
+      expect(api.downloads, ['9.9.9']);
+      expect(find.text("Couldn't update to version 9.9.9."), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+      await done(tester, core);
+    });
+
+    testWidgets('after an update the home page says what it did', (
+      tester,
+    ) async {
+      final (api, core, _) = await pumpUpdates(
+        tester,
+        update: {
+          'state': 'idle',
+          'last': {'from': '9.9.8', 'to': '9.9.9', 'ok': true},
+        },
+      );
+      expect(find.text('Updated to version 9.9.9.'), findsOneWidget);
+      await tester.tap(find.byTooltip('Dismiss'));
+      await tester.pump();
+      expect(find.text('Updated to version 9.9.9.'), findsNothing);
+      Updates.resultSeen.value = false;
+      api.update = {
+        'state': 'idle',
+        'last': {
+          'from': '9.9.8',
+          'to': '9.9.9',
+          'ok': false,
+          'error': 'moving the old core aside: in use',
+        },
+      };
+      await core.refresh();
+      await tester.pump();
+      expect(
+        find.text(
+          "The update to version 9.9.9 didn't finish, so the app went back "
+          'to the previous version.',
+        ),
+        findsOneWidget,
+      );
+      await done(tester, core);
+    });
+
+    test('the status reads the update', () {
+      final s = CoreStatus.fromJson({
+        'update': {
+          'state': 'downloading',
+          'version': '1.2.3',
+          'done': 25,
+          'total': 100,
+          'last': {'from': '1.2.2', 'to': '1.2.3', 'ok': false, 'error': 'x'},
+        },
+      });
+      expect(s.update!.downloading, isTrue);
+      expect(s.update!.progress, 0.25);
+      expect(s.update!.last!.ok, isFalse);
+      expect(s.update!.last!.error, 'x');
+      expect(CoreStatus.fromJson({}).update, isNull);
+      expect(UpdateState.fromJson({'state': 'downloading'}).progress, isNull);
+    });
+  });
+
+  group('TUN mode', () {
+    Future<(FakeApi, CoreController, FakeTunService)> pumpTun(
+      WidgetTester tester, {
+      String mode = 'clear',
+      Map<String, Object?>? tun,
+      TunServiceResult result = const TunServiceDone(),
+      bool systemProxy = true,
+      AppSettings? settings,
+    }) async {
+      stillMotion(tester);
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = FakeApi()
+        ..mode = mode
+        ..systemProxySupported = systemProxy
+        ..tunSupported = true
+        ..tun = tun ?? {'state': 'off', 'installed': false};
+      final service = FakeTunService(api, result);
+      final core = CoreController(
+        () async => api,
+        pollInterval: const Duration(hours: 1),
+        tunService: service,
+      );
+      await tester.pumpWidget(
+        VpnApp(core: core, settings: settings ?? AppSettings()),
+      );
+      core.start();
+      await tester.pumpAndSettle();
+      return (api, core, service);
+    }
+
+    Future<void> done(WidgetTester tester, CoreController core) async {
+      await tester.pumpWidget(const SizedBox());
+      core.dispose();
+    }
+
+    testWidgets('is offered only where the core runs it', (tester) async {
+      stillMotion(tester);
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final core = CoreController(
+        () async => FakeApi(),
+        pollInterval: const Duration(hours: 1),
+      );
+      await tester.pumpWidget(VpnApp(core: core, settings: AppSettings()));
+      core.start();
+      await tester.pumpAndSettle();
+      expect(find.text('System proxy'), findsWidgets);
+      expect(find.text('TUN'), findsNothing);
+      await done(tester, core);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    testWidgets('installs its service on the first choice, then switches', (
+      tester,
+    ) async {
+      final (api, core, service) = await pumpTun(tester);
+      // The modes are one track (_ModeSwitch), not segmented buttons.
+      expect(find.byType(SegmentedButton<String>), findsNothing);
+      await tester.tap(find.text('TUN'));
+      await tester.pumpAndSettle();
+      expect(service.installs, 1);
+      // The reason macOS' prompt shows, in the app's language.
+      expect(
+        service.prompt,
+        'Firefox VPN wants to install the service for TUN mode.',
+      );
+      expect(api.mode, 'tun');
+      api.tun = {'state': 'on', 'installed': true};
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(
+        find.text('All Windows traffic goes through the VPN.'),
+        findsOneWidget,
+      );
+      // Installed: choosing it again asks for nothing.
+      await tester.tap(find.text('Proxy').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('TUN'));
+      await tester.pumpAndSettle();
+      expect(service.installs, 1);
+      expect(api.mode, 'tun');
+      await done(tester, core);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    // A Linux desktop without a system proxy setting (not GNOME or KDE)
+    // still has TUN mode.
+    testWidgets('is offered without a system proxy setting', (tester) async {
+      final (api, core, service) = await pumpTun(tester, systemProxy: false);
+      expect(find.text('System proxy'), findsNothing);
+      await tester.tap(find.text('TUN'));
+      await tester.pumpAndSettle();
+      expect(service.installs, 1);
+      expect(api.mode, 'tun');
+      api.tun = {'state': 'on', 'installed': true};
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(
+        find.text('All Linux traffic goes through the VPN.'),
+        findsOneWidget,
+      );
+      // The settings have the same choice.
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Connection'));
+      await tester.pumpAndSettle();
+      expect(find.text('Connection mode'), findsOneWidget);
+      await done(tester, core);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+    testWidgets('the settings remove the service', (tester) async {
+      final (api, core, service) = await pumpTun(
+        tester,
+        tun: {'state': 'off', 'installed': true},
+      );
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      // Out of the way: in the Advanced settings, not with TUN mode's.
+      expect(find.text('TUN settings'), findsNothing);
+      await tester.tap(find.text('Advanced'));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove the TUN service'), findsOneWidget);
+      final remove = find.widgetWithText(OutlinedButton, 'Remove');
+      await tester.ensureVisible(remove);
+      await tester.pumpAndSettle();
+      // Asked first: Cancel keeps it.
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(service.removals, 0);
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+      await tester.pumpAndSettle();
+      expect(service.removals, 1);
+      expect(
+        service.prompt,
+        'Firefox VPN wants to remove the service for TUN mode.',
+      );
+      expect(find.text('The TUN service was removed.'), findsOneWidget);
+      expect(api.tun?['installed'], isFalse);
+      await done(tester, core);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    testWidgets('the TUN settings keep the programs that skip the VPN', (
+      tester,
+    ) async {
+      final (api, core, _) = await pumpTun(
+        tester,
+        mode: 'tun',
+        tun: {'state': 'on', 'installed': true, 'programs_supported': true},
+      );
+      api.config['tun'] = {
+        'programs': [
+          {'name': 'steam.exe'},
+        ],
+      };
+      final oldPick = pickProgramFile;
+      addTearDown(() => pickProgramFile = oldPick);
+      String? pickedTitle;
+      pickProgramFile = (title, label) async {
+        pickedTitle = '$title / $label';
+        return r'C:\Games\Spacewar\Game.exe';
+      };
+      List<Object?> programs() =>
+          (api.config['tun'] as Map)['programs'] as List<Object?>;
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      // After Routing.
+      final routing = tester.getTopLeft(find.text('Routing')).dy;
+      expect(
+        tester.getTopLeft(find.text('TUN settings')).dy,
+        greaterThan(routing),
+      );
+      await tester.tap(find.text('TUN settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Notice when UDP is blocked'), findsOneWidget);
+      // Removing the service is in the Advanced settings, not here.
+      expect(find.text('Remove the TUN service'), findsNothing);
+      // A program's name reads left to right, from the left, in every
+      // language.
+      final steam = find.text('steam.exe');
+      expect(steam, findsOneWidget);
+      expect(tester.widget<Text>(steam).textDirection, TextDirection.ltr);
+      expect(find.text('All traffic'), findsOneWidget);
+
+      // Only its UDP, from the row's choice.
+      await tester.tap(find.text('All traffic'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Only its UDP connects directly; the rest goes through the VPN.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('UDP only'));
+      await tester.pumpAndSettle();
+      expect(programs(), [
+        {'name': 'steam.exe', 'udp_only': true},
+      ]);
+
+      // The three ways to add one.
+      Future<void> add(String way) async {
+        await tester.tap(find.text('Add program'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(way));
+        await tester.pumpAndSettle();
+      }
+
+      // From the open dialog, by its file name, with its path to see.
+      await add('Choose a file…');
+      expect(pickedTitle, 'Add program / Programs');
+      expect(programs(), [
+        {'name': 'steam.exe', 'udp_only': true},
+        {'name': 'Game.exe', 'path': r'C:\Games\Spacewar\Game.exe'},
+      ]);
+      expect(find.text(r'C:\Games\Spacewar\Game.exe'), findsOneWidget);
+      // The same one again is not added twice.
+      await add('Choose a file…');
+      expect(programs(), hasLength(2));
+
+      // From the running programs, found with the search; the ones in the
+      // list are marked and cannot be picked.
+      api.running = [
+        {'name': 'steam.exe', 'path': r'C:\Games\Steam\steam.exe'},
+        {
+          'name': 'Telegram.exe',
+          'path': r'C:\Users\u\AppData\Roaming\Telegram Desktop\Telegram.exe',
+        },
+        {'name': 'curl.exe', 'path': r'C:\Tools\curl.exe'},
+      ];
+      await add('From running programs');
+      expect(find.text('curl.exe'), findsOneWidget);
+      await tester.enterText(find.byType(TextField).last, 'tele');
+      await tester.pumpAndSettle();
+      expect(find.text('curl.exe'), findsNothing);
+      await tester.tap(find.text('Telegram.exe'));
+      await tester.pumpAndSettle();
+      expect(programs().last, {
+        'name': 'Telegram.exe',
+        'path': r'C:\Users\u\AppData\Roaming\Telegram Desktop\Telegram.exe',
+      });
+
+      // By a name with *.
+      await add('Type a name…');
+      expect(
+        find.text(
+          "A program's file name, such as steam.exe; * stands for any text (steam* is every Steam program).",
+        ),
+        findsOneWidget,
+      );
+      await tester.enterText(find.byType(TextField).last, ' steam* ');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add program'));
+      await tester.pumpAndSettle();
+      expect(programs().last, {'name': 'steam*'});
+      expect(programs(), hasLength(4));
+
+      for (final _ in [0, 1, 2, 3]) {
+        await tester.tap(find.byTooltip('Remove').first);
+        await tester.pumpAndSettle();
+      }
+      expect(programs(), isEmpty);
+      // None running.
+      api.running = [];
+      await add('From running programs');
+      expect(find.text('No other programs are running.'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('No programs yet.'), findsOneWidget);
+      await done(tester, core);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    testWidgets('a refused call offers to send it directly', (tester) async {
+      final settings = AppSettings();
+      final (api, core, _) = await pumpTun(
+        tester,
+        mode: 'tun',
+        settings: settings,
+        tun: {
+          'state': 'on',
+          'installed': true,
+          'programs_supported': true,
+          'refused_udp': 'Telegram.exe',
+          'refused_udp_path': r'C:\Apps\Telegram.exe',
+        },
+      );
+      final card = find.textContaining(
+        "tried to make a call or play online, but in TUN mode that traffic (UDP) can't go through the VPN.",
+      );
+      expect(card, findsOneWidget);
+      expect(
+        tester.widget<Text>(card).data,
+        startsWith('\u2066Telegram\u2069 tried'),
+      );
+      await tester.tap(find.text('Send its UDP directly'));
+      await tester.pumpAndSettle();
+      expect((api.config['tun'] as Map)['programs'], [
+        {
+          'name': 'Telegram.exe',
+          'udp_only': true,
+          'path': r'C:\Apps\Telegram.exe',
+        },
+      ]);
+      expect(
+        find.textContaining('its UDP now connects directly.'),
+        findsOneWidget,
+      );
+
+      // Another program, and the notice turned off.
+      api.tun = {...api.tun!, 'refused_udp': 'Discord.exe'};
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(card, findsOneWidget);
+      await tester.tap(find.text("Don't show again"));
+      await tester.pumpAndSettle();
+      expect(settings.udpNotice, isFalse);
+      expect(card, findsNothing);
+
+      // Nothing to offer while the TUN is off, or where programs cannot
+      // skip it (macOS).
+      settings.update(udpNotice: true);
+      api.tun = {...api.tun!, 'state': 'starting'};
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(card, findsNothing);
+      api.tun = {...api.tun!, 'state': 'on', 'programs_supported': false};
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(card, findsNothing);
+      await done(tester, core);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    testWidgets('keeps the mode when Windows was not given permission', (
+      tester,
+    ) async {
+      final (api, core, service) = await pumpTun(
+        tester,
+        result: const TunServiceCancelled(),
+      );
+      await tester.tap(find.text('TUN'));
+      await tester.pumpAndSettle();
+      expect(service.installs, 1);
+      expect(api.mode, 'clear');
+      expect(
+        find.text(
+          "TUN mode needs administrator permission once. It wasn't given, so the mode didn't change.",
+        ),
+        findsOneWidget,
+      );
+      await done(tester, core);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    testWidgets('says why it does not run, with Install where that helps', (
+      tester,
+    ) async {
+      final (api, core, service) = await pumpTun(
+        tester,
+        mode: 'tun',
+        tun: {'state': 'error', 'code': 'not_running', 'installed': true},
+      );
+      expect(
+        find.text("The TUN service isn't running. Trying again…"),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Install again'));
+      await tester.pumpAndSettle();
+      expect(service.installs, 1);
+
+      for (final (code, text, button) in [
+        (
+          'outdated',
+          'The TUN service is older than this app. Install it again to use TUN mode.',
+          'Install again',
+        ),
+        ('missing', "The TUN service isn't installed.", 'Install'),
+        (
+          'app_outdated',
+          'The TUN service is newer than this app. Update the app to use TUN mode.',
+          null,
+        ),
+        ('busy', 'Another copy of Firefox VPN is using TUN mode.', null),
+        ('lost', 'TUN mode stopped unexpectedly. Trying again…', null),
+        ('failed', "TUN mode couldn't start. Trying again…", null),
+      ]) {
+        api.tun = {'state': 'error', 'code': code, 'installed': true};
+        await core.refresh();
+        await tester.pumpAndSettle();
+        expect(find.text(text), findsOneWidget, reason: code);
+        expect(
+          find.text('Install again'),
+          button == 'Install again' ? findsOneWidget : findsNothing,
+          reason: code,
+        );
+        expect(
+          find.text('Install'),
+          button == 'Install' ? findsOneWidget : findsNothing,
+          reason: code,
+        );
+      }
+      api.tun = {'state': 'starting', 'installed': true};
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(find.text('Starting TUN mode…'), findsOneWidget);
+      // Nothing to say while the proxy is off.
+      api.on = false;
+      await core.refresh();
+      await tester.pumpAndSettle();
+      expect(find.text('Starting TUN mode…'), findsNothing);
+      await done(tester, core);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+  });
+
+  test('the computer uses the VPN with the system proxy or a running TUN', () {
+    CoreStatus status(String mode, [String tun = 'off']) =>
+        CoreStatus.fromJson({
+          'state': {'phase': 'running'},
+          'system_proxy': mode,
+          'tun_supported': true,
+          'tun': {'state': tun, 'installed': true, 'service_version': '1.2.3'},
+        });
+    expect(status('set').computerUsesVpn, isTrue);
+    expect(status('clear').computerUsesVpn, isFalse);
+    expect(status('tun').computerUsesVpn, isFalse);
+    expect(status('tun', 'on').computerUsesVpn, isTrue);
+    final tun = status('tun', 'on').tun!;
+    expect(tun.installed, isTrue);
+    expect(tun.serviceVersion, '1.2.3');
+    expect(CoreStatus.fromJson({}).tun, isNull);
+  });
+}
+
+/// The TUN service's program, without the system's: an install that works
+/// makes the core report it installed. It notes the reason it was given for
+/// macOS' prompt.
+class FakeTunService implements TunService {
+  FakeTunService(this.api, this.result);
+
+  final FakeApi api;
+  final TunServiceResult result;
+  int installs = 0;
+  int removals = 0;
+  String? prompt;
+
+  @override
+  String get executable => 'firefox-vpn-tun.exe';
+
+  @override
+  Future<TunServiceResult> install({String? prompt}) async {
+    installs++;
+    this.prompt = prompt;
+    if (result is TunServiceDone) {
+      api.tun = {...?api.tun, 'installed': true};
+    }
+    return result;
+  }
+
+  @override
+  Future<TunServiceResult> uninstall({String? prompt}) async {
+    removals++;
+    this.prompt = prompt;
+    if (result is TunServiceDone) {
+      api.tun = {...?api.tun, 'installed': false};
+    }
+    return result;
+  }
 }

@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"golang.org/x/net/dns/dnsmessage"
 )
 
 // NewThrough asks its servers over the connections dial opens (tunnels
@@ -59,5 +61,59 @@ func TestThroughUsesDialAndNoSystemFallback(t *testing.T) {
 	})
 	if res, err := failing.Lookup(context.Background(), "localhost.example"); err == nil {
 		t.Fatalf("a failed query must not fall back to the system resolver: %+v", res)
+	}
+}
+
+// Exchange passes a client's whole DNS message, of any type, to DNS over
+// HTTPS through dial and returns the answer unchanged.
+func TestExchangePassesTheMessageAsItIs(t *testing.T) {
+	var got atomic.Value
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		got.Store(body)
+		w.Header().Set("Content-Type", dohContentType)
+		_, _ = w.Write(append([]byte("answer:"), body...))
+	}))
+	defer srv.Close()
+
+	oldServers, oldClient := ThroughServers, throughClient
+	t.Cleanup(func() { ThroughServers, throughClient = oldServers, oldClient })
+	ThroughServers = []string{"https://dns.invalid/dns-query"}
+	throughClient = func(dial DialFunc) *http.Client {
+		client := srv.Client()
+		transport := client.Transport.(*http.Transport).Clone()
+		transport.DialContext = dial
+		transport.TLSClientConfig.ServerName = "example.com" // httptest's certificate
+		client.Transport = transport
+		return client
+	}
+	r := NewThrough(func(ctx context.Context, network, address string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "tcp", srv.Listener.Addr().String())
+	})
+
+	name, _ := dnsmessage.NewName("example.com.")
+	query, err := (&dnsmessage.Message{
+		Header:    dnsmessage.Header{ID: 4242, RecursionDesired: true},
+		Questions: []dnsmessage.Question{{Name: name, Type: dnsmessage.TypeMX, Class: dnsmessage.ClassINET}},
+	}).Pack()
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, err := r.Exchange(context.Background(), query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got.Load().([]byte)) != string(query) || string(answer) != "answer:"+string(query) {
+		t.Fatalf("sent %q, answered %q", got.Load(), answer)
+	}
+
+	// Only DNS over HTTPS can carry a whole message.
+	plain, err := New([]string{"udp://9.9.9.9"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := plain.Exchange(context.Background(), query); err == nil {
+		t.Fatal("a resolver without DNS over HTTPS exchanged a message")
 	}
 }

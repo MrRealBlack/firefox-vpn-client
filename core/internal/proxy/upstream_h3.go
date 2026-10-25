@@ -18,6 +18,7 @@ import (
 	"github.com/quic-go/quic-go/http3"
 
 	"github.com/armanlife/firefox-vpn-client/core/internal/controlplane"
+	"github.com/armanlife/firefox-vpn-client/core/internal/egress"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 	"github.com/armanlife/firefox-vpn-client/core/internal/resolver"
 )
@@ -93,7 +94,9 @@ func newH3ProxySession(proxyURL *url.URL, token string, timeout time.Duration) (
 		lastErr error
 	)
 	for _, ip := range ips {
-		uc, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
+		// Of ip's family, and outside the TUN adapter while the TUN mode
+		// runs.
+		uc, err := egress.ListenUDP(ip)
 		if err != nil {
 			lastErr = err
 			continue

@@ -62,14 +62,18 @@ class CoreService : VpnService() {
     private val watchCountry = object : Runnable {
         override fun run() {
             if (destroyed) return
-            if (on && !mobile.Mobile.running()) {
+            // Turned off: the notification goes with the service. Posting it
+            // now, between Android removing it and onDestroy, would leave it
+            // behind with no service.
+            if (!on) return
+            if (!mobile.Mobile.running()) {
                 Log.e(TAG, "the core stopped; turning the VPN off")
                 turnOff(this@CoreService)
                 return
             }
             // The core gave the connect up (no connection to Mozilla within
             // a minute): the VPN and its notification go too.
-            if (on && !mobile.Mobile.isOn()) {
+            if (!mobile.Mobile.isOn()) {
                 Log.w(TAG, "the connect was given up; turning the VPN off")
                 turnOff(this@CoreService)
                 return
@@ -245,6 +249,8 @@ class CoreService : VpnService() {
     override fun onDestroy() {
         destroyed = true
         main.removeCallbacks(watchCountry)
+        // A notification posted at the last moment goes too.
+        getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         stopWatchingNetwork()
         mobile.Mobile.stopTun()
         on = false

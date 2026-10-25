@@ -18,6 +18,7 @@ import (
 	"github.com/armanlife/firefox-vpn-client/core/internal/netstate"
 	"github.com/armanlife/firefox-vpn-client/core/internal/proxy"
 	"github.com/armanlife/firefox-vpn-client/core/internal/serverlist"
+	"github.com/armanlife/firefox-vpn-client/core/internal/update"
 	"github.com/armanlife/firefox-vpn-client/core/internal/version"
 )
 
@@ -156,6 +157,13 @@ type StatusView struct {
 	// requests to set it again.
 	SystemProxyTaken  *SystemProxyTaken `json:"system_proxy_taken,omitempty"`
 	SystemProxyRetake uint64            `json:"system_proxy_retake"`
+	// TunSupported: system_proxy.mode can be "tun" (the desktop app's
+	// core on Windows); Tun is then the TUN mode's state.
+	TunSupported bool       `json:"tun_supported,omitempty"`
+	Tun          *TunStatus `json:"tun,omitempty"`
+	// Update is the desktop app's update (update.go), when this copy
+	// updates itself.
+	Update *update.Status `json:"update,omitempty"`
 	// AutoConnecting: the app's auto-connect tests the connection, and the
 	// system proxy waits for a passed test (autoconnect.go).
 	AutoConnecting bool `json:"auto_connecting,omitempty"`
@@ -208,6 +216,12 @@ func (d *Daemon) StatusView() (StatusView, error) {
 	view.SystemProxyByHost = d.SystemProxySupported
 	view.SystemProxyTaken = d.systemProxyTaken.Load()
 	view.SystemProxyRetake = d.systemProxyRetakes.Load()
+	view.TunSupported = d.TunSupported
+	view.Tun = d.tunStatus(cfg)
+	if d.Updater != nil {
+		status := d.Updater.Status()
+		view.Update = &status
+	}
 	view.Notices = d.notices.Since(time.Now().Add(-noticeWindow))
 	engine := d.engine
 	if engine != nil {
@@ -423,6 +437,24 @@ type settingsView struct {
 	// ProgramDir is the program's folder (the desktop app's, when the core
 	// belongs to it).
 	ProgramDir string `json:"program_dir,omitempty"`
+}
+
+// handleTunPrograms lists the running programs, for the TUN settings; only
+// the desktop app's core has the list (it shows what runs on the computer).
+func (s *dashboardServer) handleTunPrograms(w http.ResponseWriter, r *http.Request) {
+	if s.d.RunningPrograms == nil || !s.d.TunSupported {
+		writeError(w, http.StatusNotFound, "the programs that skip the VPN are not chosen here")
+		return
+	}
+	programs, err := s.d.RunningPrograms()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if programs == nil {
+		programs = []RunningProgram{}
+	}
+	writeJSON(w, http.StatusOK, map[string][]RunningProgram{"programs": programs})
 }
 
 func (s *dashboardServer) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
@@ -724,8 +756,12 @@ func (d *Daemon) SetSystemProxyTaken(t *SystemProxyTaken) {
 }
 
 // SetSystemProxy stores system_proxy.mode. Set again while set asks to take
-// the system proxy back from a program that replaced it.
+// the system proxy back from a program that replaced it. The TUN mode only
+// where the process runs it.
 func (d *Daemon) SetSystemProxy(mode string) error {
+	if mode == config.SystemProxyTun && !d.TunSupported {
+		return errors.New("the TUN mode is not available here")
+	}
 	d.endAutoConnect()
 	cfg := d.config()
 	if cfg.SystemProxy.Mode == mode {

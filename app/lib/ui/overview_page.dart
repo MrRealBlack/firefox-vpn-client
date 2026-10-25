@@ -14,6 +14,7 @@ import '../core/models.dart';
 import '../core/ports.dart';
 import '../l10n/app_localizations.dart';
 import '../platform.dart';
+import 'connection_mode.dart';
 import 'format.dart';
 import 'port_dialog.dart';
 import 'signin_dialog.dart';
@@ -272,9 +273,9 @@ class _DesktopHome extends StatelessWidget {
   final VoidCallback? onOpenAccounts;
   final VoidCallback? onOpenConnection;
 
-  /// Changes the mode ("set": System proxy, "clear": Proxy); the proxy
-  /// keeps running and stays connected.
-  Future<void> _setMode(String mode) => core.setSystemProxy(mode);
+  /// The connection mode shown as chosen; changing it (chooseConnectionMode)
+  /// keeps the proxy running and connected.
+  String get _mode => connectionModeShown(status);
 
   /// The button: off, or on with a test that confirms the connection.
   Future<void> _power(bool on) async {
@@ -370,7 +371,6 @@ class _DesktopHome extends StatelessWidget {
     // The last connect was given up: why, until the next one.
     final gaveUp = !on && status.connectFailure.isNotEmpty;
     final connected = _running && !confirming;
-    final systemProxy = status.systemProxySet;
     final accent = _accent(p);
     final ip = !showIp
         ? ''
@@ -496,63 +496,69 @@ class _DesktopHome extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 16),
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 12,
-          runSpacing: 10,
-          children: [
-            // The same choice as the button and the tray, by name.
-            SegmentedButton<String>(
-              showSelectedIcon: false,
-              style: SegmentedButton.styleFrom(
-                backgroundColor: p.card,
-                selectedBackgroundColor: accent.withValues(alpha: 0.18),
-                selectedForegroundColor: p.text,
-                foregroundColor: p.text,
-                side: BorderSide(color: p.cardBorder),
-              ),
-              segments: [
-                ButtonSegment(
+        // The same choice as the button and the tray, by name, where this
+        // computer has more than proxy only.
+        if (status.systemProxySupported || status.tunSupported)
+          Center(
+            child: _ModeSwitch(
+              palette: p,
+              accent: accent,
+              selected: _mode,
+              onSelected: core.switchingProxy || core.installingTun
+                  ? null
+                  : (mode) => chooseConnectionMode(context, core, mode),
+              modes: [
+                (
                   value: 'clear',
-                  icon: const Icon(Icons.settings_ethernet_rounded, size: 18),
-                  label: Text(l.modeProxy),
+                  icon: Icons.settings_ethernet_rounded,
+                  label: l.modeProxy,
                   // Where apps set up by hand find the proxy, which always
                   // runs.
                   tooltip: _running && proxy != null
                       ? '${l.proxyServiceActive} · ${proxy.listen}'
-                      : null,
+                      : '',
                 ),
-                ButtonSegment(
-                  value: 'set',
-                  icon: const Icon(Icons.computer_rounded, size: 18),
-                  label: Text(l.systemProxy),
-                ),
+                if (status.systemProxySupported)
+                  (
+                    value: 'set',
+                    icon: Icons.computer_rounded,
+                    label: l.systemProxy,
+                    tooltip: '',
+                  ),
+                if (status.tunSupported)
+                  (
+                    value: 'tun',
+                    icon: Icons.vpn_lock_rounded,
+                    label: l.modeTun,
+                    tooltip: '',
+                  ),
               ],
-              selected: {systemProxy ? 'set' : 'clear'},
-              onSelectionChanged: core.switchingProxy
-                  ? null
-                  : (v) => runShowingErrors(context, () => _setMode(v.first)),
             ),
-          ],
-        ),
+          ),
         const SizedBox(height: 8),
         Text(
           // Windows names itself; Linux and macOS say "the system".
-          switch ((
-            systemProxy,
-            defaultTargetPlatform == TargetPlatform.windows,
-          )) {
-            (true, true) => l.modeSystemProxyHint,
-            (true, false) => l.modeSystemProxyHintOther,
-            (false, true) => l.modeProxyHint,
-            (false, false) => l.modeProxyHintOther,
-          },
+          connectionModeHint(
+            l,
+            status,
+            installing: core.installingTun,
+            windows: defaultTargetPlatform == TargetPlatform.windows,
+          ),
           textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall?.copyWith(color: p.muted),
         ),
+        TunNote(
+          core: core,
+          box: (text, tooltip) => _ProblemBox(
+            text: text,
+            color: StatusColors.busy,
+            icon: Icons.warning_amber_rounded,
+            tooltip: tooltip,
+          ),
+        ),
         const SizedBox(height: 24),
-        _UpdateNotice(settings: settings, palette: p),
+        _UpdateNotice(core: core, settings: settings, palette: p),
+        _UdpNotice(core: core, status: status, settings: settings, palette: p),
         _Notices(notices: homeNotices(status.notices)),
         _LowQuotaNotice(
           core: core,
@@ -600,6 +606,177 @@ class _HomePill extends StatelessWidget {
     ),
     child: child,
   );
+}
+
+/// A connection mode in [_ModeSwitch]; an empty tooltip shows none.
+typedef _Mode = ({String value, IconData icon, String label, String tooltip});
+
+/// The connection modes as one rounded track with no lines between them:
+/// the chosen mode sits on a pill that slides to the one tapped. The modes
+/// are equally wide (the widest one's width), and the whole track shrinks
+/// to fit a narrow window. A tap on the chosen mode changes nothing.
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch({
+    required this.palette,
+    required this.accent,
+    required this.modes,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _HomePalette palette;
+  final Color accent;
+  final List<_Mode> modes;
+  final String selected;
+
+  /// Null while a change is under way.
+  final ValueChanged<String>? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = palette;
+    final theme = Theme.of(context);
+    final n = modes.length;
+    final index = modes.indexWhere((m) => m.value == selected);
+    final still = MediaQuery.of(context).disableAnimations;
+    final onSelected = this.onSelected;
+    Widget option(_Mode m) {
+      final chosen = m.value == selected;
+      final color = chosen ? p.text : p.muted;
+      Widget child = InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onSelected == null || chosen ? null : () => onSelected(m.value),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(m.icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Text(
+                m.label,
+                maxLines: 1,
+                softWrap: false,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: color,
+                  fontWeight: chosen ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (m.tooltip.isNotEmpty) {
+        child = Tooltip(message: m.tooltip, child: child);
+      }
+      return Semantics(
+        button: true,
+        selected: chosen,
+        enabled: onSelected != null,
+        child: child,
+      );
+    }
+
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: AnimatedOpacity(
+        opacity: onSelected == null ? 0.6 : 1,
+        duration: const Duration(milliseconds: 150),
+        child: DecoratedBox(
+          decoration: ShapeDecoration(
+            color: p.card,
+            shape: StadiumBorder(side: BorderSide(color: p.cardBorder)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            // The row is as wide as its widest mode times their number
+            // (each mode Expanded under IntrinsicWidth), so the pill is one
+            // mode wide wherever it is.
+            child: IntrinsicWidth(
+              child: Stack(
+                children: [
+                  if (index >= 0)
+                    Positioned.fill(
+                      child: AnimatedAlign(
+                        alignment: AlignmentDirectional(
+                          n == 1 ? 0 : -1 + 2 * index / (n - 1),
+                          0,
+                        ),
+                        duration: still
+                            ? Duration.zero
+                            : const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                        child: FractionallySizedBox(
+                          widthFactor: 1 / n,
+                          heightFactor: 1,
+                          child: DecoratedBox(
+                            decoration: ShapeDecoration(
+                              color: accent.withValues(alpha: 0.2),
+                              shape: StadiumBorder(
+                                side: BorderSide(
+                                  color: accent.withValues(alpha: 0.35),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  // A line between two modes, so each reads as a button of
+                  // its own; none beside the pill, which marks its mode.
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < n; i++)
+                            Expanded(
+                              child: Align(
+                                alignment: AlignmentDirectional.centerEnd,
+                                child: i == n - 1
+                                    ? null
+                                    : AnimatedOpacity(
+                                        opacity: i == index || i + 1 == index
+                                            ? 0
+                                            : 1,
+                                        duration: still
+                                            ? Duration.zero
+                                            : const Duration(milliseconds: 180),
+                                        child: Container(
+                                          width: 1.2,
+                                          height: 22,
+                                          decoration: BoxDecoration(
+                                            color: p.muted.withValues(
+                                              alpha: 0.45,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              1,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Material(
+                    type: MaterialType.transparency,
+                    child: Row(
+                      children: [
+                        for (final m in modes) Expanded(child: option(m)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Where the traffic goes: the flag and the country, under how the
@@ -842,8 +1019,10 @@ class _PhoneHome extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: boxSide),
       child: box,
     );
+    // A computer's narrow window: on while the system proxy or TUN mode
+    // carries the apps.
     final on = canSwitch
-        ? status.systemProxySet
+        ? status.systemProxySet || status.tunMode
         : status.state.phase != Phase.off;
     final proxy = status.proxy;
     // The phone's VPN is "Connecting", in orange, until a test confirms it
@@ -859,7 +1038,7 @@ class _PhoneHome extends StatelessWidget {
     // The last connect was given up: why, until the next one.
     final gaveUp = !on && status.connectFailure.isNotEmpty;
     final connected =
-        running && (status.systemProxySet || !canSwitch) && !confirming;
+        running && (status.computerUsesVpn || !canSwitch) && !confirming;
     final ip = !showIp
         ? ''
         : status.exit?.ipv4.isNotEmpty == true
@@ -1048,7 +1227,13 @@ class _PhoneHome extends StatelessWidget {
               ],
               const Spacer(),
               const SizedBox(height: 20),
-              _UpdateNotice(settings: settings, palette: p),
+              _UpdateNotice(core: core, settings: settings, palette: p),
+              _UdpNotice(
+                core: core,
+                status: status,
+                settings: settings,
+                palette: p,
+              ),
               _Notices(notices: homeNotices(status.notices)),
               _LowQuotaNotice(
                 core: core,
@@ -1669,19 +1854,297 @@ class _NoticesState extends State<_Notices> {
   }
 }
 
-/// A newer version on GitHub: its number and a button to its page; closed,
-/// it stays away until a later version.
+/// A newer version on GitHub. The Windows app installs it itself: Update
+/// downloads it (its progress shows here), then the app closes and opens
+/// again as the new version; elsewhere the button opens its download.
+/// After an update, what it did. Closed, a version's notice stays away
+/// until a later version.
 class _UpdateNotice extends StatelessWidget {
-  const _UpdateNotice({required this.settings, required this.palette});
+  const _UpdateNotice({
+    required this.core,
+    required this.settings,
+    required this.palette,
+  });
 
+  final CoreController core;
   final AppSettings settings;
   final _HomePalette palette;
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder(
-    valueListenable: Updates.available,
-    builder: (context, release, _) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([
+      Updates.available,
+      Updates.failure,
+      Updates.resultSeen,
+    ]),
+    builder: (context, _) {
+      final l = AppLocalizations.of(context);
+      final update = core.status?.update;
+      final last = update?.last;
+      if (last != null && !Updates.resultSeen.value) {
+        return _UpdateBanner(
+          palette: palette,
+          icon: last.ok ? Icons.check_circle_rounded : Icons.history_rounded,
+          text: last.ok ? l.updateDone(last.to) : l.updateRolledBack(last.to),
+          tooltip: last.error,
+          problem: !last.ok,
+          onClose: () => Updates.resultSeen.value = true,
+        );
+      }
+      final release = Updates.available.value;
       if (release == null || release.version == settings.dismissedUpdate) {
+        return const SizedBox.shrink();
+      }
+      void dismiss() => settings.update(dismissedUpdate: release.version);
+      if (update == null) {
+        return _UpdateBanner(
+          palette: palette,
+          icon: Icons.system_update_rounded,
+          text: l.updateAvailable(release.version),
+          action: release.url.isEmpty
+              ? null
+              : (
+                  label: l.download,
+                  icon: Icons.download_rounded,
+                  onPressed: () => openDownload(release),
+                ),
+          onClose: dismiss,
+        );
+      }
+      final mine = update.version == release.version;
+      if (mine && (update.downloading || update.installing)) {
+        return _UpdateBanner(
+          palette: palette,
+          icon: Icons.downloading_rounded,
+          text: update.downloading
+              ? l.updateDownloading(release.version)
+              : l.updateInstalling(release.version),
+          busy: true,
+          progress: update.downloading ? update.progress : null,
+        );
+      }
+      final failure =
+          Updates.failure.value ??
+          (mine && update.failed ? update.error : null);
+      if (failure != null) {
+        return _UpdateBanner(
+          palette: palette,
+          icon: Icons.error_outline_rounded,
+          text: l.updateFailed(release.version),
+          tooltip: failure,
+          problem: true,
+          action: (
+            label: l.tryAgain,
+            icon: Icons.refresh_rounded,
+            onPressed: () => Updates.update(release),
+          ),
+          onClose: dismiss,
+        );
+      }
+      return _UpdateBanner(
+        palette: palette,
+        icon: Icons.system_update_rounded,
+        text: mine && update.ready
+            ? l.updateReady(release.version)
+            : l.updateAvailable(release.version),
+        action: (
+          label: l.updateNow,
+          icon: Icons.system_update_alt_rounded,
+          onPressed: () => Updates.update(release),
+        ),
+        onClose: dismiss,
+      );
+    },
+  );
+}
+
+/// The update notice's look: a rounded bar in the connected color (amber
+/// for a problem, with the core's reason on hover), a button, a close
+/// button, and a progress bar under the text while busy.
+class _UpdateBanner extends StatelessWidget {
+  const _UpdateBanner({
+    required this.palette,
+    required this.icon,
+    required this.text,
+    this.tooltip = '',
+    this.problem = false,
+    this.action,
+    this.busy = false,
+    this.progress,
+    this.onClose,
+  });
+
+  final _HomePalette palette;
+  final IconData icon;
+  final String text;
+  final String tooltip;
+  final bool problem;
+  final ({String label, IconData icon, VoidCallback onPressed})? action;
+
+  /// A bar under the text: the download's [progress], or under way
+  /// (null).
+  final bool busy;
+  final double? progress;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final p = palette;
+    final color = problem ? StatusColors.busy : p.connected;
+    final action = this.action;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: color.withValues(alpha: p.dark ? 0.16 : 0.12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Padding(
+          padding: EdgeInsetsDirectional.fromSTEB(
+            14,
+            6,
+            onClose == null ? 14 : 6,
+            6,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Tooltip(
+                        message: tooltip,
+                        child: Text(
+                          text,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: p.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (busy) ...[
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 4,
+                            color: color,
+                            backgroundColor: color.withValues(alpha: 0.2),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              if (action != null) ...[
+                const SizedBox(width: 8),
+                // Solid, in the banner's color: the one thing to press.
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: color,
+                    foregroundColor: Colors.white,
+                    visualDensity: VisualDensity.compact,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  onPressed: action.onPressed,
+                  icon: Icon(action.icon, size: 18),
+                  label: Text(action.label),
+                ),
+              ],
+              if (onClose != null)
+                IconButton(
+                  tooltip: l.dismiss,
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.close_rounded, size: 18, color: p.muted),
+                  onPressed: onClose,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// TUN mode refused a program's UDP that looks like a call or a game
+/// (Mozilla does not carry UDP): the program by name, with a way to send its
+/// UDP directly (its other traffic stays in the VPN, so a messenger blocked
+/// in the country keeps working), or to see this card no more.
+class _UdpNotice extends StatelessWidget {
+  const _UdpNotice({
+    required this.core,
+    required this.status,
+    required this.settings,
+    required this.palette,
+  });
+
+  final CoreController core;
+  final CoreStatus status;
+  final AppSettings settings;
+  final _HomePalette palette;
+
+  /// A program by the name people know: without ".exe".
+  static String _label(String program) => program.toLowerCase().endsWith('.exe')
+      ? program.substring(0, program.length - 4)
+      : program;
+
+  /// Adds the program (with where it runs from) to the ones that skip the
+  /// VPN, its UDP alone; the core then refuses its calls no more and drops
+  /// this card.
+  Future<void> _sendDirectly(
+    BuildContext context,
+    String program,
+    String path,
+  ) async {
+    final l = AppLocalizations.of(context);
+    final ok = await runShowingErrors(
+      context,
+      () => core.editSettings((config) {
+        final tun = switch (config['tun']) {
+          final Map<String, Object?> m => m,
+          _ => config['tun'] = <String, Object?>{},
+        };
+        final programs = [...(tun['programs'] as List<Object?>? ?? const [])];
+        final known = programs.any(
+          (p) =>
+              p is Map && '${p['name']}'.toLowerCase() == program.toLowerCase(),
+        );
+        if (!known) {
+          programs.add({
+            'name': program,
+            'udp_only': true,
+            if (path.isNotEmpty) 'path': path,
+          });
+        }
+        tun['programs'] = programs;
+      }),
+    );
+    if (!ok || !context.mounted) return;
+    showError(context, l.udpDirectAdded(ltr(_label(program))));
+    await core.refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: settings,
+    builder: (context, _) {
+      final tun = status.tun;
+      final program = tun?.refusedUdp ?? '';
+      if (!status.tunMode ||
+          tun == null ||
+          !tun.on ||
+          !tun.programsSupported ||
+          program.isEmpty ||
+          !settings.udpNotice) {
         return const SizedBox.shrink();
       }
       final l = AppLocalizations.of(context);
@@ -1690,45 +2153,51 @@ class _UpdateNotice extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Material(
-          color: p.connected.withValues(alpha: p.dark ? 0.16 : 0.12),
+          color: StatusColors.busy.withValues(alpha: p.dark ? 0.16 : 0.12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
-            side: BorderSide(color: p.connected.withValues(alpha: 0.4)),
+            side: BorderSide(color: StatusColors.busy.withValues(alpha: 0.4)),
           ),
           child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(14, 6, 6, 6),
-            child: Row(
+            padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 6, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(Icons.system_update_rounded, color: p.connected),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    l.updateAvailable(release.version),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: p.text,
-                      fontWeight: FontWeight.w600,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(
+                        Icons.phone_disabled_rounded,
+                        color: StatusColors.busy,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        l.udpNoticeBody(ltr(_label(program))),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: p.text,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                if (release.url.isNotEmpty)
-                  // Solid, in the banner's color: the one thing to press.
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: p.connected,
-                      foregroundColor: Colors.white,
-                      visualDensity: VisualDensity.compact,
-                      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                OverflowBar(
+                  alignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => settings.update(udpNotice: false),
+                      child: Text(l.dontShowAgain),
                     ),
-                    onPressed: () => openDownload(release),
-                    icon: const Icon(Icons.download_rounded, size: 18),
-                    label: Text(l.download),
-                  ),
-                IconButton(
-                  tooltip: l.dismiss,
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.close_rounded, size: 18, color: p.muted),
-                  onPressed: () =>
-                      settings.update(dismissedUpdate: release.version),
+                    TextButton.icon(
+                      onPressed: () =>
+                          _sendDirectly(context, program, tun.refusedUdpPath),
+                      icon: const Icon(Icons.call_rounded, size: 18),
+                      label: Text(l.udpNoticeAction),
+                    ),
+                  ],
                 ),
               ],
             ),

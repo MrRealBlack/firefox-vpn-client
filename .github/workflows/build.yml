@@ -60,6 +60,9 @@ jobs:
         run: |
           go vet ./...
           go test ./...
+          # The TUN stack's tests need sing-tun's gVisor stack.
+          go vet -tags with_gvisor ./internal/tunstack/
+          go test -tags with_gvisor ./internal/tunstack/
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -93,6 +96,11 @@ jobs:
         run: choco upgrade innosetup -y --no-progress
       - name: Build
         shell: pwsh
+        env:
+          # The key updates are signed with (scripts/signing-key.ps1): the
+          # core and the TUN service take only updates it signed; without
+          # it they take none.
+          FIREFOX_VPN_SIGNING_KEY: ${{ secrets.FIREFOX_VPN_SIGNING_KEY }}
         run: ./scripts/build-windows.ps1
       - name: Release names
         shell: pwsh
@@ -226,7 +234,31 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq clang cmake ninja-build pkg-config libgtk-3-dev
+      # A real TUN, as root, for a minute (internal/tunservice/e2e_test.go):
+      # this computer is CI's.
+      - name: TUN end to end
+        working-directory: core
+        run: |
+          go test -c -tags 'e2e with_gvisor' -o "$RUNNER_TEMP/e2e.test" ./internal/tunservice
+          sudo "$RUNNER_TEMP/e2e.test" -test.run TestEndToEnd -test.v
+      # The service installed with systemd for this user, who then removes
+      # it through the service, without a prompt.
+      - name: TUN service with systemd
+        working-directory: core
+        run: |
+          go build -tags with_gvisor -o "$RUNNER_TEMP/firefox-vpn-tun" ./cmd/firefox-vpn-tun
+          sudo "$RUNNER_TEMP/firefox-vpn-tun" install
+          systemctl is-active firefox-vpn-tun
+          "$RUNNER_TEMP/firefox-vpn-tun" uninstall
+          for i in $(seq 20); do systemctl is-active --quiet firefox-vpn-tun || break; sleep 0.5; done
+          if systemctl is-active --quiet firefox-vpn-tun; then echo "the service still runs"; exit 1; fi
+          test ! -e /etc/systemd/system/firefox-vpn-tun.service
+          test ! -e /opt/firefox-vpn-tun
       - name: Build
+        env:
+          # The key the TUN service's updates are signed with; without it
+          # the service takes none.
+          FIREFOX_VPN_SIGNING_KEY: ${{ secrets.FIREFOX_VPN_SIGNING_KEY }}
         run: bash scripts/build-linux.sh
       - name: Release name
         run: |
@@ -253,10 +285,42 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+      # What runs only on macOS: the system proxy, the TUN service and its
+      # socket, DNS settings, and the core's binding outside the TUN.
       - name: Core tests on macOS
         working-directory: core
-        run: go test ./internal/desktop ./internal/config
+        run: |
+          go vet ./...
+          go test ./internal/desktop ./internal/config ./internal/egress ./internal/netstate ./internal/tunapi ./internal/tunservice
+          go test -tags with_gvisor ./internal/tunstack/
+      # A real TUN, as root, for a minute (internal/tunservice/e2e_test.go):
+      # this computer is CI's. Not yet run on a Mac but here, so a failure
+      # shows without holding the release back.
+      - name: TUN end to end
+        continue-on-error: true
+        working-directory: core
+        run: |
+          go test -c -tags 'e2e with_gvisor' -o "$RUNNER_TEMP/e2e.test" ./internal/tunservice
+          sudo "$RUNNER_TEMP/e2e.test" -test.run TestEndToEnd -test.v
+      # The service installed with launchd for this user, who then removes
+      # it through the service, without a prompt.
+      - name: TUN service with launchd
+        continue-on-error: true
+        working-directory: core
+        run: |
+          go build -tags with_gvisor -o "$RUNNER_TEMP/firefox-vpn-tun" ./cmd/firefox-vpn-tun
+          sudo "$RUNNER_TEMP/firefox-vpn-tun" install
+          sudo launchctl print system/com.arman.firefoxvpn.tun | head -20
+          "$RUNNER_TEMP/firefox-vpn-tun" uninstall
+          for i in $(seq 20); do sudo launchctl print system/com.arman.firefoxvpn.tun >/dev/null 2>&1 || break; sleep 0.5; done
+          if sudo launchctl print system/com.arman.firefoxvpn.tun >/dev/null 2>&1; then echo "the job is still loaded"; exit 1; fi
+          test ! -e /Library/LaunchDaemons/com.arman.firefoxvpn.tun.plist
+          test ! -e "/Library/Application Support/Firefox VPN TUN"
       - name: Build
+        env:
+          # The key the TUN service's updates are signed with; without it
+          # the service takes none.
+          FIREFOX_VPN_SIGNING_KEY: ${{ secrets.FIREFOX_VPN_SIGNING_KEY }}
         run: bash scripts/build-macos.sh
       - name: Release name
         run: |
@@ -278,6 +342,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
       - uses: actions/download-artifact@v8
         with:
           path: release
@@ -297,6 +365,18 @@ jobs:
       - name: Checksums
         working-directory: release
         run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      # The Windows app installs a new version only when the release key
+      # signed this list (core/internal/update): SHA256SUMS.txt.sig.
+      - name: Sign the checksums
+        working-directory: core
+        env:
+          FIREFOX_VPN_SIGNING_KEY: ${{ secrets.FIREFOX_VPN_SIGNING_KEY }}
+        run: |
+          if [ -z "$FIREFOX_VPN_SIGNING_KEY" ]; then
+            echo "::error::no release key (the secret FIREFOX_VPN_SIGNING_KEY): the apps could not install this release"
+            exit 1
+          fi
+          go run ./tools/sign ../release/SHA256SUMS.txt
       # The notes are the README's download table only, linking to this
       # release's files.
       - name: Publish

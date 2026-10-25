@@ -3,6 +3,8 @@ package resolver
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -46,4 +48,45 @@ func NewThrough(dial DialFunc) *Resolver {
 		r.servers = append(r.servers, &dohServer{url: u, client: client})
 	}
 	return r
+}
+
+// Exchange sends a whole DNS query in wire format to every DNS-over-HTTPS
+// server at once and returns the first answer as it is, for DNS a client
+// sends through the proxy (Mozilla does not connect to port 53). Servers
+// of other kinds are not asked.
+func (r *Resolver) Exchange(ctx context.Context, query []byte) ([]byte, error) {
+	var servers []*dohServer
+	if r != nil {
+		for _, s := range r.servers {
+			if d, ok := s.(*dohServer); ok {
+				servers = append(servers, d)
+			}
+		}
+	}
+	if len(servers) == 0 {
+		return nil, errors.New("no DNS-over-HTTPS server to ask")
+	}
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+	type answer struct {
+		msg    []byte
+		source string
+		err    error
+	}
+	answers := make(chan answer, len(servers))
+	for _, s := range servers {
+		go func() {
+			msg, err := s.exchange(ctx, query)
+			answers <- answer{msg, s.String(), err}
+		}()
+	}
+	var errs serverErrors
+	for range servers {
+		a := <-answers
+		if a.err == nil {
+			return a.msg, nil
+		}
+		errs = append(errs, fmt.Errorf("%s: %w", a.source, a.err))
+	}
+	return nil, fmt.Errorf("asking DNS over HTTPS failed: %w", errs)
 }

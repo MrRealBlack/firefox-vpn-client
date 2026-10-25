@@ -128,7 +128,8 @@ $ sudo firefox-vpn
    8) Add a Firefox Account                    firefox-vpn add-account
    9) List the accounts and their quota        firefox-vpn list-accounts
   10) Set the panel's username and password    firefox-vpn set-dashboard-login
+  11) Update to the newest version             firefox-vpn update
    0) Exit
   ────────────────────────────────────────────────────────────────────────────
-  Enter a number [0-10]:
+  Enter a number [0-11]:
 ```

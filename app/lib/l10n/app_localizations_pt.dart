@@ -951,6 +951,46 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get updateNow => 'Atualizar';
+
+  @override
+  String updateDownloading(String version) {
+    return 'Baixando a versão $version…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return 'A versão $version está pronta para instalar.';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return 'Instalando a versão $version. O app vai fechar e abrir de novo.';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return 'Não foi possível atualizar para a versão $version.';
+  }
+
+  @override
+  String updateDone(String version) {
+    return 'Atualizado para a versão $version.';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return 'A atualização para a versão $version não terminou, então o app voltou para a versão anterior.';
+  }
+
+  @override
+  String get autoUpdate => 'Atualizar automaticamente';
+
+  @override
+  String get autoUpdateHint =>
+      'As novas versões são baixadas em segundo plano e instaladas na próxima vez que o app abrir.';
+
+  @override
   String get repoNotSet => 'O repositório do GitHub ainda não foi definido.';
 
   @override
@@ -1110,15 +1150,11 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'Apenas os apps configurados para usar o proxy passam por ele; o Windows fica como está.';
+      'Apenas os apps configurados para usar o proxy passam por ele.';
 
   @override
   String get modeSystemProxyHint =>
       'O Windows e a maioria dos apps passam pelo proxy.';
-
-  @override
-  String get modeProxyHintOther =>
-      'Apenas os apps configurados para usar o proxy passam por ele; as configurações do sistema ficam como estão.';
 
   @override
   String get modeSystemProxyHintOther =>
@@ -1230,4 +1266,160 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'Configurar de novo';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return 'Todo o tráfego do $os passa pela VPN.';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting =>
+      'Aguardando permissão para instalar o serviço TUN…';
+
+  @override
+  String get tunInstallCancelled =>
+      'O modo TUN precisa de permissão de administrador uma vez. Ela não foi dada, então o modo não mudou.';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'Não foi possível instalar o serviço TUN: $error';
+  }
+
+  @override
+  String get tunStarting => 'Iniciando o modo TUN…';
+
+  @override
+  String get tunFailed => 'O modo TUN não pôde iniciar. Tentando de novo…';
+
+  @override
+  String get tunLost => 'O modo TUN parou inesperadamente. Tentando de novo…';
+
+  @override
+  String get tunNotRunning =>
+      'O serviço TUN não está em execução. Tentando de novo…';
+
+  @override
+  String get tunMissing => 'O serviço TUN não está instalado.';
+
+  @override
+  String get tunOutdated =>
+      'O serviço TUN é mais antigo que este app. Instale-o de novo para usar o modo TUN.';
+
+  @override
+  String get tunAppOutdated =>
+      'O serviço TUN é mais novo que este app. Atualize o app para usar o modo TUN.';
+
+  @override
+  String get tunBusy => 'Outra cópia do Firefox VPN está usando o modo TUN.';
+
+  @override
+  String get tunInstall => 'Instalar';
+
+  @override
+  String get tunInstallAgain => 'Instalar de novo';
+
+  @override
+  String get trayTunMode => 'Modo TUN (todos os apps)';
+
+  @override
+  String get removeTunService => 'Remover o serviço TUN';
+
+  @override
+  String get removeTunServiceHint =>
+      'Remove o serviço do sistema que o modo TUN usa. Escolher TUN de novo o instala outra vez.';
+
+  @override
+  String get tunServiceRemoved => 'O serviço TUN foi removido.';
+
+  @override
+  String get tunInstallPrompt =>
+      'O Firefox VPN quer instalar o serviço do modo TUN.';
+
+  @override
+  String get tunRemovePrompt =>
+      'O Firefox VPN quer remover o serviço do modo TUN.';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'Não foi possível remover o serviço TUN: $error';
+  }
+
+  @override
+  String get sectionTun => 'Configurações de TUN';
+
+  @override
+  String get tunPrograms => 'Programas fora da VPN';
+
+  @override
+  String get tunProgramsHint =>
+      'Eles se conectam diretamente, não pela Mozilla. Só para programas que funcionam sem VPN.';
+
+  @override
+  String get tunProgramsEmpty => 'Nenhum programa ainda.';
+
+  @override
+  String get addProgram => 'Adicionar programa';
+
+  @override
+  String get programFiles => 'Programas';
+
+  @override
+  String get tunProgramAll => 'Todo o tráfego';
+
+  @override
+  String get tunProgramAllHint => 'O programa inteiro se conecta diretamente.';
+
+  @override
+  String get tunProgramUdp => 'Só UDP';
+
+  @override
+  String get tunProgramUdpHint =>
+      'Só o UDP dele se conecta diretamente; o resto passa pela VPN.';
+
+  @override
+  String get udpNoticeSetting => 'Aviso de UDP bloqueado';
+
+  @override
+  String udpNoticeBody(String program) {
+    return '$program tentou fazer uma chamada ou jogar online, mas no modo TUN esse tráfego (UDP) não passa pela VPN.';
+  }
+
+  @override
+  String get udpNoticeAction => 'Enviar o UDP dele diretamente';
+
+  @override
+  String get dontShowAgain => 'Não mostrar de novo';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program: o UDP dele agora se conecta diretamente.';
+  }
+
+  @override
+  String get addRunningProgram => 'Dos programas em execução';
+
+  @override
+  String get addProgramFile => 'Escolher um arquivo…';
+
+  @override
+  String get addProgramName => 'Digitar um nome…';
+
+  @override
+  String get programNameHint =>
+      'O nome do arquivo de um programa, como steam.exe; * significa qualquer texto (steam* são todos os programas do Steam).';
+
+  @override
+  String get runningProgramsEmpty => 'Nenhum outro programa está em execução.';
 }

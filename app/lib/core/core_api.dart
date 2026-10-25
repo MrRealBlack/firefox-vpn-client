@@ -292,6 +292,21 @@ class CoreApi {
 
   Future<void> openFolder() => _json('POST', '/api/open-folder', const {});
 
+  /// Starts downloading [version] of the app (the Windows app's core; 409
+  /// for a copy that does not update itself).
+  Future<void> downloadUpdate(String version) =>
+      _json('POST', '/api/update/download', {'version': version});
+
+  /// Installs the downloaded [version]: the core starts the installation,
+  /// which waits for this app ([pid]) and its core to quit, then starts the
+  /// app again with [args].
+  Future<void> installUpdate(String version, int pid, List<String> args) =>
+      _json('POST', '/api/update/install', {
+        'version': version,
+        'pid': pid,
+        'args': args,
+      });
+
   /// A sign-in link to the web dashboard: it opens signed in, once, within
   /// 15 minutes.
   Future<Uri> loginLink() async {
@@ -338,6 +353,16 @@ class CoreApi {
       DestinationTest.fromJson(
         await _json('POST', '/api/routing/test', {'target': target}, _slow),
       );
+
+  /// The programs running on the computer, for the TUN settings' choice of
+  /// programs that skip the VPN (the desktop app's core only).
+  Future<List<RunningProgram>> runningPrograms() async {
+    final j = await _json('GET', '/api/tun/programs');
+    return [
+      for (final p in (j['programs'] as List<Object?>? ?? const []))
+        if (p is Map<String, Object?>) RunningProgram.fromJson(p),
+    ];
+  }
 
   /// Resolves the core's own names through [servers] and the system DNS.
   Future<List<DnsTestHost>> testDns(List<String> servers) async {

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
+
+	"github.com/armanlife/firefox-vpn-client/core/internal/egress"
 )
 
 const (
@@ -28,13 +30,16 @@ type dohServer struct {
 
 // newDoHClient is replaced in tests to trust a local server. The client
 // never uses an HTTP proxy from the environment and resolves the server's
-// own name, if any, with the system resolver.
+// own name, if any, with the system resolver (while the TUN mode runs, the
+// physical network's DNS: egress).
 var newDoHClient = func() *http.Client {
 	return &http.Client{
 		Timeout: queryTimeout,
 		Transport: &http.Transport{
-			Proxy:               nil,
-			DialContext:         (&net.Dialer{Timeout: queryTimeout}).DialContext,
+			Proxy: nil,
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return egress.Dialer(queryTimeout).DialContext(ctx, network, address)
+			},
 			TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
 			ForceAttemptHTTP2:   true,
 			TLSHandshakeTimeout: queryTimeout,
@@ -72,25 +77,31 @@ func (s *dohServer) query(ctx context.Context, host string, qtype dnsmessage.Typ
 	if err != nil {
 		return nil, 0, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.url, bytes.NewReader(packed))
+	body, err := s.exchange(ctx, packed)
 	if err != nil {
 		return nil, 0, err
+	}
+	return parseAnswer(body, qtype)
+}
+
+// exchange sends a DNS message in wire format and returns the server's
+// answer as it is.
+func (s *dohServer) exchange(ctx context.Context, msg []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.url, bytes.NewReader(msg))
+	if err != nil {
+		return nil, err
 	}
 	req.Header.Set("Content-Type", dohContentType)
 	req.Header.Set("Accept", dohContentType)
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, 0, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxDoHReplySize))
-	if err != nil {
-		return nil, 0, err
-	}
-	return parseAnswer(body, qtype)
+	return io.ReadAll(io.LimitReader(resp.Body, maxDoHReplySize))
 }
 
 // parseAnswer extracts the addresses of the wanted type and the smallest

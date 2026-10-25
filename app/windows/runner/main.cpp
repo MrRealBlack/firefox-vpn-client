@@ -81,8 +81,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::CoUninitialize();
     return EXIT_SUCCESS;
   }
-  // Started by Windows at sign-in: stay in the tray.
-  const bool start_hidden = HasArgument(command_line_arguments, "--autostart");
+  // Started by Windows at sign-in, or by an update of a copy that was in
+  // the tray: stay in the tray.
+  const bool start_hidden = HasArgument(command_line_arguments, "--autostart") ||
+                            HasArgument(command_line_arguments, "--hidden");
 
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 

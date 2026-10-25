@@ -18,6 +18,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/armanlife/firefox-vpn-client/core/internal/egress"
 )
 
 // Result is what a check found.
@@ -99,8 +101,12 @@ func probe(ctx context.Context, list []site) Result {
 	defer cancel()
 	client := &http.Client{
 		Transport: &http.Transport{
-			Proxy:             nil,
-			DialContext:       (&net.Dialer{Timeout: Timeout}).DialContext,
+			Proxy: nil,
+			// Outside the TUN adapter while the TUN mode runs: the check is
+			// about the network itself.
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return egress.Dialer(Timeout).DialContext(ctx, network, address)
+			},
 			DisableKeepAlives: true,
 		},
 		// A redirect is a captive portal's, not the expected answer.

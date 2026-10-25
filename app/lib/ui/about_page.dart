@@ -111,16 +111,9 @@ class _AboutPageState extends State<AboutPage> {
                   child: Text(_result!, style: muted),
                 ),
               ],
-              if (_release != null && _release!.url.isNotEmpty) ...[
+              if (_release case final release?) ...[
                 const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () => openDownload(_release!),
-                    icon: const Icon(Icons.download_rounded, size: 18),
-                    label: Text(l.download),
-                  ),
-                ),
+                _UpdateAction(core: widget.core, release: release),
               ],
               const Divider(height: 24),
               Row(
@@ -211,6 +204,85 @@ class _AboutPageState extends State<AboutPage> {
       ],
     );
   }
+}
+
+/// The found version's button: Update where the app installs it itself
+/// (Windows), with the download's progress, why it failed, and Try again;
+/// else Download.
+class _UpdateAction extends StatelessWidget {
+  const _UpdateAction({required this.core, required this.release});
+
+  final CoreController core;
+  final Release release;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([core, Updates.failure]),
+    builder: (context, _) {
+      final l = AppLocalizations.of(context);
+      final muted = Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
+      final update = core.status?.update;
+      Widget button(String label, IconData icon, VoidCallback? onPressed) =>
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon, size: 18),
+              label: Text(label),
+            ),
+          );
+      if (update == null) {
+        return release.url.isEmpty
+            ? const SizedBox.shrink()
+            : button(
+                l.download,
+                Icons.download_rounded,
+                () => openDownload(release),
+              );
+      }
+      final mine = update.version == release.version;
+      if (mine && (update.downloading || update.installing)) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              update.downloading
+                  ? l.updateDownloading(release.version)
+                  : l.updateInstalling(release.version),
+              style: muted,
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: update.downloading ? update.progress : null,
+            ),
+          ],
+        );
+      }
+      final failure =
+          Updates.failure.value ??
+          (mine && update.failed ? update.error : null);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (failure != null) ...[
+            Tooltip(
+              message: failure,
+              child: Text(l.updateFailed(release.version), style: muted),
+            ),
+            const SizedBox(height: 8),
+          ],
+          button(
+            failure != null ? l.tryAgain : l.updateNow,
+            failure != null
+                ? Icons.refresh_rounded
+                : Icons.system_update_alt_rounded,
+            () => Updates.update(release),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 class _Line extends StatelessWidget {

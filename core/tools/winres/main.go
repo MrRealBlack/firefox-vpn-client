@@ -1,9 +1,11 @@
-// Command winres writes the Windows resources of the executable (its icon,
+// Command winres writes the Windows resources of an executable (its icon,
 // version information, and application manifest) as .syso objects that go
-// build links into ./cmd/firefox-vpn-core. scripts/build-windows.ps1 runs
-// it before each build with the release version in APP_VERSION (else version.Current):
+// build links into the package in the current folder: ./cmd/firefox-vpn-core,
+// or with -program tun ./cmd/firefox-vpn-tun. scripts/build-windows.ps1 runs
+// it before each build with the release version in APP_VERSION (else
+// version.Current):
 //
-//	APP_VERSION=1.1.0 go generate ./cmd/firefox-vpn-core
+//	APP_VERSION=1.1.0 go generate ./cmd/firefox-vpn-core ./cmd/firefox-vpn-tun
 //
 // The objects are build output, not kept in Git; a build without them has
 // no icon, version information, or manifest.
@@ -11,6 +13,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 
@@ -21,14 +24,31 @@ import (
 	"github.com/armanlife/firefox-vpn-client/core/internal/version"
 )
 
+// program is what each executable's version information says.
+type program struct{ description, name string }
+
+var programs = map[string]program{
+	"core": {"Firefox VPN Core", "firefox-vpn-core"},
+	// The administrator prompt shows this description when the app
+	// installs the service.
+	"tun": {"Firefox VPN TUN", "firefox-vpn-tun"},
+}
+
 func main() {
-	if err := run(); err != nil {
+	which := flag.String("program", "core", "the executable: core or tun")
+	flag.Parse()
+	p, ok := programs[*which]
+	if !ok {
+		fmt.Fprintln(os.Stderr, "winres: unknown program", *which)
+		os.Exit(2)
+	}
+	if err := run(p); err != nil {
 		fmt.Fprintln(os.Stderr, "winres:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(p program) error {
 	// The program's icon in every size, as app/tool/app_icons.py made it.
 	icon, err := winres.LoadICO(bytes.NewReader(desktop.AppIconICO))
 	if err != nil {
@@ -48,9 +68,9 @@ func run() error {
 	vi.SetProductVersion(release)
 	for key, value := range map[string]string{
 		winversion.ProductName:      "Firefox VPN",
-		winversion.FileDescription:  "Firefox VPN Core",
-		winversion.OriginalFilename: "firefox-vpn-core.exe",
-		winversion.InternalName:     "firefox-vpn-core",
+		winversion.FileDescription:  p.description,
+		winversion.OriginalFilename: p.name + ".exe",
+		winversion.InternalName:     p.name,
 		// The publisher, as in the installer (AppPublisher) and the app.
 		winversion.CompanyName:    "Arman",
 		winversion.LegalCopyright: "Copyright (c) 2026 Arman",
@@ -61,9 +81,10 @@ func run() error {
 	}
 	rs.SetVersionInfo(vi)
 
-	// Runs with the user's rights (no elevation prompt), declares Windows
-	// 10 and 11 like the app's manifest, and is per-monitor DPI aware for
-	// the tray icon and its menu.
+	// Runs with the user's rights (no elevation prompt: the TUN service's
+	// install asks for administrator rights itself, only then), declares
+	// Windows 10 and 11 like the app's manifest, and is per-monitor DPI
+	// aware for the tray icon and its menu.
 	rs.SetManifest(winres.AppManifest{
 		ExecutionLevel: winres.AsInvoker,
 		Compatibility:  winres.Win10AndAbove,

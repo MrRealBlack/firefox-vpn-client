@@ -170,6 +170,9 @@ func TestDestinationTest(t *testing.T) {
 		"ads.example":                  {Host: "ads.example", Route: "block", Rule: "full:ads.example"},
 		"example.com:9898":             {Host: "example.com", Port: "9898", Route: "proxy", PortRefused: true},
 		"[2001:db8::1]:443":            {Host: "2001:db8::1", Port: "443", Route: "proxy"},
+		// Mozilla refuses port 53, but this program answers DNS itself.
+		"1.1.1.1:53":   {Host: "1.1.1.1", Port: "53", Route: "proxy", Note: "DNS to port 53 is answered by this program, with DNS over HTTPS through Mozilla."},
+		"10.0.0.53:53": {Host: "10.0.0.53", Port: "53", Route: "direct", Rule: "10.0.0.0/8"},
 	} {
 		if got := test(target); got != want {
 			t.Errorf("%s: got %+v, want %+v", target, got, want)

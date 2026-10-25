@@ -950,6 +950,46 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
+  String get updateNow => 'Cập nhật';
+
+  @override
+  String updateDownloading(String version) {
+    return 'Đang tải phiên bản $version…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return 'Phiên bản $version đã sẵn sàng để cài đặt.';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return 'Đang cài đặt phiên bản $version. Ứng dụng sẽ đóng và mở lại.';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return 'Không thể cập nhật lên phiên bản $version.';
+  }
+
+  @override
+  String updateDone(String version) {
+    return 'Đã cập nhật lên phiên bản $version.';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return 'Bản cập nhật lên phiên bản $version chưa hoàn tất nên ứng dụng đã quay về phiên bản trước.';
+  }
+
+  @override
+  String get autoUpdate => 'Tự động cập nhật';
+
+  @override
+  String get autoUpdateHint =>
+      'Phiên bản mới được tải ở chế độ nền và được cài đặt vào lần mở ứng dụng tiếp theo.';
+
+  @override
   String get repoNotSet => 'Chưa thiết lập kho GitHub.';
 
   @override
@@ -1110,14 +1150,10 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'Chỉ những ứng dụng được cài đặt dùng proxy mới đi qua proxy; cài đặt của Windows không bị thay đổi.';
+      'Chỉ những ứng dụng được cài đặt dùng proxy mới đi qua proxy.';
 
   @override
   String get modeSystemProxyHint => 'Windows và hầu hết ứng dụng đi qua proxy.';
-
-  @override
-  String get modeProxyHintOther =>
-      'Chỉ những ứng dụng được cài đặt dùng proxy mới đi qua proxy; cài đặt của hệ thống không bị thay đổi.';
 
   @override
   String get modeSystemProxyHintOther =>
@@ -1229,4 +1265,158 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'Đặt lại';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return 'Toàn bộ lưu lượng của $os đi qua VPN.';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting => 'Đang chờ cho phép cài đặt dịch vụ TUN…';
+
+  @override
+  String get tunInstallCancelled =>
+      'Chế độ TUN cần quyền quản trị một lần. Quyền không được cấp nên chế độ không thay đổi.';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'Không thể cài đặt dịch vụ TUN: $error';
+  }
+
+  @override
+  String get tunStarting => 'Đang bật chế độ TUN…';
+
+  @override
+  String get tunFailed => 'Không bật được chế độ TUN. Đang thử lại…';
+
+  @override
+  String get tunLost => 'Chế độ TUN đã dừng bất ngờ. Đang thử lại…';
+
+  @override
+  String get tunNotRunning => 'Dịch vụ TUN không chạy. Đang thử lại…';
+
+  @override
+  String get tunMissing => 'Dịch vụ TUN chưa được cài đặt.';
+
+  @override
+  String get tunOutdated =>
+      'Dịch vụ TUN cũ hơn ứng dụng này. Hãy cài đặt lại để dùng chế độ TUN.';
+
+  @override
+  String get tunAppOutdated =>
+      'Dịch vụ TUN mới hơn ứng dụng này. Hãy cập nhật ứng dụng để dùng chế độ TUN.';
+
+  @override
+  String get tunBusy => 'Một bản Firefox VPN khác đang dùng chế độ TUN.';
+
+  @override
+  String get tunInstall => 'Cài đặt';
+
+  @override
+  String get tunInstallAgain => 'Cài đặt lại';
+
+  @override
+  String get trayTunMode => 'Chế độ TUN (mọi ứng dụng)';
+
+  @override
+  String get removeTunService => 'Gỡ dịch vụ TUN';
+
+  @override
+  String get removeTunServiceHint =>
+      'Gỡ dịch vụ hệ thống mà chế độ TUN dùng. Chọn lại TUN sẽ cài đặt lại dịch vụ.';
+
+  @override
+  String get tunServiceRemoved => 'Đã gỡ dịch vụ TUN.';
+
+  @override
+  String get tunInstallPrompt =>
+      'Firefox VPN muốn cài đặt dịch vụ cho chế độ TUN.';
+
+  @override
+  String get tunRemovePrompt => 'Firefox VPN muốn gỡ dịch vụ của chế độ TUN.';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'Không thể gỡ dịch vụ TUN: $error';
+  }
+
+  @override
+  String get sectionTun => 'Cài đặt TUN';
+
+  @override
+  String get tunPrograms => 'Chương trình không qua VPN';
+
+  @override
+  String get tunProgramsHint =>
+      'Kết nối trực tiếp, không qua Mozilla. Chỉ dành cho chương trình chạy được mà không cần VPN.';
+
+  @override
+  String get tunProgramsEmpty => 'Chưa có chương trình nào.';
+
+  @override
+  String get addProgram => 'Thêm chương trình';
+
+  @override
+  String get programFiles => 'Chương trình';
+
+  @override
+  String get tunProgramAll => 'Mọi lưu lượng';
+
+  @override
+  String get tunProgramAllHint => 'Toàn bộ chương trình kết nối trực tiếp.';
+
+  @override
+  String get tunProgramUdp => 'Chỉ UDP';
+
+  @override
+  String get tunProgramUdpHint =>
+      'Chỉ UDP của nó kết nối trực tiếp; phần còn lại qua VPN.';
+
+  @override
+  String get udpNoticeSetting => 'Thông báo UDP bị chặn';
+
+  @override
+  String udpNoticeBody(String program) {
+    return '$program đã cố gọi điện hoặc chơi trực tuyến, nhưng ở chế độ TUN lưu lượng này (UDP) không thể đi qua VPN.';
+  }
+
+  @override
+  String get udpNoticeAction => 'Cho UDP của nó đi trực tiếp';
+
+  @override
+  String get dontShowAgain => 'Không hiện lại';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program: UDP của nó giờ kết nối trực tiếp.';
+  }
+
+  @override
+  String get addRunningProgram => 'Từ các chương trình đang chạy';
+
+  @override
+  String get addProgramFile => 'Chọn tệp…';
+
+  @override
+  String get addProgramName => 'Nhập tên…';
+
+  @override
+  String get programNameHint =>
+      'Tên tệp của chương trình, ví dụ steam.exe; * nghĩa là văn bản bất kỳ (steam* là mọi chương trình của Steam).';
+
+  @override
+  String get runningProgramsEmpty =>
+      'Không có chương trình nào khác đang chạy.';
 }

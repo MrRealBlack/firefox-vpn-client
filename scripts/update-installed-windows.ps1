@@ -7,7 +7,11 @@
 # - user-data in the install folder (accounts, settings, logs) is never
 #   touched;
 # - a copy that was running is started again, and connected again if it
-#   was connected.
+#   was connected;
+# - an installed TUN service is asked to replace itself with the new one,
+#   which it does when the build is signed with its key (the developer key
+#   in FIREFOX_VPN_SIGNING_KEY_FILE; scripts\signing-key.ps1). The core gets
+#   the same key: the app then installs only updates signed with it.
 # The version is "major.minor.patch" from app\pubspec.yaml, or -AppVersion: an
 # older one makes the app find the latest release as an update, to try the
 # update notices. Nothing is written to dist\; scripts\build-windows.ps1
@@ -45,17 +49,21 @@ try {
 } finally { Pop-Location }
 $release = "$root\app\build\windows\x64\runner\Release"
 $coreOut = "$root\app\build\installed-core"
+$public = & "$PSScriptRoot\signing-key.ps1"
 Push-Location "$root\core"
 try {
     $env:APP_VERSION = $version
     go generate ./cmd/firefox-vpn-core
     if ($LASTEXITCODE -ne 0) { throw 'go generate failed' }
-    go build -trimpath -ldflags "-s -w -X github.com/armanlife/firefox-vpn-client/core/internal/version.Current=$version" -o "$coreOut\firefox-vpn-core.exe" ./cmd/firefox-vpn-core
+    $ldflags = "-s -w -X github.com/armanlife/firefox-vpn-client/core/internal/version.Current=$version"
+    if ($public) { $ldflags += " -X github.com/armanlife/firefox-vpn-client/core/internal/signing.Key=$public" }
+    go build -trimpath -ldflags $ldflags -o "$coreOut\firefox-vpn-core.exe" ./cmd/firefox-vpn-core
     if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
 } finally {
     Remove-Item Env:APP_VERSION -ErrorAction SilentlyContinue
     Pop-Location
 }
+& "$PSScriptRoot\build-windows-tun.ps1" -Version $version -Out $coreOut -PublicKey $public
 
 # The core's API, as the app reaches it: the address from config.json and
 # the local token. The token is only sent, never shown.
@@ -107,10 +115,25 @@ if ($LASTEXITCODE -ge 8) { throw "copying the app failed (robocopy $LASTEXITCODE
 # old icon, say) must not stay behind and be used.
 robocopy "$release\data" "$dir\data" /MIR /R:10 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "copying the app's assets failed (robocopy $LASTEXITCODE)" }
-robocopy $coreOut "$dir\core" firefox-vpn-core.exe /R:10 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+robocopy $coreOut "$dir\core" firefox-vpn-core.exe firefox-vpn-tun.exe firefox-vpn-tun.exe.sig /R:10 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "copying the core failed (robocopy $LASTEXITCODE)" }
+if (-not (Test-Path "$coreOut\firefox-vpn-tun.exe.sig")) {
+    Remove-Item "$dir\core\firefox-vpn-tun.exe.sig" -ErrorAction SilentlyContinue
+}
 Set-ItemProperty $uninstallKey -Name DisplayVersion -Value $version
 Write-Host "Installed $version in $dir"
+
+# The installed TUN service, if any, replaces itself with the new one: the
+# app's core asks only when the service is older, and a test build keeps
+# the version. It refuses a build its key did not sign (then install it
+# again: core\firefox-vpn-tun.exe install, with the administrator prompt).
+if (Get-Service FirefoxVPNTun -ErrorAction SilentlyContinue) {
+    $p = Start-Process -FilePath "$dir\core\firefox-vpn-tun.exe" -ArgumentList update -Wait -PassThru -NoNewWindow -RedirectStandardError "$coreOut\tun-update.txt"
+    $why = (Get-Content "$coreOut\tun-update.txt" -Raw -ErrorAction SilentlyContinue)
+    if ($p.ExitCode -eq 0) { Write-Host 'The TUN service updated itself' }
+    elseif ($why -match 'already this build') { Write-Host 'The TUN service is already this build' }
+    else { Write-Warning "The TUN service did not update itself: $why" }
+}
 
 if ($appWasRunning) {
     # Without the proxy variables a build may have needed: the app's core

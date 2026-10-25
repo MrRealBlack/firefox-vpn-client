@@ -960,6 +960,46 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get updateNow => 'تحديث';
+
+  @override
+  String updateDownloading(String version) {
+    return 'جارٍ تنزيل الإصدار $version…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return 'الإصدار $version جاهز للتثبيت.';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return 'جارٍ تثبيت الإصدار $version. سيُغلق التطبيق ثم يُفتح من جديد.';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return 'تعذّر التحديث إلى الإصدار $version.';
+  }
+
+  @override
+  String updateDone(String version) {
+    return 'تم التحديث إلى الإصدار $version.';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return 'لم يكتمل التحديث إلى الإصدار $version، فعاد التطبيق إلى الإصدار السابق.';
+  }
+
+  @override
+  String get autoUpdate => 'التحديث تلقائيًا';
+
+  @override
+  String get autoUpdateHint =>
+      'تُنزَّل الإصدارات الجديدة في الخلفية وتُثبَّت عند فتح التطبيق في المرة التالية.';
+
+  @override
   String get repoNotSet => 'لم يُحدَّد مستودع GitHub بعد.';
 
   @override
@@ -1116,14 +1156,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'تمر عبره فقط التطبيقات المضبوطة على استخدام البروكسي؛ ولا يتغير شيء في Windows.';
+      'تمر عبره فقط التطبيقات المضبوطة على استخدام البروكسي.';
 
   @override
   String get modeSystemProxyHint => 'يمر Windows ومعظم التطبيقات عبر البروكسي.';
-
-  @override
-  String get modeProxyHintOther =>
-      'تمر عبره فقط التطبيقات المضبوطة على استخدام البروكسي؛ ولا يتغير شيء في إعدادات النظام.';
 
   @override
   String get modeSystemProxyHintOther =>
@@ -1244,4 +1280,156 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'اضبطه مرة أخرى';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return 'تمر كل حركة بيانات $os عبر VPN.';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting => 'بانتظار الإذن لتثبيت خدمة TUN…';
+
+  @override
+  String get tunInstallCancelled =>
+      'يحتاج وضع TUN إلى إذن المسؤول مرة واحدة. لم يُمنح الإذن، فلم يتغير الوضع.';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'تعذّر تثبيت خدمة TUN: $error';
+  }
+
+  @override
+  String get tunStarting => 'جارٍ تشغيل وضع TUN…';
+
+  @override
+  String get tunFailed => 'تعذّر تشغيل وضع TUN. جارٍ المحاولة مرة أخرى…';
+
+  @override
+  String get tunLost => 'توقف وضع TUN فجأة. جارٍ المحاولة مرة أخرى…';
+
+  @override
+  String get tunNotRunning => 'خدمة TUN لا تعمل. جارٍ المحاولة مرة أخرى…';
+
+  @override
+  String get tunMissing => 'خدمة TUN غير مثبّتة.';
+
+  @override
+  String get tunOutdated =>
+      'خدمة TUN أقدم من هذا التطبيق. ثبّتها مرة أخرى لاستخدام وضع TUN.';
+
+  @override
+  String get tunAppOutdated =>
+      'خدمة TUN أحدث من هذا التطبيق. حدّث التطبيق لاستخدام وضع TUN.';
+
+  @override
+  String get tunBusy => 'نسخة أخرى من Firefox VPN تستخدم وضع TUN.';
+
+  @override
+  String get tunInstall => 'تثبيت';
+
+  @override
+  String get tunInstallAgain => 'إعادة التثبيت';
+
+  @override
+  String get trayTunMode => 'وضع TUN (جميع التطبيقات)';
+
+  @override
+  String get removeTunService => 'إزالة خدمة TUN';
+
+  @override
+  String get removeTunServiceHint =>
+      'يزيل خدمة النظام التي يستخدمها وضع TUN. اختيار TUN مرة أخرى يثبّتها من جديد.';
+
+  @override
+  String get tunServiceRemoved => 'أُزيلت خدمة TUN.';
+
+  @override
+  String get tunInstallPrompt => 'يريد Firefox VPN تثبيت الخدمة لوضع TUN.';
+
+  @override
+  String get tunRemovePrompt => 'يريد Firefox VPN إزالة خدمة وضع TUN.';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'تعذّرت إزالة خدمة TUN: $error';
+  }
+
+  @override
+  String get sectionTun => 'إعدادات TUN';
+
+  @override
+  String get tunPrograms => 'برامج تتجاوز VPN';
+
+  @override
+  String get tunProgramsHint =>
+      'تتصل مباشرةً، لا عبر Mozilla. فقط للبرامج التي تعمل دون VPN.';
+
+  @override
+  String get tunProgramsEmpty => 'لا توجد برامج بعد.';
+
+  @override
+  String get addProgram => 'إضافة برنامج';
+
+  @override
+  String get programFiles => 'البرامج';
+
+  @override
+  String get tunProgramAll => 'كل الحركة';
+
+  @override
+  String get tunProgramAllHint => 'يتصل البرنامج كله مباشرةً.';
+
+  @override
+  String get tunProgramUdp => 'حركة UDP فقط';
+
+  @override
+  String get tunProgramUdpHint =>
+      'يتصل UDP الخاص به فقط مباشرةً؛ والباقي عبر VPN.';
+
+  @override
+  String get udpNoticeSetting => 'تنبيه عند حظر UDP';
+
+  @override
+  String udpNoticeBody(String program) {
+    return 'حاول البرنامج $program إجراء مكالمة أو اللعب عبر الإنترنت، لكن في وضع TUN لا تمر هذه الحركة (UDP) عبر VPN.';
+  }
+
+  @override
+  String get udpNoticeAction => 'إرسال حركة UDP الخاصة به مباشرةً';
+
+  @override
+  String get dontShowAgain => 'عدم الإظهار مجددًا';
+
+  @override
+  String udpDirectAdded(String program) {
+    return 'حركة UDP لبرنامج $program تتصل الآن مباشرةً.';
+  }
+
+  @override
+  String get addRunningProgram => 'من البرامج قيد التشغيل';
+
+  @override
+  String get addProgramFile => 'اختيار ملف…';
+
+  @override
+  String get addProgramName => 'كتابة اسم…';
+
+  @override
+  String get programNameHint =>
+      'اسم ملف البرنامج، مثل steam.exe؛ والعلامة * تعني أي نص (steam* هي كل برامج Steam).';
+
+  @override
+  String get runningProgramsEmpty => 'لا توجد برامج أخرى قيد التشغيل.';
 }

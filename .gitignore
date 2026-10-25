@@ -9,9 +9,13 @@
 *.msix
 /core/cmd/firefox-vpn-core/firefox-vpn-core
 /core/firefox-vpn-core*
-# The core's Windows resources (icon, version), made by the build:
-# go generate ./cmd/firefox-vpn-core
+# The Windows resources (icon, version) of the core and the TUN service,
+# made by the build: go generate ./cmd/firefox-vpn-core ./cmd/firefox-vpn-tun
 /core/cmd/firefox-vpn-core/rsrc_windows_*.syso
+/core/cmd/firefox-vpn-tun/rsrc_windows_*.syso
+/core/cmd/firefox-vpn-tun/firefox-vpn-tun
+# Update signing keys (tools/sign) never go into the repository.
+*.signing-key
 # gomobile's output for the Android app (core.aar, core-sources.jar),
 # rebuilt from core/ (see core/doc/DEVELOPMENT.md).
 /app/android/app/libs/

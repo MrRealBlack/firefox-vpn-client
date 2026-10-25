@@ -607,6 +607,57 @@
       }
     }
   },
+  "updateNow": "Update",
+  "updateDownloading": "Downloading version {version}…",
+  "@updateDownloading": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateReady": "Version {version} is ready to install.",
+  "@updateReady": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateInstalling": "Installing version {version}. The app will close and open again.",
+  "@updateInstalling": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateFailed": "Couldn't update to version {version}.",
+  "@updateFailed": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDone": "Updated to version {version}.",
+  "@updateDone": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateRolledBack": "The update to version {version} didn't finish, so the app went back to the previous version.",
+  "@updateRolledBack": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "autoUpdate": "Update automatically",
+  "autoUpdateHint": "New versions download in the background and install the next time the app opens.",
   "repoNotSet": "The GitHub repository is not set yet.",
   "sourceCode": "Source code",
   "tapToConnect": "Click to connect",
@@ -694,9 +745,8 @@
   },
   "modeProxy": "Proxy",
   "connectionMode": "Connection mode",
-  "modeProxyHint": "Only apps set up to use the proxy go through it; Windows is left as it is.",
+  "modeProxyHint": "Only apps set up to use the proxy go through it.",
   "modeSystemProxyHint": "Windows and most apps go through the proxy.",
-  "modeProxyHintOther": "Only apps set up to use the proxy go through it; the system's settings stay as they are.",
   "modeSystemProxyHintOther": "Browsers and most apps go through the proxy.",
   "suggestedApps": "Suggested apps",
   "suggestedAdded": "{count, plural, =0{The suggested apps are already selected} =1{1 suggested app selected} other{{count} suggested apps selected}}",
@@ -767,5 +817,107 @@
     }
   },
   "systemProxyTakenOff": "Another program turned the system proxy off, so traffic doesn't go through the VPN.",
-  "setSystemProxyAgain": "Set it again"
+  "setSystemProxyAgain": "Set it again",
+  "modeTun": "TUN",
+  "@modeTun": {
+    "description": "The connection mode that sends every app through the VPN with a TUN adapter (system_proxy.mode tun)."
+  },
+  "modeTunHint": "All {os} traffic goes through the VPN.",
+  "@modeTunHint": {
+    "description": "Under the TUN mode on the home page; os is osWindows, osLinux, or osMacos.",
+    "placeholders": {
+      "os": {
+        "type": "String"
+      }
+    }
+  },
+  "osWindows": "Windows",
+  "osLinux": "Linux",
+  "osMacos": "macOS",
+  "tunInstallWaiting": "Waiting for permission to install the TUN service…",
+  "tunInstallCancelled": "TUN mode needs administrator permission once. It wasn't given, so the mode didn't change.",
+  "tunInstallFailed": "Couldn't install the TUN service: {error}",
+  "@tunInstallFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tunStarting": "Starting TUN mode…",
+  "tunFailed": "TUN mode couldn't start. Trying again…",
+  "tunLost": "TUN mode stopped unexpectedly. Trying again…",
+  "tunNotRunning": "The TUN service isn't running. Trying again…",
+  "tunMissing": "The TUN service isn't installed.",
+  "tunOutdated": "The TUN service is older than this app. Install it again to use TUN mode.",
+  "tunAppOutdated": "The TUN service is newer than this app. Update the app to use TUN mode.",
+  "tunBusy": "Another copy of Firefox VPN is using TUN mode.",
+  "tunInstall": "Install",
+  "tunInstallAgain": "Install again",
+  "trayTunMode": "TUN mode (all apps)",
+  "removeTunService": "Remove the TUN service",
+  "removeTunServiceHint": "Removes the system service that TUN mode uses. Choosing TUN again installs it again.",
+  "tunServiceRemoved": "The TUN service was removed.",
+  "tunInstallPrompt": "Firefox VPN wants to install the service for TUN mode.",
+  "@tunInstallPrompt": {
+    "description": "macOS: the reason its administrator password prompt shows when the app installs the TUN mode's service."
+  },
+  "tunRemovePrompt": "Firefox VPN wants to remove the service for TUN mode.",
+  "@tunRemovePrompt": {
+    "description": "macOS: the reason its administrator password prompt shows when the app removes the TUN mode's service while the service does not run."
+  },
+  "tunRemoveFailed": "Couldn't remove the TUN service: {error}",
+  "@tunRemoveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "sectionTun": "TUN settings",
+  "@sectionTun": {
+    "description": "The computer's settings section for TUN mode, after Routing."
+  },
+  "tunPrograms": "Programs that bypass the VPN",
+  "tunProgramsHint": "They connect directly, not through Mozilla. Only for programs that work without a VPN.",
+  "tunProgramsEmpty": "No programs yet.",
+  "addProgram": "Add program",
+  "programFiles": "Programs",
+  "@programFiles": {
+    "description": "The kind of file the program picker shows (on Windows, .exe files)."
+  },
+  "tunProgramAll": "All traffic",
+  "tunProgramAllHint": "The whole program connects directly.",
+  "tunProgramUdp": "UDP only",
+  "tunProgramUdpHint": "Only its UDP connects directly; the rest goes through the VPN.",
+  "udpNoticeSetting": "Notice when UDP is blocked",
+  "udpNoticeBody": "{program} tried to make a call or play online, but in TUN mode that traffic (UDP) can't go through the VPN.",
+  "@udpNoticeBody": {
+    "description": "A card on the home page in TUN mode when a program's UDP was refused.",
+    "placeholders": {
+      "program": {
+        "type": "String",
+        "example": "Telegram"
+      }
+    }
+  },
+  "udpNoticeAction": "Send its UDP directly",
+  "dontShowAgain": "Don't show again",
+  "udpDirectAdded": "{program}: its UDP now connects directly.",
+  "@udpDirectAdded": {
+    "placeholders": {
+      "program": {
+        "type": "String",
+        "example": "Telegram"
+      }
+    }
+  },
+  "addRunningProgram": "From running programs",
+  "@addRunningProgram": {
+    "description": "TUN settings, Add program: the first of three ways (then a file, then a name)."
+  },
+  "addProgramFile": "Choose a file…",
+  "addProgramName": "Type a name…",
+  "programNameHint": "A program's file name, such as steam.exe; * stands for any text (steam* is every Steam program).",
+  "runningProgramsEmpty": "No other programs are running."
 }

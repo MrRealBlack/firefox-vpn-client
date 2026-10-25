@@ -86,6 +86,12 @@ String? updateProxy(CoreStatus? status) {
 /// home page shows it after a restart too; the computer also shows a
 /// notification while the window is in the tray. The About page looks at
 /// once, whenever asked.
+///
+/// The Windows app installs it itself (its core: core/internal/update):
+/// Update downloads it through the VPN while it runs, and the app closes
+/// and opens again as the new version. With automatic updates (on unless
+/// turned off), a version found downloads in the background and installs
+/// the next time the app starts. Elsewhere the notice opens the download.
 abstract final class Updates {
   /// How long a successful look holds.
   static const every = Duration(days: 5);
@@ -93,20 +99,181 @@ abstract final class Updates {
   /// The newer release, once one was found.
   static final available = ValueNotifier<Release?>(null);
 
+  /// The app installs a downloaded version at its start (automatic
+  /// updates) and quits in a moment, so it does not connect first.
+  static final installingAtStart = ValueNotifier<bool>(false);
+
+  /// Why the app's last request to install failed, when the core could not
+  /// say it in its status.
+  static final failure = ValueNotifier<String?>(null);
+
+  /// The notice of what the last update did was closed.
+  static final resultSeen = ValueNotifier<bool>(false);
+
+  /// Quits the app (the desktop's Quit), once an install has started.
+  static Future<void> Function()? quitApp;
+
+  /// Whether the window is in the tray: the new version starts there too.
+  static bool Function() windowHidden = () => false;
+
+  static Timer? _first;
   static Timer? _timer;
   static CoreController? _core;
   static AppSettings? _settings;
 
-  static void start(CoreController core, AppSettings settings) {
+  /// The app's arguments that its next start keeps (core/internal/update
+  /// AppArgs).
+  static List<String> _startArgs = const [];
+
+  /// The version the user asked to install: it installs once downloaded.
+  static String? _wanted;
+
+  /// Whether the first status since the start was looked at.
+  static bool _started = false;
+
+  /// The versions automatic updates asked to download in this run, so a
+  /// failed one waits for the next start.
+  static final _downloadsAsked = <String>{};
+
+  /// Starts looking. [args] are the app's own (`--autostart`, `--hidden`),
+  /// which a new version installed at the start keeps.
+  static void start(
+    CoreController core,
+    AppSettings settings, {
+    List<String> args = const [],
+  }) {
     if (githubRepo.isEmpty || _timer != null) return;
     _core = core;
     _settings = settings;
+    _startArgs = [
+      for (final a in args)
+        if (a == '--autostart' || a == '--hidden') a,
+    ];
     // A version found earlier, unless this app is already that one.
     if (newerVersion(settings.updateVersion, appVersion)) {
       available.value = Release(settings.updateVersion, settings.updateUrl);
     }
-    Timer(const Duration(minutes: 1), _due);
+    core.addListener(_onStatus);
+    _first = Timer(const Duration(minutes: 1), _due);
     _timer = Timer.periodic(const Duration(hours: 1), (_) => _due());
+  }
+
+  /// Forgets everything, for the next test.
+  @visibleForTesting
+  static void reset() {
+    _first?.cancel();
+    _timer?.cancel();
+    _core?.removeListener(_onStatus);
+    _first = _timer = _core = _settings = _wanted = null;
+    _started = false;
+    _startArgs = const [];
+    _downloadsAsked.clear();
+    available.value = null;
+    installingAtStart.value = false;
+    failure.value = null;
+    resultSeen.value = false;
+    quitApp = null;
+    windowHidden = () => false;
+  }
+
+  /// Follows the core's update: a version downloaded before installs at
+  /// the start (automatic updates), the one the user asked for once it is
+  /// downloaded, and a version found downloads by itself.
+  static void _onStatus() {
+    final core = _core, settings = _settings;
+    final update = core?.status?.update;
+    if (core == null || settings == null || update == null) return;
+    if (!_started) {
+      _started = true;
+      // Not right after an update that failed (the old version started
+      // again): the next start tries again, so a lasting failure is no loop.
+      final justFailed = update.last != null && !update.last!.ok;
+      if (settings.autoUpdate &&
+          update.ready &&
+          !justFailed &&
+          newerVersion(update.version, appVersion)) {
+        installingAtStart.value = true;
+        unawaited(
+          _install(update.version, _startArgs).then((ok) {
+            if (!ok) installingAtStart.value = false;
+          }),
+        );
+        return;
+      }
+    }
+    final wanted = _wanted;
+    if (wanted != null && update.version == wanted) {
+      if (update.ready) {
+        _wanted = null;
+        unawaited(_install(wanted, _restartArgs()));
+        return;
+      }
+      if (update.failed) _wanted = null;
+    }
+    _downloadInBackground();
+  }
+
+  /// With automatic updates, downloads the version found (once per run).
+  static void _downloadInBackground() {
+    final core = _core, settings = _settings;
+    final release = available.value;
+    final update = core?.status?.update;
+    if (core == null || settings == null || release == null || update == null) {
+      return;
+    }
+    if (!settings.autoUpdate || !newerVersion(release.version, appVersion)) {
+      return;
+    }
+    if (update.downloading || update.installing) return;
+    if (update.ready && update.version == release.version) return;
+    if (!_downloadsAsked.add(release.version)) return;
+    unawaited(
+      core.downloadUpdate(release.version).catchError((Object _) {
+        // The core's status says why.
+      }),
+    );
+  }
+
+  /// The Update button: downloads [release] when needed, then installs it;
+  /// the app closes and opens again as the new version.
+  static Future<void> update(Release release) async {
+    final core = _core;
+    if (core == null) return;
+    failure.value = null;
+    final current = core.status?.update;
+    if (current != null &&
+        current.ready &&
+        current.version == release.version) {
+      await _install(release.version, _restartArgs());
+      return;
+    }
+    _wanted = release.version;
+    try {
+      await core.downloadUpdate(release.version);
+    } on Exception catch (e) {
+      _wanted = null;
+      failure.value = '$e';
+    }
+  }
+
+  /// The arguments of the next start after an install now: in the tray if
+  /// the window is there.
+  static List<String> _restartArgs() =>
+      windowHidden() ? const ['--hidden'] : const [];
+
+  /// Asks the core to install [version], then quits the app; false when the
+  /// core refused (the reason in [failure] or the core's status).
+  static Future<bool> _install(String version, List<String> args) async {
+    final core = _core;
+    if (core == null) return false;
+    try {
+      await core.installUpdate(version, pid, args);
+    } on Exception catch (e) {
+      failure.value = '$e';
+      return false;
+    }
+    await quitApp?.call();
+    return true;
   }
 
   static Future<void> _due() async {
@@ -128,5 +295,6 @@ abstract final class Updates {
       updateVersion: release?.version ?? '',
       updateUrl: release?.url ?? '',
     );
+    _downloadInBackground();
   }
 }

@@ -927,6 +927,45 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get updateNow => '更新';
+
+  @override
+  String updateDownloading(String version) {
+    return '正在下载版本 $version…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return '版本 $version 已可安装。';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return '正在安装版本 $version，应用将关闭并重新打开。';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return '无法更新到版本 $version。';
+  }
+
+  @override
+  String updateDone(String version) {
+    return '已更新到版本 $version。';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return '更新到版本 $version 未能完成，应用已恢复到之前的版本。';
+  }
+
+  @override
+  String get autoUpdate => '自动更新';
+
+  @override
+  String get autoUpdateHint => '新版本会在后台下载，并在下次打开应用时安装。';
+
+  @override
   String get repoNotSet => '尚未设置 GitHub 仓库。';
 
   @override
@@ -1072,13 +1111,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionMode => '连接模式';
 
   @override
-  String get modeProxyHint => '仅对已设置代理的应用生效，不更改 Windows 设置。';
+  String get modeProxyHint => '仅对已设置代理的应用生效。';
 
   @override
   String get modeSystemProxyHint => 'Windows 和大多数应用都走代理。';
-
-  @override
-  String get modeProxyHintOther => '仅对已设置代理的应用生效，不更改系统设置。';
 
   @override
   String get modeSystemProxyHintOther => '浏览器和大多数应用都走代理。';
@@ -1183,6 +1219,152 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => '重新设置';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return '$os 的所有流量都走 VPN。';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting => '正在等待安装 TUN 服务的许可…';
+
+  @override
+  String get tunInstallCancelled => 'TUN 模式需要一次管理员权限。未获得权限，模式未更改。';
+
+  @override
+  String tunInstallFailed(String error) {
+    return '无法安装 TUN 服务：$error';
+  }
+
+  @override
+  String get tunStarting => '正在开启 TUN 模式…';
+
+  @override
+  String get tunFailed => 'TUN 模式未能开启，正在重试…';
+
+  @override
+  String get tunLost => 'TUN 模式意外停止，正在重试…';
+
+  @override
+  String get tunNotRunning => 'TUN 服务未在运行，正在重试…';
+
+  @override
+  String get tunMissing => 'TUN 服务未安装。';
+
+  @override
+  String get tunOutdated => 'TUN 服务比此应用旧。请重新安装以使用 TUN 模式。';
+
+  @override
+  String get tunAppOutdated => 'TUN 服务比此应用新。请更新应用以使用 TUN 模式。';
+
+  @override
+  String get tunBusy => '另一个 Firefox VPN 副本正在使用 TUN 模式。';
+
+  @override
+  String get tunInstall => '安装';
+
+  @override
+  String get tunInstallAgain => '重新安装';
+
+  @override
+  String get trayTunMode => 'TUN 模式（所有应用）';
+
+  @override
+  String get removeTunService => '移除 TUN 服务';
+
+  @override
+  String get removeTunServiceHint => '移除 TUN 模式使用的系统服务。再次选择 TUN 时会重新安装。';
+
+  @override
+  String get tunServiceRemoved => '已移除 TUN 服务。';
+
+  @override
+  String get tunInstallPrompt => 'Firefox VPN 想要安装 TUN 模式的服务。';
+
+  @override
+  String get tunRemovePrompt => 'Firefox VPN 想要移除 TUN 模式的服务。';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return '无法移除 TUN 服务：$error';
+  }
+
+  @override
+  String get sectionTun => 'TUN 设置';
+
+  @override
+  String get tunPrograms => '绕过 VPN 的程序';
+
+  @override
+  String get tunProgramsHint => '它们直连，不经过 Mozilla。仅适用于不用 VPN 也能正常工作的程序。';
+
+  @override
+  String get tunProgramsEmpty => '还没有程序。';
+
+  @override
+  String get addProgram => '添加程序';
+
+  @override
+  String get programFiles => '程序';
+
+  @override
+  String get tunProgramAll => '全部流量';
+
+  @override
+  String get tunProgramAllHint => '整个程序直连。';
+
+  @override
+  String get tunProgramUdp => '仅 UDP';
+
+  @override
+  String get tunProgramUdpHint => '仅其 UDP 直连；其余流量走 VPN。';
+
+  @override
+  String get udpNoticeSetting => 'UDP 被拦截时提示';
+
+  @override
+  String udpNoticeBody(String program) {
+    return '$program 试图拨打电话或在线游戏，但在 TUN 模式下这类流量（UDP）无法经过 VPN。';
+  }
+
+  @override
+  String get udpNoticeAction => '让它的 UDP 直连';
+
+  @override
+  String get dontShowAgain => '不再显示';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program：其 UDP 现在直连。';
+  }
+
+  @override
+  String get addRunningProgram => '从正在运行的程序中选择';
+
+  @override
+  String get addProgramFile => '选择文件…';
+
+  @override
+  String get addProgramName => '输入名称…';
+
+  @override
+  String get programNameHint =>
+      '程序的文件名，例如 steam.exe；* 代表任意文字（steam* 即 Steam 的所有程序）。';
+
+  @override
+  String get runningProgramsEmpty => '没有其他正在运行的程序。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -2105,6 +2287,45 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
+  String get updateNow => '更新';
+
+  @override
+  String updateDownloading(String version) {
+    return '正在下載版本 $version…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return '版本 $version 已可安裝。';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return '正在安裝版本 $version，應用程式將關閉並重新開啟。';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return '無法更新至版本 $version。';
+  }
+
+  @override
+  String updateDone(String version) {
+    return '已更新至版本 $version。';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return '更新至版本 $version 未能完成，應用程式已恢復為先前的版本。';
+  }
+
+  @override
+  String get autoUpdate => '自動更新';
+
+  @override
+  String get autoUpdateHint => '新版本會在背景下載，並在下次開啟應用程式時安裝。';
+
+  @override
   String get repoNotSet => '尚未設定 GitHub 儲存庫。';
 
   @override
@@ -2250,13 +2471,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get connectionMode => '連線模式';
 
   @override
-  String get modeProxyHint => '只有已設定使用代理的應用程式會經過代理；不會變更 Windows 設定。';
+  String get modeProxyHint => '只有已設定使用代理的應用程式會經過代理。';
 
   @override
   String get modeSystemProxyHint => 'Windows 和大多數應用程式都會經過代理。';
-
-  @override
-  String get modeProxyHintOther => '只有已設定使用代理的應用程式會經過代理；不會變更系統設定。';
 
   @override
   String get modeSystemProxyHintOther => '瀏覽器和大多數應用程式都會經過代理。';
@@ -2364,4 +2582,150 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get setSystemProxyAgain => '重新設定';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return '$os 的所有流量都會經過 VPN。';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting => '正在等待安裝 TUN 服務的許可…';
+
+  @override
+  String get tunInstallCancelled => 'TUN 模式需要一次系統管理員權限。未取得權限，模式未變更。';
+
+  @override
+  String tunInstallFailed(String error) {
+    return '無法安裝 TUN 服務：$error';
+  }
+
+  @override
+  String get tunStarting => '正在開啟 TUN 模式…';
+
+  @override
+  String get tunFailed => 'TUN 模式未能開啟，正在重試…';
+
+  @override
+  String get tunLost => 'TUN 模式意外停止，正在重試…';
+
+  @override
+  String get tunNotRunning => 'TUN 服務未在執行，正在重試…';
+
+  @override
+  String get tunMissing => 'TUN 服務未安裝。';
+
+  @override
+  String get tunOutdated => 'TUN 服務比此應用程式舊。請重新安裝以使用 TUN 模式。';
+
+  @override
+  String get tunAppOutdated => 'TUN 服務比此應用程式新。請更新應用程式以使用 TUN 模式。';
+
+  @override
+  String get tunBusy => '另一個 Firefox VPN 副本正在使用 TUN 模式。';
+
+  @override
+  String get tunInstall => '安裝';
+
+  @override
+  String get tunInstallAgain => '重新安裝';
+
+  @override
+  String get trayTunMode => 'TUN 模式（所有應用程式）';
+
+  @override
+  String get removeTunService => '移除 TUN 服務';
+
+  @override
+  String get removeTunServiceHint => '移除 TUN 模式使用的系統服務。再次選擇 TUN 時會重新安裝。';
+
+  @override
+  String get tunServiceRemoved => '已移除 TUN 服務。';
+
+  @override
+  String get tunInstallPrompt => 'Firefox VPN 想要安裝 TUN 模式的服務。';
+
+  @override
+  String get tunRemovePrompt => 'Firefox VPN 想要移除 TUN 模式的服務。';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return '無法移除 TUN 服務：$error';
+  }
+
+  @override
+  String get sectionTun => 'TUN 設定';
+
+  @override
+  String get tunPrograms => '繞過 VPN 的程式';
+
+  @override
+  String get tunProgramsHint => '它們直接連線，不經過 Mozilla。僅適用於不用 VPN 也能正常運作的程式。';
+
+  @override
+  String get tunProgramsEmpty => '還沒有程式。';
+
+  @override
+  String get addProgram => '新增程式';
+
+  @override
+  String get programFiles => '程式';
+
+  @override
+  String get tunProgramAll => '全部流量';
+
+  @override
+  String get tunProgramAllHint => '整個程式直接連線。';
+
+  @override
+  String get tunProgramUdp => '僅 UDP';
+
+  @override
+  String get tunProgramUdpHint => '僅其 UDP 直接連線；其餘流量經過 VPN。';
+
+  @override
+  String get udpNoticeSetting => 'UDP 被封鎖時提示';
+
+  @override
+  String udpNoticeBody(String program) {
+    return '$program 試圖撥打電話或線上遊戲，但在 TUN 模式下這類流量（UDP）無法經過 VPN。';
+  }
+
+  @override
+  String get udpNoticeAction => '讓它的 UDP 直接連線';
+
+  @override
+  String get dontShowAgain => '不再顯示';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program：其 UDP 現在直接連線。';
+  }
+
+  @override
+  String get addRunningProgram => '從正在執行的程式中選擇';
+
+  @override
+  String get addProgramFile => '選擇檔案…';
+
+  @override
+  String get addProgramName => '輸入名稱…';
+
+  @override
+  String get programNameHint =>
+      '程式的檔案名稱，例如 steam.exe；* 代表任意文字（steam* 即 Steam 的所有程式）。';
+
+  @override
+  String get runningProgramsEmpty => '沒有其他正在執行的程式。';
 }

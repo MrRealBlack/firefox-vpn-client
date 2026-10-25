@@ -43,8 +43,10 @@ type proxyEngine struct {
 	idle       idleState
 	// routed is what clients connect through: the controller, or directly
 	// for destinations the routing rules send there.
-	routed    *proxy.RoutedOpener
-	listener  net.Listener
+	routed   *proxy.RoutedOpener
+	listener net.Listener
+	// tunSOCKS serves the TUN listener's connections (tun.go).
+	tunSOCKS  *proxy.SOCKSServer
 	transport string
 	// fellBackToH2 is set when HTTP/3 was configured but did not connect,
 	// so the engine uses HTTP/2 (connectEngine).
@@ -111,6 +113,12 @@ func (d *Daemon) startEngine() (*proxyEngine, error) {
 		logx.Warn("the SOCKS5 proxy is reachable from other devices without a password; set proxy.username and proxy.password listen=%s", cfg.Proxy.Listen)
 	}
 	go proxy.ServeSOCKS(ln, socks)
+	tunUser, tunPassword := d.tunCredentials()
+	tunSOCKS := proxy.NewSOCKSServer(routed, config.HandshakeTimeout, config.IdleTimeout, tunMaxConnections)
+	tunSOCKS.Auth = proxy.SOCKSCredentials(tunUser, tunPassword)
+	tunSOCKS.Notices = d.notices
+	tunSOCKS.Allow = d.TunnelAllows
+	engine.tunSOCKS = tunSOCKS
 	if err := proxy.WriteIdleStatus(engine.statusFile, proxy.StatusSleeping); err != nil {
 		logx.Warn("writing status file failed path=%s err=%s", engine.statusFile, logx.Err(err))
 	}

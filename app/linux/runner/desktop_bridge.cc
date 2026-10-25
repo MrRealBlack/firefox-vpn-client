@@ -249,11 +249,34 @@ static void set_autostart(DesktopBridge* self, bool enabled,
   g_file_set_contents(path, entry, -1, nullptr);
 }
 
+// The program the user picks in the system's open dialog (the desktop's
+// portal where it has one), or null when the dialog is cancelled.
+static FlValue* pick_program(DesktopBridge* self, const gchar* title) {
+  GtkFileChooserNative* chooser = gtk_file_chooser_native_new(
+      title, self->window, GTK_FILE_CHOOSER_ACTION_OPEN, nullptr, nullptr);
+  FlValue* picked = nullptr;
+  if (gtk_native_dialog_run(GTK_NATIVE_DIALOG(chooser)) ==
+      GTK_RESPONSE_ACCEPT) {
+    g_autofree gchar* path =
+        gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
+    if (path) {
+      picked = fl_value_new_string(path);
+    }
+  }
+  g_object_unref(chooser);
+  return picked ? picked : fl_value_new_null();
+}
+
 static void method_call_cb(FlMethodChannel*, FlMethodCall* call,
                            gpointer user_data) {
   auto* self = static_cast<DesktopBridge*>(user_data);
   const gchar* name = fl_method_call_get_name(call);
   FlValue* args = fl_method_call_get_args(call);
+  if (strcmp(name, "pickProgram") == 0) {
+    g_autoptr(FlValue) picked = pick_program(self, string_arg(args, "title"));
+    fl_method_call_respond_success(call, picked, nullptr);
+    return;
+  }
   if (strcmp(name, "setTray") == 0) {
     set_tray(self, args);
   } else if (strcmp(name, "notify") == 0) {

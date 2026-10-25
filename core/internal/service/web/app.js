@@ -584,6 +584,7 @@ function renderStatus() {
 const NOTICE_TEXT = {
   port: (n) => [`Mozilla's proxy refused port ${n.detail}`, "It connects to ports 80, 443, 8080, and 8443 only; sites on other ports do not open through it.", "help-ports"],
   command: (n) => [`An application asked for ${n.detail}`, "Mozilla's proxy carries TCP connections only; games, calls, and other UDP traffic do not go through it.", "help-udp"],
+  loop: () => ["This program's own connections come back to it", "Another program sends this program's traffic into its proxy, so nothing connects: in PassWall2, turn Localhost Proxy off.", "help-loop"],
 };
 
 function noticeKey(n) {

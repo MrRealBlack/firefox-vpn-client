@@ -8,7 +8,8 @@
 // "app/desktop"), as windows/runner/desktop_bridge.cpp on Windows: the
 // window's close button, the tray icon (AppIndicator, loaded at run time;
 // without it "hide" minimizes the window instead), notifications (the
-// desktop's notification service over D-Bus), and the XDG autostart entry.
+// desktop's notification service over D-Bus), the XDG autostart entry, and
+// the open dialog for a program (pickProgram).
 typedef struct _DesktopBridge DesktopBridge;
 
 DesktopBridge* desktop_bridge_new(FlView* view, GtkWindow* window);

@@ -22,6 +22,7 @@ import (
 	"github.com/armanlife/firefox-vpn-client/core/internal/routing"
 	"github.com/armanlife/firefox-vpn-client/core/internal/securefile"
 	"github.com/armanlife/firefox-vpn-client/core/internal/serverlist"
+	"github.com/armanlife/firefox-vpn-client/core/internal/update"
 	"github.com/armanlife/firefox-vpn-client/core/internal/version"
 )
 
@@ -143,6 +144,30 @@ type Daemon struct {
 	// SystemProxySupported: the process hosting this daemon sets the
 	// system proxy (the Linux desktop app; Windows always can).
 	SystemProxySupported bool
+	// TunSupported: the process hosting this daemon runs the TUN mode
+	// (system_proxy.mode "tun"; the desktop app's core on Windows).
+	TunSupported bool
+	// TunInstalled reports whether the TUN service is installed, for the
+	// status.
+	TunInstalled func() bool
+	// RunningPrograms lists the programs running on this computer, for
+	// the TUN settings' choice of programs that skip the VPN
+	// (GET /api/tun/programs); nil where there is none to make (only the
+	// desktop app's core on Windows and Linux lists them).
+	RunningPrograms func() ([]RunningProgram, error)
+	// Updater installs new versions of the desktop app (update.go); nil
+	// when this copy does not update itself (not the Windows app's core).
+	Updater *update.Manager
+	// tun is the TUN mode's listener and state (tun.go).
+	tun struct {
+		mu             sync.Mutex
+		listener       net.Listener
+		status         *TunStatus
+		user, password string
+		// refusedUDP is the last program whose UDP the running TUN refused,
+		// and refusedUDPPath its executable.
+		refusedUDP, refusedUDPPath string
+	}
 	// folderRequests counts requests to open the data folder; the tray
 	// opens it when the count in the status rises.
 	folderRequests atomic.Uint64
@@ -280,6 +305,7 @@ func (d *Daemon) Run() error {
 	go d.runRoutingUpdates()
 	go d.watchNetwork()
 	d.superviseEngine()
+	d.CloseTunListener()
 	if d.dashboard != nil {
 		d.dashboard.close()
 	}
@@ -929,6 +955,7 @@ func (d *Daemon) updateSettings(next config.Config, newPassword *string) (settin
 	if dashboardExposedWithoutLogin(next) {
 		return settingsChange{}, errors.New("set a dashboard username and password before opening the dashboard to other devices")
 	}
+	next.Tun.Programs = config.CleanTunPrograms(next.Tun.Programs)
 	// Another region: its preset rules replace the old region's in the
 	// Direct list; the user's own rules stay.
 	if next.Routing.Region != prev.Routing.Region {

@@ -9,9 +9,16 @@
 ; Mozilla's own client). The first install lets the user choose another
 ; folder; it must be one the user can write to, because the app keeps its
 ; data (accounts, settings, logs) in user-data beside it. A new version
-; installs over the old one, in the same folder, and keeps user-data. An
-; uninstall that keeps the data notes its folder, which the next install
-; offers again.
+; installs over the old one, in the same folder, and keeps user-data; the
+; app also updates itself (core\internal\update): it replaces its files with
+; a new version's and sets the version this Setup's entry in Windows' list
+; of installed apps shows (AppId). An uninstall that keeps the data notes
+; its folder, which the next install offers again.
+;
+; The TUN mode's service is the one part that needs administrator rights:
+; a checked task runs core\firefox-vpn-tun.exe install, which asks for them
+; itself and installs the service in Program Files; the uninstall removes it
+; again.
 
 #define AppName "Firefox VPN"
 #define AppExe "firefox-vpn.exe"
@@ -30,7 +37,8 @@
 #endif
 
 [Setup]
-; The same id in every version, so a new one replaces the old.
+; The same id in every version, so a new one replaces the old; the app's
+; own update finds this Setup's entry by it (core\internal\update).
 AppId={{6F3A2C1E-9B4D-4E7A-8C21-5D0F7B9E4A63}
 AppName={#AppName}
 AppVersion={#AppVersion}
@@ -147,8 +155,26 @@ pt.DirNotWritable=O Firefox VPN não consegue gravar nesta pasta. Ele guarda sua
 vi.DirNotWritable=Firefox VPN không thể ghi vào thư mục này. Tài khoản và cài đặt của bạn được lưu ngay cạnh ứng dụng, nên cần một thư mục bạn có thể thay đổi mà không cần quyền quản trị (không phải Program Files). Hãy chọn thư mục khác.
 bn.DirNotWritable=Firefox VPN এই ফোল্ডারে লিখতে পারছে না। আপনার অ্যাকাউন্ট ও সেটিংস অ্যাপের পাশেই রাখা হয়, তাই এমন একটি ফোল্ডার দরকার যা অ্যাডমিনিস্ট্রেটর অনুমতি ছাড়াই বদলানো যায় (Program Files নয়)। অন্য একটি ফোল্ডার বেছে নিন।
 
+; The TUN mode's service (core\firefox-vpn-tun.exe), installed with its own
+; administrator prompt; checked by default. Not offered when it is installed
+; already: an installed service updates itself from the app's copy.
+TunTask=Install the service for TUN mode (asks for administrator permission)
+fa.TunTask=نصب سرویس حالت TUN (اجازه Administrator لازم است)
+ar.TunTask=تثبيت خدمة وضع TUN (يطلب إذن المسؤول)
+ru.TunTask=Установить службу для режима TUN (потребуется разрешение администратора)
+tr.TunTask=TUN modu için hizmeti yükle (yönetici izni ister)
+az.TunTask=TUN rejimi üçün xidməti quraşdır (administrator icazəsi tələb edir)
+id.TunTask=Pasang layanan untuk mode TUN (meminta izin administrator)
+es.TunTask=Instalar el servicio del modo TUN (pide permiso de administrador)
+fr.TunTask=Installer le service du mode TUN (demande l'autorisation administrateur)
+hu.TunTask=A TUN mód szolgáltatásának telepítése (rendszergazdai engedélyt kér)
+pt.TunTask=Instalar o serviço do modo TUN (pede permissão de administrador)
+vi.TunTask=Cài đặt dịch vụ cho chế độ TUN (cần quyền quản trị)
+bn.TunTask=TUN মোডের সার্ভিস ইনস্টল করুন (অ্যাডমিনিস্ট্রেটর অনুমতি চায়)
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "tun"; Description: "{cm:TunTask}"; Check: not TunServiceInstalled
 
 ; Versions before 1.1.2 kept the core beside the app; it is in core\ now.
 [InstallDelete]
@@ -163,7 +189,26 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]
+; Not in a silent run: no prompt there, and an installed service updates
+; itself from the app.
+Filename: "{app}\core\firefox-vpn-tun.exe"; Parameters: "install"; Tasks: tun; Flags: waituntilterminated skipifsilent; Check: not TunServiceInstalled
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+; The TUN service goes with the app: through its pipe, with no prompt while
+; it runs; it does nothing when the service is not installed.
+[UninstallRun]
+Filename: "{app}\core\firefox-vpn-tun.exe"; Parameters: "uninstall"; Flags: waituntilterminated; RunOnceId: "RemoveTunService"
+
+; The app updates itself (core\internal\update) by replacing its files, so
+; this uninstaller does not know every file a later version brought: the
+; app's own files and folders go, whichever version put them there.
+; user-data stays for the question below.
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\core"
+Type: filesandordirs; Name: "{app}\data"
+Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\{#AppExe}"
+Type: files; Name: "{app}\native_assets.json"
 
 [Code]
 const
@@ -180,6 +225,13 @@ begin
   if not RegQueryStringValue(HKCU, KeptKey, KeptValue, Result) or
      not DirExists(AddBackslash(Result) + 'user-data') then
     Result := ExpandConstant('{localappdata}\Programs\{#AppDir}');
+end;
+
+// TunServiceInstalled tells whether the TUN mode's Windows service is
+// installed (core\cmd\firefox-vpn-tun).
+function TunServiceInstalled: Boolean;
+begin
+  Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\FirefoxVPNTun');
 end;
 
 // IsUnder tells whether Dir is Parent or a folder inside it.

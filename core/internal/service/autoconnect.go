@@ -47,7 +47,10 @@ var autoConnectProbe = func(d *Daemon) bool {
 // connection test (see above).
 func (d *Daemon) AutoConnect() {
 	cfg := d.config()
-	holds := cfg.SystemProxy.Mode == config.SystemProxySet && d.systemProxyApplies()
+	// The TUN, which takes every app's traffic, waits like the system
+	// proxy.
+	holds := (cfg.SystemProxy.Mode == config.SystemProxySet && d.systemProxyApplies()) ||
+		(cfg.SystemProxy.Mode == config.SystemProxyTun && d.TunSupported)
 	d.mu.Lock()
 	d.autoConnect = nil
 	var attempt chan struct{}
@@ -117,7 +120,7 @@ func (d *Daemon) runAutoConnect(attempt chan struct{}) {
 				d.autoConnect = nil
 			}
 			d.mu.Unlock()
-			logx.Info("auto-connect: connected; the system proxy is set")
+			logx.Info("auto-connect: connected; the system proxy or the TUN follows")
 			return
 		}
 		failures++

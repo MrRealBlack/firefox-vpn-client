@@ -14,6 +14,9 @@ const (
 	// NoticeCommand is a SOCKS command other than CONNECT, such as UDP
 	// ASSOCIATE; Detail names it.
 	NoticeCommand = "command"
+	// NoticeLoop is this program's own connections coming back to its
+	// proxy as a client's (loopWatch); Detail is empty.
+	NoticeLoop = "loop"
 )
 
 // maxNotices bounds the distinct notices kept; maxNoticeHosts the

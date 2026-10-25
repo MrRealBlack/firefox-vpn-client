@@ -10,6 +10,7 @@ import 'core/core_controller.dart';
 import 'core/updates.dart';
 import 'core/core_process.dart';
 import 'core/ports.dart';
+import 'core/tun_service.dart';
 import 'desktop/desktop_integration.dart';
 import 'ui/app.dart';
 
@@ -34,21 +35,28 @@ Future<void> main(List<String> args) async {
       process.retryNow();
     },
     retryStoppedCore: () async => process.retryNow(),
+    // The TUN mode's service, beside the core.
+    tunService: Platform.isWindows || Platform.isLinux || Platform.isMacOS
+        ? TunService.besideCore(process.executable)
+        : null,
   )..start();
   // Back in front: the core tries again at once, not after a wait.
   AppLifecycleListener(onResume: core.retryNow);
   final navigatorKey = GlobalKey<NavigatorState>();
+  // Before the desktop's: a version installed at the start goes first.
+  Updates.start(core, settings, args: args);
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     DesktopIntegration(
       core: core,
       settings: settings,
       process: process,
       navigatorKey: navigatorKey,
-      startHidden: args.contains('--autostart'),
+      // --hidden: a new version that its update started in the tray.
+      startHidden: args.contains('--autostart') || args.contains('--hidden'),
+      autostarted: args.contains('--autostart'),
       manageAutostart: !args.any((a) => a.startsWith('--data-dir=')),
     ).start();
   }
-  Updates.start(core, settings);
   runApp(VpnApp(core: core, settings: settings, navigatorKey: navigatorKey));
 }
 

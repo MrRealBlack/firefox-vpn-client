@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -161,14 +163,14 @@ func TestLoadIgnoresAllowLocked(t *testing.T) {
 	}
 }
 
-// The system proxy has two modes, set and clear (the default: proxy
-// only); anything else is refused with the accepted values.
+// The connection modes are set, clear (the default: proxy only), and tun;
+// anything else is refused with the accepted values.
 func TestSystemProxyModes(t *testing.T) {
 	cfg := Default()
 	if cfg.SystemProxy.Mode != SystemProxyClear {
 		t.Fatalf("default system proxy mode %q", cfg.SystemProxy.Mode)
 	}
-	for _, mode := range []string{SystemProxySet, SystemProxyClear} {
+	for _, mode := range []string{SystemProxySet, SystemProxyClear, SystemProxyTun} {
 		cfg.SystemProxy.Mode = mode
 		if err := cfg.Validate(); err != nil {
 			t.Errorf("mode %q: %v", mode, err)
@@ -177,9 +179,60 @@ func TestSystemProxyModes(t *testing.T) {
 	for _, mode := range []string{"pac", "unchanged", "", "Set"} {
 		cfg.SystemProxy.Mode = mode
 		err := cfg.Validate()
-		if err == nil || !strings.Contains(err.Error(), "system_proxy.mode") || !strings.Contains(err.Error(), `"set" or "clear"`) {
+		if err == nil || !strings.Contains(err.Error(), "system_proxy.mode") || !strings.Contains(err.Error(), `"set", "clear", or "tun"`) {
 			t.Errorf("mode %q must be refused naming the accepted values: %v", mode, err)
 		}
+	}
+}
+
+// The programs that skip the VPN start empty; a file's are kept by their
+// file name, once each, and a path in one is refused.
+func TestTunProgramsAreFileNames(t *testing.T) {
+	if p := Default().Tun.Programs; p == nil || len(p) != 0 {
+		t.Fatalf("default tun.programs %#v", p)
+	}
+	got := CleanTunPrograms([]TunProgram{
+		{Name: ` C:\Games\Steam\steam.exe `},
+		{Name: "STEAM.EXE", UDPOnly: true},
+		{Name: "/usr/bin/telegram-desktop", UDPOnly: true},
+		{Name: "  "},
+	})
+	want := []TunProgram{{Name: "steam.exe", Path: `C:\Games\Steam\steam.exe`}, {Name: "telegram-desktop", UDPOnly: true, Path: "/usr/bin/telegram-desktop"}}
+	if !slices.Equal(got, want) {
+		t.Fatalf("cleaned %+v, want %+v", got, want)
+	}
+	if got := CleanTunPrograms(nil); got == nil || len(got) != 0 {
+		t.Fatalf("cleaned nil to %#v", got)
+	}
+
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"tun":{"programs":[{"name":"D:\\Apps\\Discord.exe","udp_only":true},{"name":"discord.exe"}]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []TunProgram{{Name: "Discord.exe", UDPOnly: true, Path: `D:\Apps\Discord.exe`}}; !slices.Equal(cfg.Tun.Programs, want) {
+		t.Fatalf("loaded %+v, want %+v", cfg.Tun.Programs, want)
+	}
+	// A pattern with * or ? is a name too.
+	cfg.Tun.Programs = []TunProgram{{Name: "steam*", UDPOnly: true}, {Name: "tele?ram.exe"}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("patterns: %v", err)
+	}
+	for _, bad := range []TunProgram{{Name: `a\b.exe`}, {Name: ""}, {Name: strings.Repeat("x", 256)}} {
+		cfg.Tun.Programs = []TunProgram{bad}
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "tun.programs") {
+			t.Errorf("%q: %v", bad.Name, err)
+		}
+	}
+	cfg.Tun.Programs = make([]TunProgram, MaxTunPrograms+1)
+	for i := range cfg.Tun.Programs {
+		cfg.Tun.Programs[i].Name = fmt.Sprintf("p%d.exe", i)
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Error("more programs than allowed were taken")
 	}
 }
 

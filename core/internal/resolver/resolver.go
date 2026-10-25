@@ -20,6 +20,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/armanlife/firefox-vpn-client/core/internal/egress"
 )
 
 const (
@@ -254,7 +256,7 @@ func clampTTL(ttl time.Duration) time.Duration {
 }
 
 func systemLookup(ctx context.Context, host string) (Result, error) {
-	addrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	addrs, err := egress.LookupNetIP(ctx, host)
 	if err != nil {
 		return Result{}, err
 	}
@@ -267,7 +269,7 @@ func systemLookup(ctx context.Context, host string) (Result, error) {
 // DialContext resolves the host of address and connects to its addresses
 // in turn.
 func (r *Resolver) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	var d net.Dialer
+	d := egress.Dialer(0)
 	if r.System() {
 		return d.DialContext(ctx, network, address)
 	}
@@ -345,7 +347,7 @@ func newStreamServer(kind, host, port string) *streamServer {
 	s := &streamServer{kind: kind, host: host, port: port}
 	addr := net.JoinHostPort(host, port)
 	s.r = &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-		var d net.Dialer
+		d := egress.Dialer(0)
 		switch kind {
 		case "tls":
 			// A TLS connection is a stream, so Go's resolver uses TCP

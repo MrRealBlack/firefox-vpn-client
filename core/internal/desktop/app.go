@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 	"github.com/armanlife/firefox-vpn-client/core/internal/service"
+	"github.com/armanlife/firefox-vpn-client/core/internal/update"
+	"github.com/armanlife/firefox-vpn-client/core/internal/version"
 )
 
 // The app mode (-app) is the core process of the desktop app: the app
@@ -145,6 +148,34 @@ func RunApp(paths service.DataPaths, verbose bool) error {
 	// The app starts with the proxy off, and so without the system proxy:
 	// it connects when the user presses the button (POST /api/power).
 	d.Off()
+	bundledTun, tunOK := tunAvailable()
+	d.TunSupported = tunOK
+	d.TunInstalled = func() bool {
+		installed, _ := tunInstalled()
+		return installed
+	}
+	if tunOK && listsPrograms {
+		d.RunningPrograms = runningPrograms
+	}
+	// The app's own updates (Windows): this core is core\ in the app's
+	// folder. After an update, an older TUN service updates itself.
+	refreshTun := false
+	if exe, err := os.Executable(); err == nil {
+		appDir := filepath.Dir(filepath.Dir(exe))
+		if why := update.Supported(appDir, paths.Dir, version.Current); why == "" {
+			d.Updater = update.New(update.Options{DataDir: paths.Dir, AppDir: appDir, Current: version.Current, Transports: d.UpdateTransports})
+			last := d.Updater.Status().Last
+			refreshTun = last != nil && last.OK
+			if last != nil && last.On {
+				// The proxy was on before the update (or the update that
+				// did not install): on again, as at a start with the
+				// computer.
+				d.AutoConnect()
+			}
+		} else {
+			logx.Info("app: the app's updates are downloaded by hand: %s", why)
+		}
+	}
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
@@ -185,7 +216,19 @@ func RunApp(paths service.DataPaths, verbose bool) error {
 	defer stopEnd()
 	return runHosted(d, stop.ch,
 		func(ctx context.Context) {
+			// The TUN closes before the service stops (runHosted waits for
+			// this function), so the core's connections never fall into it.
+			tunDone := make(chan struct{})
+			go func() {
+				defer close(tunDone)
+				if d.TunSupported {
+					sync := newTunSync(d, bundledTun)
+					sync.refresh = refreshTun
+					sync.run(ctx)
+				}
+			}()
 			sysproxy.follow(ctx, func() (service.TrayStatus, error) { return pollStatus(client) }, appPollInterval)
+			<-tunDone
 		},
 		cleanup)
 }

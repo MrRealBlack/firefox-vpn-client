@@ -109,12 +109,14 @@ func (d *Daemon) DirectApps() []string {
 	return routing.ReadAppList(d.paths.RoutingDir, cfg.Region)
 }
 
-// TunnelAllows reports whether the phone's VPN sends a connection to
-// host:port to the proxy: a port Mozilla's proxy carries, or a destination
-// the routing sends directly (any port). Others are refused at once rather
-// than tried: Mozilla would refuse them, and they must not go out directly.
+// TunnelAllows reports whether the VPN (the phone's, or the computer's TUN
+// mode) sends a connection to host:port to the proxy: a port Mozilla's
+// proxy carries (and GitHub's SSH, which goes to its HTTPS port), or a
+// destination the routing sends directly (any port). Others are refused at
+// once rather than tried: Mozilla would refuse them, and they must not go
+// out directly.
 func (d *Daemon) TunnelAllows(host, port string) bool {
-	if proxy.PortAllowed(port) {
+	if proxy.Carried(host, port) {
 		return true
 	}
 	r := d.currentRouter()
@@ -277,7 +279,11 @@ func (d *Daemon) testDestination(ctx context.Context, host, port string) destina
 		decision := router.Explain(ctx, host, lookup)
 		out.Route, out.Rule, out.Resolved = decision.Action.String(), decision.Rule, decision.Resolved
 	}
-	if out.Route == routing.Proxy.String() && port != "" && !proxy.PortAllowed(port) {
+	switch {
+	case out.Route != routing.Proxy.String() || port == "" || proxy.PortAllowed(port):
+	case port == proxy.DNSPort:
+		out.Note = strings.TrimSpace(out.Note + " DNS to port 53 is answered by this program, with DNS over HTTPS through Mozilla.")
+	default:
 		out.PortRefused = true
 	}
 	return out

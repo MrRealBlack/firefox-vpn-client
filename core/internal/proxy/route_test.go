@@ -213,7 +213,7 @@ func TestDirectRouteRefusesThisMachineForOtherDevices(t *testing.T) {
 		}
 	}()
 	for _, addr := range []string{ln.Addr().String(), "[::1]:1", "0.0.0.0:1", "169.254.169.254:80", "[fe80::1]:80"} {
-		conn, err := remoteDirectDialer.DialContext(context.Background(), "tcp", addr)
+		conn, err := remoteDirectDial(context.Background(), "tcp", addr)
 		if err == nil {
 			conn.Close()
 			t.Fatalf("a direct route for another device reached %s", addr)
@@ -222,7 +222,7 @@ func TestDirectRouteRefusesThisMachineForOtherDevices(t *testing.T) {
 			t.Fatalf("%s: want ErrThisMachine, got %v", addr, err)
 		}
 	}
-	conn, err := directDialer.DialContext(context.Background(), "tcp", ln.Addr().String())
+	conn, err := directDial(context.Background(), "tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatalf("a client on this machine may reach it: %v", err)
 	}

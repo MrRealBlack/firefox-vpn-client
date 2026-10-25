@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/armanlife/firefox-vpn-client/core/internal/egress"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 	"github.com/armanlife/firefox-vpn-client/core/internal/resolver"
 	"github.com/armanlife/firefox-vpn-client/core/internal/routing"
@@ -45,21 +46,37 @@ type RoutedOpener struct {
 	dial, dialRemote func(ctx context.Context, network, address string) (net.Conn, error)
 	// lookup resolves names for the router's IP rules (routing
 	// resolve_domains) through Mozilla; tests replace it.
-	lookup                   routing.LookupFunc
+	lookup routing.LookupFunc
+	// exchange answers the DNS a client sends through the proxy, which
+	// Mozilla does not carry (DNSPort), with DNS over HTTPS through
+	// Mozilla; tests replace it.
+	exchange                 ExchangeFunc
+	dnsNoted                 atomic.Bool
 	proxied, direct, blocked atomic.Int64
 	meter                    *trafficMeter
 }
 
-// directDialer opens the connections routed directly with the local
+// directDial opens the connections routed directly with the local
 // network's own DNS, not dns.servers: they go to the local country's
 // sites, whose names its DNS answers best (with the nearest servers), and a
-// filtering DNS only hijacks foreign names. remoteDirectDialer does the same
-// for clients on other devices, but never connects to this machine itself
-// (refuseThisMachine).
-var (
-	directDialer       = &net.Dialer{}
-	remoteDirectDialer = &net.Dialer{Control: refuseThisMachine}
-)
+// filtering DNS only hijacks foreign names. While the TUN mode runs, both
+// the connection and the DNS go outside the TUN adapter (egress).
+// remoteDirectDial does the same for clients on other devices, but never
+// connects to this machine itself (refuseThisMachine).
+func directDial(ctx context.Context, network, address string) (net.Conn, error) {
+	return egress.ClientDialer(0).DialContext(ctx, network, address)
+}
+
+func remoteDirectDial(ctx context.Context, network, address string) (net.Conn, error) {
+	d := egress.ClientDialer(0)
+	d.Control = func(network, address string, c syscall.RawConn) error {
+		if err := refuseThisMachine(network, address, c); err != nil {
+			return err
+		}
+		return egress.Control(network, address, c)
+	}
+	return d.DialContext(ctx, network, address)
+}
 
 // refuseThisMachine keeps clients on other devices, when the proxy is
 // shared, off this machine's own services (the dashboard among them) and
@@ -94,7 +111,7 @@ func remoteClient(clientKey string) bool {
 // NewRoutedOpener routes the tunnels of upstream; Close stops its speed
 // sampling.
 func NewRoutedOpener(upstream tunnelOpener) *RoutedOpener {
-	o := &RoutedOpener{upstream: upstream, dial: directDialer.DialContext, dialRemote: remoteDirectDialer.DialContext, meter: newTrafficMeter()}
+	o := &RoutedOpener{upstream: upstream, dial: directDial, dialRemote: remoteDirectDial, meter: newTrafficMeter()}
 	// Names are looked up with DNS over HTTPS inside tunnels through
 	// Mozilla: the local network's DNS may be filtered and answer a
 	// blocked name with its block page's address (10.10.34.35 in Iran),
@@ -107,6 +124,7 @@ func NewRoutedOpener(upstream tunnelOpener) *RoutedOpener {
 		result, err := names.Lookup(ctx, host)
 		return result.Addrs, err
 	}
+	o.exchange = names.Exchange
 	return o
 }
 
@@ -139,11 +157,19 @@ func (o *RoutedOpener) OpenTunnel(authority string) (net.Conn, error) {
 // ssh.github.com:443, GitHub's SSH server on the HTTPS port, with the same
 // protocol and host keys.
 func throughMozilla(authority string) string {
-	if strings.EqualFold(authority, "github.com:22") {
+	if strings.EqualFold(authority, githubSSH) {
 		logx.Debug("GitHub's SSH through port 443 target=%s", logx.Target(authority))
 		return "ssh.github.com:443"
 	}
 	return authority
+}
+
+const githubSSH = "github.com:22"
+
+// Carried reports whether a connection to host:port can go through
+// Mozilla's proxy: one of its ports, or GitHub's SSH (throughMozilla).
+func Carried(host, port string) bool {
+	return PortAllowed(port) || strings.EqualFold(net.JoinHostPort(host, port), githubSSH)
 }
 
 // OpenTunnelForClient keeps the client affinity of the upstream pool.
@@ -179,6 +205,15 @@ func (o *RoutedOpener) OpenTunnelForClient(authority, clientKey string) (net.Con
 		}
 	}
 	o.proxied.Add(1)
+	if _, port, err := net.SplitHostPort(authority); err == nil && port == DNSPort && o.exchange != nil {
+		if o.dnsNoted.CompareAndSwap(false, true) {
+			logx.Info("DNS a client sends through the proxy (port 53, which Mozilla does not connect to) is answered here, with DNS over HTTPS through Mozilla")
+		}
+		logx.Debug("DNS through the proxy answered here target=%s", logx.Target(authority))
+		client, server := net.Pipe()
+		go serveDNS(server, o.exchange)
+		return countConn(client, &o.meter.up, &o.meter.down), nil
+	}
 	authority = throughMozilla(authority)
 	var conn net.Conn
 	var err error

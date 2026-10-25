@@ -11,9 +11,12 @@ import (
 	"strings"
 	"syscall"
 
+	"golang.org/x/term"
+
 	"github.com/armanlife/firefox-vpn-client/core/internal/desktop"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 	"github.com/armanlife/firefox-vpn-client/core/internal/service"
+	"github.com/armanlife/firefox-vpn-client/core/internal/update"
 	"github.com/armanlife/firefox-vpn-client/core/internal/version"
 )
 
@@ -23,6 +26,7 @@ func main() {
 		fmt.Fprintln(out, "Usage: firefox-vpn-core [-data-dir DIR] [-plain] [-verbose]")
 		fmt.Fprintln(out, "       firefox-vpn-core -tray [-data-dir DIR]")
 		fmt.Fprintln(out, "       firefox-vpn-core -app [-data-dir DIR] [-verbose]   (started by the desktop app)")
+		fmt.Fprintln(out, "       firefox-vpn-core -update -data-dir DIR   (a copy started by the app's core, to install an update)")
 		fmt.Fprintln(out, "       firefox-vpn-core -add-account | -list-accounts | -set-dashboard-login [-data-dir DIR]")
 		fmt.Fprintln(out, "       firefox-vpn-core -setup-server USERNAME [-data-dir DIR]   (install.sh, new Linux servers)")
 		fmt.Fprintln(out)
@@ -49,6 +53,7 @@ func main() {
 	setupServer := flag.String("setup-server", "", "Open the dashboard and the proxy to the network (the dashboard login for USERNAME, \"-\" for a random one, and a random proxy login, each with a random password), print the logins, then exit (install.sh runs it on a new server)")
 	tray := flag.Bool("tray", false, "Show the tray icon; runs the service in-process unless one is already running")
 	app := flag.Bool("app", false, "Run the service for the desktop app (no tray icon or status screen); stops when standard input ends")
+	applyUpdate := flag.Bool("update", false, "Install the desktop app's downloaded update (the app's core starts a copy of itself with it; the log goes to the log file)")
 	showVersion := flag.Bool("version", false, "Print the version and exit")
 	plain := flag.Bool("plain", false, "Print the log instead of the status screen")
 	verbose := flag.Bool("verbose", false, "Log CONNECT destinations and debug lines regardless of the config")
@@ -79,6 +84,7 @@ func main() {
 		setupServer:  *setupServer,
 		tray:         *tray,
 		app:          *app,
+		update:       *applyUpdate,
 		plain:        *plain,
 		verbose:      *verbose,
 	}); err != nil {
@@ -102,6 +108,7 @@ type commandOptions struct {
 	setupServer  string
 	tray         bool
 	app          bool
+	update       bool
 	plain        bool
 	verbose      bool
 }
@@ -110,13 +117,13 @@ type commandOptions struct {
 // command is given.
 func runCommand(opts commandOptions) error {
 	commands := 0
-	for _, set := range []bool{opts.addAccount, opts.listAccounts, opts.status, opts.setLogin, opts.setupServer != "", opts.tray, opts.app} {
+	for _, set := range []bool{opts.addAccount, opts.listAccounts, opts.status, opts.setLogin, opts.setupServer != "", opts.tray, opts.app, opts.update} {
 		if set {
 			commands++
 		}
 	}
 	if commands > 1 {
-		return errors.New("use only one of -add-account, -list-accounts, -status, -set-dashboard-login, -setup-server, -tray, -app")
+		return errors.New("use only one of -add-account, -list-accounts, -status, -set-dashboard-login, -setup-server, -tray, -app, -update")
 	}
 	if opts.app && opts.plain {
 		return errors.New("-plain applies to the terminal; -app logs to the log file only")
@@ -136,7 +143,16 @@ func runCommand(opts commandOptions) error {
 		return runSetDashboardLogin(paths)
 	case opts.setupServer != "":
 		return runSetupServer(paths, opts.setupServer)
+	case opts.update:
+		// A copy of the core, started apart by the app's core: no console,
+		// and nobody reads its output.
+		logx.EnableFile(paths.LogDir, false)
+		return update.Apply(paths.Dir)
 	case opts.app:
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			// Typed in a terminal: the app starts it with a pipe.
+			fmt.Fprintln(os.Stderr, appInTerminalHint)
+		}
 		// Standard output and error are pipes the app may never read; a
 		// full pipe would block logging, so the log goes to the file only.
 		logx.EnableFile(paths.LogDir, false)
@@ -166,6 +182,14 @@ func runCommand(opts commandOptions) error {
 	}
 	return runConsole(paths, opts.verbose)
 }
+
+// appInTerminalHint tells someone who typed -app what that mode is for: it
+// waits for the desktop app to turn the proxy on.
+const appInTerminalHint = `firefox-vpn-core: -app is the desktop app's mode: the proxy stays off until the
+app or the panel's power button turns it on, the log goes to user-data/logs
+only, and closing this terminal stops it. In a terminal or as a service, run
+firefox-vpn-core without -app: the proxy is on from the start (-plain prints
+the log).`
 
 // runConsole runs the service in the terminal until Ctrl+C or SIGTERM.
 func runConsole(paths service.DataPaths, verbose bool) error {

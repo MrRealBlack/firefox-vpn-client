@@ -32,6 +32,12 @@ bool newerVersion(String a, String b) {
   return false;
 }
 
+/// A release server used instead of GitHub, to try updates with a local
+/// test release: it answers `<server>/releases/latest` as GitHub's API does,
+/// and the core downloads from it too (core/internal/update, ServerEnv).
+String get updateServer =>
+    Platform.environment['FIREFOX_VPN_UPDATE_SERVER'] ?? '';
+
 /// Reads the latest release of [repo] from GitHub; null when [appVersion] is
 /// the newest, or when there is no release yet. [proxy] ("host:port"), when
 /// set, carries the request (the VPN's own proxy, for networks where GitHub
@@ -40,12 +46,17 @@ Future<Release?> checkForUpdate({
   String? proxy,
   String repo = githubRepo,
 }) async {
+  final server = updateServer;
   final client = HttpClient()
     ..connectionTimeout = const Duration(seconds: 15)
-    ..findProxy = (_) => proxy == null ? 'DIRECT' : 'PROXY $proxy; DIRECT';
+    ..findProxy = (_) =>
+        proxy == null || server.isNotEmpty ? 'DIRECT' : 'PROXY $proxy; DIRECT';
   try {
+    final api = server.isEmpty
+        ? 'https://api.github.com/repos/$repo/releases/latest'
+        : '$server/releases/latest';
     final req = await client
-        .getUrl(Uri.parse('https://api.github.com/repos/$repo/releases/latest'))
+        .getUrl(Uri.parse(api))
         .timeout(const Duration(seconds: 20));
     req.headers
       ..set(HttpHeaders.acceptHeader, 'application/vnd.github+json')

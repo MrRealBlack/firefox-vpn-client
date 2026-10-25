@@ -951,6 +951,46 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get updateNow => 'Update';
+
+  @override
+  String updateDownloading(String version) {
+    return 'Downloading version $version…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return 'Version $version is ready to install.';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return 'Installing version $version. The app will close and open again.';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return 'Couldn\'t update to version $version.';
+  }
+
+  @override
+  String updateDone(String version) {
+    return 'Updated to version $version.';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return 'The update to version $version didn\'t finish, so the app went back to the previous version.';
+  }
+
+  @override
+  String get autoUpdate => 'Update automatically';
+
+  @override
+  String get autoUpdateHint =>
+      'New versions download in the background and install the next time the app opens.';
+
+  @override
   String get repoNotSet => 'The GitHub repository is not set yet.';
 
   @override
@@ -1108,15 +1148,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'Only apps set up to use the proxy go through it; Windows is left as it is.';
+      'Only apps set up to use the proxy go through it.';
 
   @override
   String get modeSystemProxyHint =>
       'Windows and most apps go through the proxy.';
-
-  @override
-  String get modeProxyHintOther =>
-      'Only apps set up to use the proxy go through it; the system\'s settings stay as they are.';
 
   @override
   String get modeSystemProxyHintOther =>
@@ -1228,4 +1264,159 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'Set it again';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return 'All $os traffic goes through the VPN.';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting =>
+      'Waiting for permission to install the TUN service…';
+
+  @override
+  String get tunInstallCancelled =>
+      'TUN mode needs administrator permission once. It wasn\'t given, so the mode didn\'t change.';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'Couldn\'t install the TUN service: $error';
+  }
+
+  @override
+  String get tunStarting => 'Starting TUN mode…';
+
+  @override
+  String get tunFailed => 'TUN mode couldn\'t start. Trying again…';
+
+  @override
+  String get tunLost => 'TUN mode stopped unexpectedly. Trying again…';
+
+  @override
+  String get tunNotRunning => 'The TUN service isn\'t running. Trying again…';
+
+  @override
+  String get tunMissing => 'The TUN service isn\'t installed.';
+
+  @override
+  String get tunOutdated =>
+      'The TUN service is older than this app. Install it again to use TUN mode.';
+
+  @override
+  String get tunAppOutdated =>
+      'The TUN service is newer than this app. Update the app to use TUN mode.';
+
+  @override
+  String get tunBusy => 'Another copy of Firefox VPN is using TUN mode.';
+
+  @override
+  String get tunInstall => 'Install';
+
+  @override
+  String get tunInstallAgain => 'Install again';
+
+  @override
+  String get trayTunMode => 'TUN mode (all apps)';
+
+  @override
+  String get removeTunService => 'Remove the TUN service';
+
+  @override
+  String get removeTunServiceHint =>
+      'Removes the system service that TUN mode uses. Choosing TUN again installs it again.';
+
+  @override
+  String get tunServiceRemoved => 'The TUN service was removed.';
+
+  @override
+  String get tunInstallPrompt =>
+      'Firefox VPN wants to install the service for TUN mode.';
+
+  @override
+  String get tunRemovePrompt =>
+      'Firefox VPN wants to remove the service for TUN mode.';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'Couldn\'t remove the TUN service: $error';
+  }
+
+  @override
+  String get sectionTun => 'TUN settings';
+
+  @override
+  String get tunPrograms => 'Programs that bypass the VPN';
+
+  @override
+  String get tunProgramsHint =>
+      'They connect directly, not through Mozilla. Only for programs that work without a VPN.';
+
+  @override
+  String get tunProgramsEmpty => 'No programs yet.';
+
+  @override
+  String get addProgram => 'Add program';
+
+  @override
+  String get programFiles => 'Programs';
+
+  @override
+  String get tunProgramAll => 'All traffic';
+
+  @override
+  String get tunProgramAllHint => 'The whole program connects directly.';
+
+  @override
+  String get tunProgramUdp => 'UDP only';
+
+  @override
+  String get tunProgramUdpHint =>
+      'Only its UDP connects directly; the rest goes through the VPN.';
+
+  @override
+  String get udpNoticeSetting => 'Notice when UDP is blocked';
+
+  @override
+  String udpNoticeBody(String program) {
+    return '$program tried to make a call or play online, but in TUN mode that traffic (UDP) can\'t go through the VPN.';
+  }
+
+  @override
+  String get udpNoticeAction => 'Send its UDP directly';
+
+  @override
+  String get dontShowAgain => 'Don\'t show again';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program: its UDP now connects directly.';
+  }
+
+  @override
+  String get addRunningProgram => 'From running programs';
+
+  @override
+  String get addProgramFile => 'Choose a file…';
+
+  @override
+  String get addProgramName => 'Type a name…';
+
+  @override
+  String get programNameHint =>
+      'A program\'s file name, such as steam.exe; * stands for any text (steam* is every Steam program).';
+
+  @override
+  String get runningProgramsEmpty => 'No other programs are running.';
 }

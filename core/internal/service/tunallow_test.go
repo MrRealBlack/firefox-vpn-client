@@ -19,6 +19,10 @@ func TestTunnelAllowsMozillaPortsAndDirectDestinations(t *testing.T) {
 			t.Errorf("port %s: %t", port, got)
 		}
 	}
+	// Git over SSH to GitHub goes to its SSH server on port 443.
+	if !d.TunnelAllows("github.com", "22") || !d.TunnelAllows("GitHub.com", "22") {
+		t.Error("GitHub's SSH is refused")
+	}
 	writeTestGeoIP(t, d, map[string][]string{"private": {"10.0.0.0/8"}})
 	d.applyRouting(config.Routing{Enabled: true, Direct: []string{"domain:bank.test"}})
 	if d.currentRouter() == nil {

@@ -40,6 +40,11 @@ class AppSettings extends ChangeNotifier {
   String updateVersion = '';
   String updateUrl = '';
 
+  /// Downloads a newer version in the background and installs it the next
+  /// time the app starts (the Windows app, which updates itself); on unless
+  /// the user turned it off.
+  bool autoUpdate = true;
+
   /// Starts the app in the tray when the user signs in to Windows; on
   /// unless the user turned it off.
   bool autostart = true;
@@ -47,6 +52,10 @@ class AppSettings extends ChangeNotifier {
   /// Connects by itself when started with the computer ([autostart]); off
   /// until the user turns it on. The core decides how (Daemon.AutoConnect).
   bool autoConnect = false;
+
+  /// The home page's card when TUN mode refused a program's call or game
+  /// (UDP); on unless the user turned it off.
+  bool udpNotice = true;
 
   /// The app's languages, in the order the language menus list them.
   /// 'zh' is Simplified and 'zh_Hant' Traditional Chinese.
@@ -164,6 +173,8 @@ class AppSettings extends ChangeNotifier {
         };
         s.autostart = j['autostart'] != false;
         s.autoConnect = j['auto_connect'] == true;
+        s.autoUpdate = j['auto_update'] != false;
+        s.udpNotice = j['udp_notice'] != false;
       }
     } on FileSystemException {
       // First run: defaults, and the welcome page.
@@ -187,7 +198,11 @@ class AppSettings extends ChangeNotifier {
     String? updateUrl,
     bool? autostart,
     bool? autoConnect,
+    bool? autoUpdate,
+    bool? udpNotice,
   }) {
+    this.udpNotice = udpNotice ?? this.udpNotice;
+    this.autoUpdate = autoUpdate ?? this.autoUpdate;
     this.autostart = autostart ?? this.autostart;
     this.autoConnect = autoConnect ?? this.autoConnect;
     this.showPublicIp = showPublicIp ?? this.showPublicIp;
@@ -223,6 +238,8 @@ class AppSettings extends ChangeNotifier {
           'update_url': updateUrl,
           'autostart': autostart,
           'auto_connect': autoConnect,
+          'auto_update': autoUpdate,
+          'udp_notice': udpNotice,
         }),
       );
     } on FileSystemException {

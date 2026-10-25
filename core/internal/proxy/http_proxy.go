@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/armanlife/firefox-vpn-client/core/internal/egress"
 	"github.com/armanlife/firefox-vpn-client/core/internal/logx"
 )
 
@@ -103,8 +104,17 @@ func (s *SOCKSServer) serveHTTP(client *bufferedConn, clientAddr string, start t
 }
 
 // openTarget opens a tunnel to target for a SOCKS5 or HTTP client and
-// notes and logs a port Mozilla's proxy refuses.
+// notes and logs a port Mozilla's proxy refuses, and a loop.
 func (s *SOCKSServer) openTarget(client net.Conn, target, clientAddr string) (net.Conn, error) {
+	if egress.OwnDial(target) {
+		if loop, warn := loops.note(target, time.Now()); loop {
+			host, _, _ := net.SplitHostPort(target)
+			s.Notices.record(NoticeLoop, "", host)
+			if warn {
+				logx.Warn("a loop: this program's own connections come back to its proxy as a client's (client=%s target=%s), so nothing connects; a program sends this program's own traffic into the proxy: in PassWall2 turn Localhost Proxy off, in another VPN program's TUN mode let firefox-vpn-core connect directly", clientAddr, logx.Target(target))
+			}
+		}
+	}
 	var conn net.Conn
 	var err error
 	if affinityUpstream, ok := s.upstream.(clientAffinityTunnelOpener); ok {

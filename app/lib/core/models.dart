@@ -260,6 +260,123 @@ abstract final class Failure {
   static const other = 'other';
 }
 
+/// The TUN mode's state (core/internal/service/tun.go): the TUN service
+/// (core/cmd/firefox-vpn-tun) carries every app's traffic to the core.
+class TunState {
+  TunState.fromJson(Map<String, Object?> j)
+    : state = _str(j['state']),
+      code = _str(j['code']),
+      message = _str(j['message']),
+      serviceVersion = _str(j['service_version']),
+      installed = _bool(j['installed']),
+      programsSupported = _bool(j['programs_supported']),
+      refusedUdp = _str(j['refused_udp']),
+      refusedUdpPath = _str(j['refused_udp_path']);
+
+  /// off, starting, on, or error.
+  final String state;
+
+  /// Why it is not on ([TunCode]); [message] is the core's English.
+  final String code;
+  final String message;
+  final String serviceVersion;
+
+  /// The TUN service is installed; the app installs it before the mode.
+  final bool installed;
+
+  /// Programs can skip the VPN here (the core's tun.programs: Windows and
+  /// Linux).
+  final bool programsSupported;
+
+  /// The file name of the last program whose UDP (a call or a game) the
+  /// running TUN refused, while it does not skip the VPN; "" for none.
+  /// [refusedUdpPath] is its executable.
+  final String refusedUdp;
+  final String refusedUdpPath;
+
+  bool get on => state == 'on';
+  bool get starting => state == 'starting';
+  bool get failed => state == 'error';
+}
+
+/// A program running on the computer (GET /api/tun/programs): its
+/// executable's file name, which the TUN settings take, and its path.
+class RunningProgram {
+  RunningProgram.fromJson(Map<String, Object?> j)
+    : name = _str(j['name']),
+      path = _str(j['path']);
+
+  final String name;
+  final String path;
+}
+
+/// TunState.code values.
+abstract final class TunCode {
+  static const missing = 'missing';
+  static const notRunning = 'not_running';
+  static const outdated = 'outdated';
+  static const appOutdated = 'app_outdated';
+  static const busy = 'busy';
+  static const failed = 'failed';
+  static const lost = 'lost';
+}
+
+/// The Windows app's own update (core/internal/update): the core downloads
+/// a newer release, checks its signature, and installs it while the app
+/// restarts.
+class UpdateState {
+  UpdateState.fromJson(Map<String, Object?> j)
+    : state = _str(j['state']),
+      version = _str(j['version']),
+      done = _int(j['done']),
+      total = _int(j['total']),
+      error = _str(j['error']),
+      last = switch (_mapOrNull(j['last'])) {
+        final m? => UpdateResult.fromJson(m),
+        null => null,
+      };
+
+  /// idle, downloading, ready, installing, or failed.
+  final String state;
+
+  /// The version downloading, ready, installing, or that failed.
+  final String version;
+
+  /// The package's bytes while it downloads ([total] 0 when unknown).
+  final int done;
+  final int total;
+
+  /// Why the last download or install failed (the core's English).
+  final String error;
+
+  /// What the update before this start did.
+  final UpdateResult? last;
+
+  bool get downloading => state == 'downloading';
+  bool get ready => state == 'ready';
+  bool get installing => state == 'installing';
+  bool get failed => state == 'failed';
+
+  /// The download's progress, 0 to 1; null while the size is unknown.
+  double? get progress => total > 0 ? (done / total).clamp(0, 1) : null;
+}
+
+/// What an update did, reported by the next start.
+class UpdateResult {
+  UpdateResult.fromJson(Map<String, Object?> j)
+    : from = _str(j['from']),
+      to = _str(j['to']),
+      ok = _bool(j['ok']),
+      error = _str(j['error']);
+
+  final String from;
+  final String to;
+
+  /// The new version runs; otherwise the old one was kept or put back.
+  final bool ok;
+  final String error;
+}
+
 /// The result of `POST /api/test` (core/internal/proxy/conntest.go).
 class ConnectionTest {
   ConnectionTest.fromJson(Map<String, Object?> j)
@@ -348,6 +465,15 @@ class CoreStatus {
         final m? => _str(m['by']),
         null => null,
       },
+      tunSupported = _bool(j['tun_supported']),
+      tun = switch (_mapOrNull(j['tun'])) {
+        final m? => TunState.fromJson(m),
+        null => null,
+      },
+      update = switch (_mapOrNull(j['update'])) {
+        final m? => UpdateState.fromJson(m),
+        null => null,
+      },
       autoConnecting = _bool(j['auto_connecting']),
       connectFailure = _str(j['connect_failure']),
       selection = _str(j['selection']),
@@ -374,12 +500,28 @@ class CoreStatus {
   /// Whether `POST /api/app/exit` can end the core's process.
   final bool canExit;
 
-  /// system_proxy.mode: set (Windows uses the proxy while it runs) or
-  /// clear.
+  /// system_proxy.mode, the connection mode: set (Windows uses the proxy
+  /// while it runs), clear (proxy only), or tun (every app, through the TUN
+  /// service).
   final String systemProxy;
 
   bool get systemProxySet => systemProxy == 'set';
   final bool systemProxySupported;
+
+  /// The TUN mode can be chosen (the computer's core, on Windows); [tun] is
+  /// then its state.
+  final bool tunSupported;
+  final TunState? tun;
+
+  bool get tunMode => systemProxy == 'tun';
+
+  /// The app's own update, when this copy installs updates by itself (the
+  /// Windows app's core); null where the app offers the download instead.
+  final UpdateState? update;
+
+  /// The computer's apps go through the VPN: the system proxy is set, or
+  /// the TUN runs.
+  bool get computerUsesVpn => systemProxySet || (tunMode && (tun?.on ?? false));
 
   /// Another program (another VPN or proxy) replaced the system proxy the
   /// core set: the proxy or setup script it points at now, "" when it

@@ -816,7 +816,7 @@ class AppLocalizationsFa extends AppLocalizations {
   String get routeDirect => 'مستقیم وصل می‌شود';
 
   @override
-  String get routeProxy => 'از VPN رد می‌شود';
+  String get routeProxy => 'از VPN عبور می‌کند';
 
   @override
   String get routeBlock => 'مسدود';
@@ -945,6 +945,46 @@ class AppLocalizationsFa extends AppLocalizations {
   String updateCheckFailed(String error) {
     return 'بررسی به‌روزرسانی ممکن نشد: $error';
   }
+
+  @override
+  String get updateNow => 'به‌روزرسانی';
+
+  @override
+  String updateDownloading(String version) {
+    return 'در حال دانلود نسخه $version…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return 'نسخه $version آماده نصب است.';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return 'در حال نصب نسخه $version؛ برنامه بسته و دوباره باز می‌شود.';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return 'به‌روزرسانی به نسخه $version انجام نشد.';
+  }
+
+  @override
+  String updateDone(String version) {
+    return 'برنامه به نسخه $version به‌روز شد.';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return 'به‌روزرسانی به نسخه $version کامل نشد و برنامه به نسخه قبلی برگشت.';
+  }
+
+  @override
+  String get autoUpdate => 'به‌روزرسانی خودکار';
+
+  @override
+  String get autoUpdateHint =>
+      'نسخه جدید در پس‌زمینه دانلود می‌شود و دفعه بعد که برنامه باز شود، نصب می‌شود.';
 
   @override
   String get repoNotSet => 'آدرس مخزن گیت‌هاب هنوز تنظیم نشده است.';
@@ -1089,7 +1129,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get appModeIncludeHint =>
-      'فقط برنامه‌های انتخاب‌شده از VPN رد می‌شوند؛ بقیه مستقیم وصل می‌شوند.';
+      'فقط برنامه‌های انتخاب‌شده از VPN عبور می‌کنند؛ بقیه مستقیم وصل می‌شوند.';
 
   @override
   String fromRegionList(String region) {
@@ -1104,19 +1144,15 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'فقط برنامه‌هایی که برای پروکسی تنظیم شده‌اند از آن استفاده می‌کنند؛ تنظیمات ویندوز تغییر نمی‌کند.';
+      'فقط برنامه‌هایی که برای پروکسی تنظیم شده‌اند از آن استفاده می‌کنند.';
 
   @override
   String get modeSystemProxyHint =>
-      'ویندوز و بیشتر برنامه‌ها از پروکسی رد می‌شوند.';
-
-  @override
-  String get modeProxyHintOther =>
-      'فقط برنامه‌هایی که برای پروکسی تنظیم شده‌اند از آن استفاده می‌کنند؛ تنظیمات سیستم تغییر نمی‌کند.';
+      'ویندوز و بیشتر برنامه‌ها از پروکسی عبور می‌کنند.';
 
   @override
   String get modeSystemProxyHintOther =>
-      'مرورگرها و بیشتر برنامه‌ها از پروکسی رد می‌شوند.';
+      'مرورگرها و بیشتر برنامه‌ها از پروکسی عبور می‌کنند.';
 
   @override
   String get suggestedApps => 'برنامه‌های پیشنهادی';
@@ -1221,4 +1257,158 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'دوباره تنظیم کن';
+
+  @override
+  String get modeTun => 'حالت TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return 'کل ترافیک $os از VPN عبور می‌کند.';
+  }
+
+  @override
+  String get osWindows => 'ویندوز';
+
+  @override
+  String get osLinux => 'لینوکس';
+
+  @override
+  String get osMacos => 'مک';
+
+  @override
+  String get tunInstallWaiting => 'در انتظار اجازه برای نصب سرویس TUN…';
+
+  @override
+  String get tunInstallCancelled =>
+      'حالت TUN یک بار اجازه Administrator لازم دارد. این اجازه داده نشد و حالت عوض نشد.';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'نصب سرویس TUN ممکن نشد: $error';
+  }
+
+  @override
+  String get tunStarting => 'در حال روشن کردن حالت TUN…';
+
+  @override
+  String get tunFailed => 'حالت TUN روشن نشد؛ دوباره تلاش می‌شود…';
+
+  @override
+  String get tunLost => 'حالت TUN ناگهان خاموش شد؛ دوباره تلاش می‌شود…';
+
+  @override
+  String get tunNotRunning => 'سرویس TUN اجرا نمی‌شود؛ دوباره تلاش می‌شود…';
+
+  @override
+  String get tunMissing => 'سرویس TUN نصب نیست.';
+
+  @override
+  String get tunOutdated =>
+      'سرویس TUN از این برنامه قدیمی‌تر است. برای استفاده از حالت TUN دوباره نصبش کنید.';
+
+  @override
+  String get tunAppOutdated =>
+      'سرویس TUN از این برنامه جدیدتر است. برای استفاده از حالت TUN برنامه را به‌روز کنید.';
+
+  @override
+  String get tunBusy => 'حالت TUN را نسخه دیگری از Firefox VPN استفاده می‌کند.';
+
+  @override
+  String get tunInstall => 'نصب';
+
+  @override
+  String get tunInstallAgain => 'نصب دوباره';
+
+  @override
+  String get trayTunMode => 'حالت TUN (همه برنامه‌ها)';
+
+  @override
+  String get removeTunService => 'حذف سرویس TUN';
+
+  @override
+  String get removeTunServiceHint =>
+      'سرویس سیستمی که حالت TUN از آن استفاده می‌کند حذف می‌شود. با انتخاب دوباره حالت TUN، دوباره نصب می‌شود.';
+
+  @override
+  String get tunServiceRemoved => 'سرویس TUN حذف شد.';
+
+  @override
+  String get tunInstallPrompt =>
+      'برای حالت TUN، سرویس Firefox VPN باید نصب شود.';
+
+  @override
+  String get tunRemovePrompt =>
+      'برای حذف حالت TUN، سرویس Firefox VPN باید حذف شود.';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'حذف سرویس TUN ممکن نشد: $error';
+  }
+
+  @override
+  String get sectionTun => 'تنظیمات TUN';
+
+  @override
+  String get tunPrograms => 'برنامه‌های بدون VPN';
+
+  @override
+  String get tunProgramsHint =>
+      'مستقیم وصل می‌شوند، نه از موزیلا؛ فقط برای برنامه‌هایی که بدون VPN کار می‌کنند.';
+
+  @override
+  String get tunProgramsEmpty => 'هنوز برنامه‌ای اضافه نشده است.';
+
+  @override
+  String get addProgram => 'افزودن برنامه';
+
+  @override
+  String get programFiles => 'برنامه‌ها';
+
+  @override
+  String get tunProgramAll => 'همه ترافیک';
+
+  @override
+  String get tunProgramAllHint => 'کل برنامه مستقیم وصل می‌شود.';
+
+  @override
+  String get tunProgramUdp => 'فقط UDP';
+
+  @override
+  String get tunProgramUdpHint =>
+      'فقط ترافیک UDP آن مستقیم وصل می‌شود؛ بقیه از VPN عبور می‌کند.';
+
+  @override
+  String get udpNoticeSetting => 'اعلان مسدود شدن UDP';
+
+  @override
+  String udpNoticeBody(String program) {
+    return 'برنامه $program می‌خواست تماس بگیرد یا آنلاین بازی کند، ولی در حالت TUN این ترافیک (UDP) از VPN عبور نمی‌کند.';
+  }
+
+  @override
+  String get udpNoticeAction => 'ترافیک UDP آن مستقیم برود';
+
+  @override
+  String get dontShowAgain => 'دیگر نشان نده';
+
+  @override
+  String udpDirectAdded(String program) {
+    return 'ترافیک UDP برنامه $program از این به بعد مستقیم وصل می‌شود.';
+  }
+
+  @override
+  String get addRunningProgram => 'از برنامه‌های در حال اجرا';
+
+  @override
+  String get addProgramFile => 'انتخاب فایل…';
+
+  @override
+  String get addProgramName => 'نوشتن نام…';
+
+  @override
+  String get programNameHint =>
+      'نام فایل برنامه، مثل steam.exe؛ علامت * یعنی هر متنی (steam* یعنی همه برنامه‌های Steam).';
+
+  @override
+  String get runningProgramsEmpty => 'برنامه دیگری در حال اجرا نیست.';
 }

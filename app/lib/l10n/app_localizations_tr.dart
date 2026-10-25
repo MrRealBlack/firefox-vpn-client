@@ -950,6 +950,46 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String get updateNow => 'Güncelle';
+
+  @override
+  String updateDownloading(String version) {
+    return '$version sürümü indiriliyor…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return '$version sürümü kurulmaya hazır.';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return '$version sürümü kuruluyor. Uygulama kapanıp yeniden açılacak.';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return '$version sürümüne güncellenemedi.';
+  }
+
+  @override
+  String updateDone(String version) {
+    return '$version sürümüne güncellendi.';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return '$version sürümüne güncelleme tamamlanmadı, bu yüzden uygulama önceki sürüme döndü.';
+  }
+
+  @override
+  String get autoUpdate => 'Otomatik güncelle';
+
+  @override
+  String get autoUpdateHint =>
+      'Yeni sürümler arka planda indirilir ve uygulama bir sonraki açılışında kurulur.';
+
+  @override
   String get repoNotSet => 'GitHub deposu henüz ayarlanmadı.';
 
   @override
@@ -1107,15 +1147,11 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'Yalnızca proxy ayarı yapılmış uygulamalar proxy\'den geçer; Windows ayarlarına dokunulmaz.';
+      'Yalnızca proxy ayarı yapılmış uygulamalar proxy\'den geçer.';
 
   @override
   String get modeSystemProxyHint =>
       'Windows ve çoğu uygulama proxy üzerinden geçer.';
-
-  @override
-  String get modeProxyHintOther =>
-      'Yalnızca proxy ayarı yapılmış uygulamalar proxy\'den geçer; sistem ayarlarına dokunulmaz.';
 
   @override
   String get modeSystemProxyHintOther =>
@@ -1227,4 +1263,161 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'Yeniden ayarla';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return 'Tüm $os trafiği VPN üzerinden geçer.';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting =>
+      'TUN hizmetini yüklemek için izin bekleniyor…';
+
+  @override
+  String get tunInstallCancelled =>
+      'TUN modu bir kez yönetici izni gerektirir. İzin verilmedi, bu yüzden mod değişmedi.';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'TUN hizmeti yüklenemedi: $error';
+  }
+
+  @override
+  String get tunStarting => 'TUN modu açılıyor…';
+
+  @override
+  String get tunFailed => 'TUN modu açılamadı. Yeniden deneniyor…';
+
+  @override
+  String get tunLost =>
+      'TUN modu beklenmedik şekilde kapandı. Yeniden deneniyor…';
+
+  @override
+  String get tunNotRunning => 'TUN hizmeti çalışmıyor. Yeniden deneniyor…';
+
+  @override
+  String get tunMissing => 'TUN hizmeti yüklü değil.';
+
+  @override
+  String get tunOutdated =>
+      'TUN hizmeti bu uygulamadan eski. TUN modunu kullanmak için yeniden yükleyin.';
+
+  @override
+  String get tunAppOutdated =>
+      'TUN hizmeti bu uygulamadan yeni. TUN modunu kullanmak için uygulamayı güncelleyin.';
+
+  @override
+  String get tunBusy =>
+      'Firefox VPN\'in başka bir kopyası TUN modunu kullanıyor.';
+
+  @override
+  String get tunInstall => 'Yükle';
+
+  @override
+  String get tunInstallAgain => 'Yeniden yükle';
+
+  @override
+  String get trayTunMode => 'TUN modu (tüm uygulamalar)';
+
+  @override
+  String get removeTunService => 'TUN hizmetini kaldır';
+
+  @override
+  String get removeTunServiceHint =>
+      'TUN modunun kullandığı sistem hizmetini kaldırır. TUN yeniden seçildiğinde yeniden yüklenir.';
+
+  @override
+  String get tunServiceRemoved => 'TUN hizmeti kaldırıldı.';
+
+  @override
+  String get tunInstallPrompt =>
+      'Firefox VPN, TUN modu için hizmeti yüklemek istiyor.';
+
+  @override
+  String get tunRemovePrompt =>
+      'Firefox VPN, TUN modunun hizmetini kaldırmak istiyor.';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'TUN hizmeti kaldırılamadı: $error';
+  }
+
+  @override
+  String get sectionTun => 'TUN ayarları';
+
+  @override
+  String get tunPrograms => 'VPN\'i atlayan programlar';
+
+  @override
+  String get tunProgramsHint =>
+      'Mozilla üzerinden değil, doğrudan bağlanırlar. Yalnızca VPN olmadan çalışan programlar için.';
+
+  @override
+  String get tunProgramsEmpty => 'Henüz program yok.';
+
+  @override
+  String get addProgram => 'Program ekle';
+
+  @override
+  String get programFiles => 'Programlar';
+
+  @override
+  String get tunProgramAll => 'Tüm trafik';
+
+  @override
+  String get tunProgramAllHint => 'Programın tamamı doğrudan bağlanır.';
+
+  @override
+  String get tunProgramUdp => 'Yalnızca UDP';
+
+  @override
+  String get tunProgramUdpHint =>
+      'Yalnızca UDP\'si doğrudan bağlanır; geri kalanı VPN\'den geçer.';
+
+  @override
+  String get udpNoticeSetting => 'Engellenen UDP bildirimi';
+
+  @override
+  String udpNoticeBody(String program) {
+    return '$program arama yapmaya veya çevrimiçi oynamaya çalıştı, ancak TUN modunda bu trafik (UDP) VPN\'den geçemez.';
+  }
+
+  @override
+  String get udpNoticeAction => 'UDP\'sini doğrudan gönder';
+
+  @override
+  String get dontShowAgain => 'Bir daha gösterme';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program: UDP\'si artık doğrudan bağlanıyor.';
+  }
+
+  @override
+  String get addRunningProgram => 'Çalışan programlardan';
+
+  @override
+  String get addProgramFile => 'Dosya seç…';
+
+  @override
+  String get addProgramName => 'Ad yaz…';
+
+  @override
+  String get programNameHint =>
+      'Programın dosya adı, ör. steam.exe; * herhangi bir metin demektir (steam*, Steam\'in tüm programlarıdır).';
+
+  @override
+  String get runningProgramsEmpty => 'Çalışan başka program yok.';
 }

@@ -9,6 +9,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/armanlife/firefox-vpn-client/core/internal/egress"
 )
 
 // connected looks for an adapter that is up and has a default gateway.
@@ -64,8 +66,14 @@ func adapters() ([]adapter, error) {
 		if err != nil {
 			return nil, err
 		}
+		_, tun, tunRuns := egress.Tun()
 		var list []adapter
 		for a := first; a != nil; a = a.Next {
+			if tunRuns && a.Luid == tun {
+				// The TUN mode's adapter has the default routes but is no
+				// network of its own.
+				continue
+			}
 			var addrs []string
 			for u := a.FirstUnicastAddress; u != nil; u = u.Next {
 				addrs = append(addrs, u.Address.IP().String())

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -508,5 +509,32 @@ func TestExitMismatchOnlyForAChosenCountry(t *testing.T) {
 	data, _ := json.Marshal(exitMismatch(config.Proxy{Country: "GB"}, gb, inDE))
 	if string(data) != `{"chosen_country_code":"GB","chosen_country_name":"United Kingdom","exit_country_code":"DE","exit_country_name":"Germany"}` {
 		t.Fatalf("JSON %s", data)
+	}
+}
+
+// Listening on every address, the log names the addresses other devices
+// open the dashboard at, not only 127.0.0.1; on one address it needs none.
+func TestNetworkURLsNameTheComputersAddresses(t *testing.T) {
+	old := interfaceAddrs
+	t.Cleanup(func() { interfaceAddrs = old })
+	interfaceAddrs = func() ([]net.Addr, error) {
+		var out []net.Addr
+		for _, s := range []string{"127.0.0.1/8", "192.168.1.20/24", "169.254.1.2/16", "10.0.0.5/8", "fe80::1/64", "2001:db8::1/64"} {
+			ip, ipnet, _ := net.ParseCIDR(s)
+			ipnet.IP = ip
+			out = append(out, ipnet)
+		}
+		return out, nil
+	}
+	want := []string{"http://192.168.1.20:10820/app/", "http://10.0.0.5:10820/app/"}
+	for _, listen := range []string{"0.0.0.0:10820", "[::]:10820"} {
+		if got := networkURLs(listen, "/app/"); !slices.Equal(got, want) {
+			t.Errorf("%s: %v", listen, got)
+		}
+	}
+	for _, listen := range []string{"127.0.0.1:10820", "192.168.1.20:10820"} {
+		if got := networkURLs(listen, "/app/"); got != nil {
+			t.Errorf("%s: %v", listen, got)
+		}
 	}
 }

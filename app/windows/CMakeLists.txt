@@ -87,6 +87,23 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
+# DirectX's shader compiler, which Flutter's renderer (ANGLE on Direct3D 11)
+# needs to draw anything: part of Windows, but missing from some stripped
+# copies of it, where the window stays empty. The copy beside the executable
+# is loaded first. The Windows SDK redistributes it.
+set(D3D_COMPILER_ARCH "x64")
+if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64")
+  set(D3D_COMPILER_ARCH "arm64")
+endif()
+file(TO_CMAKE_PATH "$ENV{ProgramFiles\(x86\)}" PROGRAM_FILES_X86)
+set(D3D_COMPILER "${PROGRAM_FILES_X86}/Windows Kits/10/Redist/D3D/${D3D_COMPILER_ARCH}/d3dcompiler_47.dll")
+if(EXISTS "${D3D_COMPILER}")
+  install(FILES "${D3D_COMPILER}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+else()
+  message(WARNING "${D3D_COMPILER} is missing (the Windows SDK's): the app will draw nothing where Windows lacks its own copy")
+endif()
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"

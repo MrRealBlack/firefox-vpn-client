@@ -956,6 +956,46 @@ class AppLocalizationsHu extends AppLocalizations {
   }
 
   @override
+  String get updateNow => 'Frissítés';
+
+  @override
+  String updateDownloading(String version) {
+    return 'A(z) $version verzió letöltése…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return 'A(z) $version verzió készen áll a telepítésre.';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return 'A(z) $version verzió telepítése. Az alkalmazás bezárul, majd újra megnyílik.';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return 'Nem sikerült frissíteni a(z) $version verzióra.';
+  }
+
+  @override
+  String updateDone(String version) {
+    return 'Frissítve a(z) $version verzióra.';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return 'A(z) $version verzióra frissítés nem fejeződött be, ezért az alkalmazás visszaállt az előző verzióra.';
+  }
+
+  @override
+  String get autoUpdate => 'Automatikus frissítés';
+
+  @override
+  String get autoUpdateHint =>
+      'Az új verziók a háttérben töltődnek le, és az alkalmazás következő megnyitásakor települnek.';
+
+  @override
   String get repoNotSet => 'A GitHub-tároló még nincs beállítva.';
 
   @override
@@ -1117,15 +1157,11 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'Csak a proxy használatára beállított alkalmazások mennek rajta át; a Windows változatlan marad.';
+      'Csak a proxy használatára beállított alkalmazások mennek rajta át.';
 
   @override
   String get modeSystemProxyHint =>
       'A Windows és a legtöbb alkalmazás a proxyn át megy.';
-
-  @override
-  String get modeProxyHintOther =>
-      'Csak a proxy használatára beállított alkalmazások mennek rajta át; a rendszer beállításai nem változnak.';
 
   @override
   String get modeSystemProxyHintOther =>
@@ -1237,4 +1273,160 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'Beállítás újra';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return 'A $os teljes forgalma a VPN-en át megy.';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting =>
+      'Várakozás az engedélyre a TUN-szolgáltatás telepítéséhez…';
+
+  @override
+  String get tunInstallCancelled =>
+      'A TUN módhoz egyszer rendszergazdai engedély kell. Az engedély nem érkezett meg, ezért a mód nem változott.';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'A TUN-szolgáltatás telepítése nem sikerült: $error';
+  }
+
+  @override
+  String get tunStarting => 'A TUN mód indul…';
+
+  @override
+  String get tunFailed => 'A TUN mód nem indult el. Újrapróbálkozás…';
+
+  @override
+  String get tunLost => 'A TUN mód váratlanul leállt. Újrapróbálkozás…';
+
+  @override
+  String get tunNotRunning => 'A TUN-szolgáltatás nem fut. Újrapróbálkozás…';
+
+  @override
+  String get tunMissing => 'A TUN-szolgáltatás nincs telepítve.';
+
+  @override
+  String get tunOutdated =>
+      'A TUN-szolgáltatás régebbi, mint ez az alkalmazás. A TUN mód használatához telepítse újra.';
+
+  @override
+  String get tunAppOutdated =>
+      'A TUN-szolgáltatás újabb, mint ez az alkalmazás. A TUN mód használatához frissítse az alkalmazást.';
+
+  @override
+  String get tunBusy =>
+      'A Firefox VPN egy másik példánya használja a TUN módot.';
+
+  @override
+  String get tunInstall => 'Telepítés';
+
+  @override
+  String get tunInstallAgain => 'Újratelepítés';
+
+  @override
+  String get trayTunMode => 'TUN mód (minden alkalmazás)';
+
+  @override
+  String get removeTunService => 'A TUN-szolgáltatás eltávolítása';
+
+  @override
+  String get removeTunServiceHint =>
+      'Eltávolítja a rendszerszolgáltatást, amelyet a TUN mód használ. A TUN újbóli választása újra telepíti.';
+
+  @override
+  String get tunServiceRemoved => 'A TUN-szolgáltatás eltávolítva.';
+
+  @override
+  String get tunInstallPrompt =>
+      'A Firefox VPN telepíteni szeretné a TUN mód szolgáltatását.';
+
+  @override
+  String get tunRemovePrompt =>
+      'A Firefox VPN el szeretné távolítani a TUN mód szolgáltatását.';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'A TUN-szolgáltatás eltávolítása nem sikerült: $error';
+  }
+
+  @override
+  String get sectionTun => 'TUN-beállítások';
+
+  @override
+  String get tunPrograms => 'VPN-t megkerülő programok';
+
+  @override
+  String get tunProgramsHint =>
+      'Közvetlenül csatlakoznak, nem a Mozillán át. Csak VPN nélkül is működő programokhoz.';
+
+  @override
+  String get tunProgramsEmpty => 'Még nincs program.';
+
+  @override
+  String get addProgram => 'Program hozzáadása';
+
+  @override
+  String get programFiles => 'Programok';
+
+  @override
+  String get tunProgramAll => 'Teljes forgalom';
+
+  @override
+  String get tunProgramAllHint => 'A teljes program közvetlenül csatlakozik.';
+
+  @override
+  String get tunProgramUdp => 'Csak UDP';
+
+  @override
+  String get tunProgramUdpHint =>
+      'Csak az UDP-je csatlakozik közvetlenül; a többi a VPN-en át megy.';
+
+  @override
+  String get udpNoticeSetting => 'Értesítés letiltott UDP-ről';
+
+  @override
+  String udpNoticeBody(String program) {
+    return 'A(z) $program hívást próbált indítani vagy online játszani, de TUN módban ez a forgalom (UDP) nem mehet át a VPN-en.';
+  }
+
+  @override
+  String get udpNoticeAction => 'Az UDP-je menjen közvetlenül';
+
+  @override
+  String get dontShowAgain => 'Ne mutassa többé';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program: az UDP-je mostantól közvetlenül csatlakozik.';
+  }
+
+  @override
+  String get addRunningProgram => 'A futó programok közül';
+
+  @override
+  String get addProgramFile => 'Fájl kiválasztása…';
+
+  @override
+  String get addProgramName => 'Név beírása…';
+
+  @override
+  String get programNameHint =>
+      'Egy program fájlneve, például steam.exe; a * bármilyen szöveget jelent (a steam* az összes Steam-program).';
+
+  @override
+  String get runningProgramsEmpty => 'Más program nem fut.';
 }

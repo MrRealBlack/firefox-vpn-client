@@ -2,6 +2,7 @@
 
 #include <flutter/standard_method_codec.h>
 #include <shellapi.h>
+#include <shobjidl.h>
 
 #include <cmath>
 #include <cstring>
@@ -22,6 +23,19 @@ std::wstring Wide(const std::string& utf8) {
   MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()),
                       wide.data(), size);
   return wide;
+}
+
+std::string Utf8(const std::wstring& wide) {
+  if (wide.empty()) {
+    return std::string();
+  }
+  int size = WideCharToMultiByte(CP_UTF8, 0, wide.data(),
+                                 static_cast<int>(wide.size()), nullptr, 0,
+                                 nullptr, nullptr);
+  std::string utf8(size, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()),
+                      utf8.data(), size, nullptr, nullptr);
+  return utf8;
 }
 
 template <typename T>
@@ -114,6 +128,17 @@ void DesktopBridge::HandleCall(
       return;
     }
     result->Success();
+  } else if (name == "pickProgram") {
+    const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+    const std::wstring path =
+        args ? PickProgram(Wide(Field<std::string>(*args, "title").value_or("")),
+                           Wide(Field<std::string>(*args, "label").value_or("")))
+             : std::wstring();
+    if (path.empty()) {
+      result->Success();
+    } else {
+      result->Success(flutter::EncodableValue(Utf8(path)));
+    }
   } else if (name == "show") {
     ShowWindowNow();
     result->Success();
@@ -334,6 +359,39 @@ bool DesktopBridge::OpenUrl(const std::wstring& url) {
                     SW_SHOWNORMAL);
   // Values above 32 mean success.
   return reinterpret_cast<INT_PTR>(done) > 32;
+}
+
+// The program the user picks in Windows' open dialog, shown over the
+// window: an .exe, or "" when the dialog is cancelled.
+std::wstring DesktopBridge::PickProgram(const std::wstring& title,
+                                        const std::wstring& label) {
+  IFileOpenDialog* dialog = nullptr;
+  if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr,
+                              CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
+    return std::wstring();
+  }
+  const COMDLG_FILTERSPEC filter = {label.empty() ? L"Programs" : label.c_str(),
+                                    L"*.exe"};
+  dialog->SetFileTypes(1, &filter);
+  if (!title.empty()) {
+    dialog->SetTitle(title.c_str());
+  }
+  DWORD options = 0;
+  if (SUCCEEDED(dialog->GetOptions(&options))) {
+    dialog->SetOptions(options | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST);
+  }
+  std::wstring path;
+  IShellItem* item = nullptr;
+  if (SUCCEEDED(dialog->Show(window_)) && SUCCEEDED(dialog->GetResult(&item))) {
+    PWSTR name = nullptr;
+    if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &name))) {
+      path = name;
+      CoTaskMemFree(name);
+    }
+    item->Release();
+  }
+  dialog->Release();
+  return path;
 }
 
 void DesktopBridge::ShowWindowNow() {

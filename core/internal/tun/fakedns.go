@@ -34,22 +34,46 @@ type FakeDNS struct {
 	mu     sync.Mutex
 	byName map[string]netip.Addr
 	byAddr map[netip.Addr]string
-	// next is the offset of the next address to hand out in fakeRange.
-	next uint32
-	size uint32
+	// next is the offset of the next address to hand out in fakeRange;
+	// offsets run from first to size-2, then start again at first.
+	next, first, size uint32
+	// fixed names get these real addresses instead (A and AAAA).
+	fixed map[string][]netip.Addr
 }
 
+// NewFakeDNS is the phone's: the whole range (its VPN interface's own
+// addresses are elsewhere, vpnNet).
 func NewFakeDNS() *FakeDNS {
-	return newFakeDNS(1 << (32 - fakeRange.Bits()))
+	return newFakeDNS(1, 1<<(32-fakeRange.Bits())) // not the network address
 }
 
-// newFakeDNS hands out at most size addresses before reusing them; tests
+// DesktopNet holds the desktop TUN adapter's own addresses: the first four
+// of fakeRange, which no app on a computer can be using either (WSL and
+// Docker take their networks from 172.16.0.0/12, where the phone's are).
+// NewDesktopFakeDNS never hands them out, so a connection to one is
+// refused as a forgotten fake address.
+var DesktopNet = netip.MustParsePrefix("198.18.0.0/30")
+
+// NewDesktopFakeDNS is the desktop TUN mode's: the range after DesktopNet,
+// and the real answer for the name of Windows' network check (NCSI), which
+// compares it with Microsoft's address and would otherwise report no
+// internet access.
+func NewDesktopFakeDNS() *FakeDNS {
+	f := newFakeDNS(4, 1<<(32-fakeRange.Bits()))
+	f.fixed = map[string][]netip.Addr{
+		"dns.msftncsi.com": {netip.MustParseAddr("131.107.255.255"), netip.MustParseAddr("fd3e:4f5a:5b81::1")},
+	}
+	return f
+}
+
+// newFakeDNS hands out offsets first to size-2 before reusing them; tests
 // use a small size.
-func newFakeDNS(size uint32) *FakeDNS {
+func newFakeDNS(first, size uint32) *FakeDNS {
 	return &FakeDNS{
 		byName: map[string]netip.Addr{},
 		byAddr: map[netip.Addr]string{},
-		next:   1, // not the network address
+		next:   first,
+		first:  first,
 		size:   size,
 	}
 }
@@ -79,7 +103,7 @@ func (f *FakeDNS) addrFor(name string) netip.Addr {
 	addr := netip.AddrFrom4([4]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)})
 	f.next++
 	if f.next >= f.size-1 { // not the broadcast address
-		f.next = 1
+		f.next = f.first
 	}
 	if old, ok := f.byAddr[addr]; ok {
 		delete(f.byName, old)
@@ -120,22 +144,40 @@ func (f *FakeDNS) Answer(query []byte) ([]byte, error) {
 	}
 	for _, q := range questions {
 		name := strings.ToLower(strings.TrimSuffix(q.Name.String(), "."))
-		if q.Class != dnsmessage.ClassINET || q.Type != dnsmessage.TypeA || name == "" {
+		if q.Class != dnsmessage.ClassINET || name == "" {
+			continue
+		}
+		if addrs, ok := f.fixed[name]; ok {
+			for _, addr := range addrs {
+				if (q.Type == dnsmessage.TypeA && addr.Is4()) || (q.Type == dnsmessage.TypeAAAA && addr.Is6()) {
+					reply.Answers = append(reply.Answers, addrRecord(q.Name, addr))
+				}
+			}
+			continue
+		}
+		if q.Type != dnsmessage.TypeA {
 			continue
 		}
 		if name == "localhost" || strings.HasSuffix(name, ".localhost") {
-			reply.Answers = append(reply.Answers, aRecord(q.Name, netip.AddrFrom4([4]byte{127, 0, 0, 1})))
+			reply.Answers = append(reply.Answers, addrRecord(q.Name, netip.AddrFrom4([4]byte{127, 0, 0, 1})))
 			continue
 		}
-		reply.Answers = append(reply.Answers, aRecord(q.Name, f.addrFor(name)))
+		reply.Answers = append(reply.Answers, addrRecord(q.Name, f.addrFor(name)))
 	}
 	return reply.Pack()
 }
 
-func aRecord(name dnsmessage.Name, addr netip.Addr) dnsmessage.Resource {
+// addrRecord is an A record for an IPv4 address, else an AAAA record.
+func addrRecord(name dnsmessage.Name, addr netip.Addr) dnsmessage.Resource {
+	if addr.Is4() {
+		return dnsmessage.Resource{
+			Header: dnsmessage.ResourceHeader{Name: name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: fakeTTL},
+			Body:   &dnsmessage.AResource{A: addr.As4()},
+		}
+	}
 	return dnsmessage.Resource{
-		Header: dnsmessage.ResourceHeader{Name: name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: fakeTTL},
-		Body:   &dnsmessage.AResource{A: addr.As4()},
+		Header: dnsmessage.ResourceHeader{Name: name, Type: dnsmessage.TypeAAAA, Class: dnsmessage.ClassINET, TTL: fakeTTL},
+		Body:   &dnsmessage.AAAAResource{AAAA: addr.As16()},
 	}
 }
 

@@ -45,9 +45,9 @@ func SOCKS5Dialer(addr, user, password string) (Dialer, error) {
 // closeWriter is a connection that can end its sending half.
 type closeWriter interface{ CloseWrite() error }
 
-// relay copies between a and b until both directions end, passing on each
+// Relay copies between a and b until both directions end, passing on each
 // end of stream as a half close, then closes both.
-func relay(a, b net.Conn) {
+func Relay(a, b net.Conn) {
 	var wg sync.WaitGroup
 	copyHalf := func(dst, src net.Conn) {
 		defer wg.Done()

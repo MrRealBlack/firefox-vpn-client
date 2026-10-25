@@ -955,6 +955,46 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get updateNow => 'Mettre à jour';
+
+  @override
+  String updateDownloading(String version) {
+    return 'Téléchargement de la version $version…';
+  }
+
+  @override
+  String updateReady(String version) {
+    return 'La version $version est prête à être installée.';
+  }
+
+  @override
+  String updateInstalling(String version) {
+    return 'Installation de la version $version. L\'application va se fermer puis se rouvrir.';
+  }
+
+  @override
+  String updateFailed(String version) {
+    return 'Impossible de passer à la version $version.';
+  }
+
+  @override
+  String updateDone(String version) {
+    return 'Mise à jour vers la version $version effectuée.';
+  }
+
+  @override
+  String updateRolledBack(String version) {
+    return 'La mise à jour vers la version $version n\'a pas abouti : l\'application est revenue à la version précédente.';
+  }
+
+  @override
+  String get autoUpdate => 'Mettre à jour automatiquement';
+
+  @override
+  String get autoUpdateHint =>
+      'Les nouvelles versions se téléchargent en arrière-plan et s\'installent à la prochaine ouverture de l\'application.';
+
+  @override
   String get repoNotSet => 'Le dépôt GitHub n\'est pas encore défini.';
 
   @override
@@ -1116,15 +1156,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get modeProxyHint =>
-      'Seules les applications configurées pour utiliser le proxy passent par lui ; Windows reste inchangé.';
+      'Seules les applications configurées pour utiliser le proxy passent par lui.';
 
   @override
   String get modeSystemProxyHint =>
       'Windows et la plupart des applications passent par le proxy.';
-
-  @override
-  String get modeProxyHintOther =>
-      'Seules les applications configurées pour utiliser le proxy passent par lui ; les réglages du système restent inchangés.';
 
   @override
   String get modeSystemProxyHintOther =>
@@ -1236,4 +1272,160 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get setSystemProxyAgain => 'Le régler à nouveau';
+
+  @override
+  String get modeTun => 'TUN';
+
+  @override
+  String modeTunHint(String os) {
+    return 'Tout le trafic de $os passe par le VPN.';
+  }
+
+  @override
+  String get osWindows => 'Windows';
+
+  @override
+  String get osLinux => 'Linux';
+
+  @override
+  String get osMacos => 'macOS';
+
+  @override
+  String get tunInstallWaiting =>
+      'En attente de l\'autorisation d\'installer le service TUN…';
+
+  @override
+  String get tunInstallCancelled =>
+      'Le mode TUN a besoin une fois de l\'autorisation administrateur. Elle n\'a pas été donnée : le mode n\'a pas changé.';
+
+  @override
+  String tunInstallFailed(String error) {
+    return 'Impossible d\'installer le service TUN : $error';
+  }
+
+  @override
+  String get tunStarting => 'Démarrage du mode TUN…';
+
+  @override
+  String get tunFailed => 'Le mode TUN n\'a pas pu démarrer. Nouvel essai…';
+
+  @override
+  String get tunLost =>
+      'Le mode TUN s\'est arrêté de manière inattendue. Nouvel essai…';
+
+  @override
+  String get tunNotRunning => 'Le service TUN ne fonctionne pas. Nouvel essai…';
+
+  @override
+  String get tunMissing => 'Le service TUN n\'est pas installé.';
+
+  @override
+  String get tunOutdated =>
+      'Le service TUN est plus ancien que cette application. Réinstallez-le pour utiliser le mode TUN.';
+
+  @override
+  String get tunAppOutdated =>
+      'Le service TUN est plus récent que cette application. Mettez l\'application à jour pour utiliser le mode TUN.';
+
+  @override
+  String get tunBusy => 'Une autre copie de Firefox VPN utilise le mode TUN.';
+
+  @override
+  String get tunInstall => 'Installer';
+
+  @override
+  String get tunInstallAgain => 'Réinstaller';
+
+  @override
+  String get trayTunMode => 'Mode TUN (toutes les applications)';
+
+  @override
+  String get removeTunService => 'Supprimer le service TUN';
+
+  @override
+  String get removeTunServiceHint =>
+      'Supprime le service système utilisé par le mode TUN. Choisir TUN à nouveau le réinstalle.';
+
+  @override
+  String get tunServiceRemoved => 'Le service TUN a été supprimé.';
+
+  @override
+  String get tunInstallPrompt =>
+      'Firefox VPN veut installer le service du mode TUN.';
+
+  @override
+  String get tunRemovePrompt =>
+      'Firefox VPN veut supprimer le service du mode TUN.';
+
+  @override
+  String tunRemoveFailed(String error) {
+    return 'Impossible de supprimer le service TUN : $error';
+  }
+
+  @override
+  String get sectionTun => 'Réglages TUN';
+
+  @override
+  String get tunPrograms => 'Programmes hors VPN';
+
+  @override
+  String get tunProgramsHint =>
+      'Ils se connectent directement, sans passer par Mozilla. Seulement pour les programmes qui fonctionnent sans VPN.';
+
+  @override
+  String get tunProgramsEmpty => 'Aucun programme pour l\'instant.';
+
+  @override
+  String get addProgram => 'Ajouter un programme';
+
+  @override
+  String get programFiles => 'Programmes';
+
+  @override
+  String get tunProgramAll => 'Tout le trafic';
+
+  @override
+  String get tunProgramAllHint => 'Tout le programme se connecte directement.';
+
+  @override
+  String get tunProgramUdp => 'UDP uniquement';
+
+  @override
+  String get tunProgramUdpHint =>
+      'Seul son UDP se connecte directement ; le reste passe par le VPN.';
+
+  @override
+  String get udpNoticeSetting => 'Avis si l\'UDP est bloqué';
+
+  @override
+  String udpNoticeBody(String program) {
+    return '$program a tenté de passer un appel ou de jouer en ligne, mais en mode TUN ce trafic (UDP) ne peut pas passer par le VPN.';
+  }
+
+  @override
+  String get udpNoticeAction => 'Envoyer son UDP directement';
+
+  @override
+  String get dontShowAgain => 'Ne plus afficher';
+
+  @override
+  String udpDirectAdded(String program) {
+    return '$program : son UDP se connecte désormais directement.';
+  }
+
+  @override
+  String get addRunningProgram => 'Parmi les programmes en cours';
+
+  @override
+  String get addProgramFile => 'Choisir un fichier…';
+
+  @override
+  String get addProgramName => 'Saisir un nom…';
+
+  @override
+  String get programNameHint =>
+      'Le nom de fichier d\'un programme, comme steam.exe ; * remplace n\'importe quel texte (steam* désigne tous les programmes de Steam).';
+
+  @override
+  String get runningProgramsEmpty => 'Aucun autre programme n\'est en cours.';
 }

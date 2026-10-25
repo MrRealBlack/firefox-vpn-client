@@ -14,6 +14,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -108,8 +109,53 @@ func (s *dashboardServer) start(addr string) error {
 		}
 	}()
 	cfg := s.d.config()
-	logx.Info("dashboard listening url=http://%s%s login_required=%v token_only=%v", displayAddr(ln.Addr().String()), appPath, cfg.Dashboard.Username != "", s.d.tokenOnly.Load())
+	listening := ln.Addr().String()
+	network := ""
+	if urls := networkURLs(listening, appPath); len(urls) > 0 {
+		network = " network=" + strings.Join(urls, ",")
+	}
+	logx.Info("dashboard listening listen=%s url=http://%s%s%s login_required=%v token_only=%v", listening, displayAddr(listening), appPath, network, cfg.Dashboard.Username != "", s.d.tokenOnly.Load())
 	return nil
+}
+
+// interfaceAddrs lists this computer's addresses; tests replace it.
+var interfaceAddrs = net.InterfaceAddrs
+
+// maxNetworkURLs bounds the addresses networkURLs lists.
+const maxNetworkURLs = 4
+
+// networkURLs are the dashboard's addresses for other devices when it
+// listens on every address (0.0.0.0 or ::): one for each IPv4 address of
+// this computer but loopback and link-local. Its URL in the log shows
+// 127.0.0.1, which only this computer can open.
+func networkURLs(addr, path string) []string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil
+	}
+	if ip, err := netip.ParseAddr(host); err != nil || !ip.IsUnspecified() {
+		return nil
+	}
+	addrs, err := interfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	var urls []string
+	for _, a := range addrs {
+		prefix, err := netip.ParsePrefix(a.String())
+		if err != nil {
+			continue
+		}
+		ip := prefix.Addr().Unmap()
+		if !ip.Is4() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+			continue
+		}
+		urls = append(urls, "http://"+net.JoinHostPort(ip.String(), port)+path)
+		if len(urls) == maxNetworkURLs {
+			break
+		}
+	}
+	return urls
 }
 
 // moveTo switches the dashboard to a new address, keeping the old one when
@@ -188,7 +234,10 @@ func (s *dashboardServer) handler() http.Handler {
 	mux.HandleFunc("GET /api/routing", s.handleRouting)
 	mux.HandleFunc("POST /api/routing/update", s.handleRoutingUpdate)
 	mux.HandleFunc("POST /api/routing/test", s.handleRoutingTest)
+	mux.HandleFunc("GET /api/tun/programs", s.handleTunPrograms)
 	mux.HandleFunc("POST /api/app/exit", s.handleAppExit)
+	mux.HandleFunc("POST /api/update/download", s.handleUpdateDownload)
+	mux.HandleFunc("POST /api/update/install", s.handleUpdateInstall)
 
 	mux.HandleFunc("GET /api/logs", s.handleLogs)
 	mux.HandleFunc("GET /api/logs/stream", s.handleLogStream)
