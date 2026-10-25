@@ -46,6 +46,13 @@ func TestTheSystemsOwnPrograms(t *testing.T) {
 			"/opt/discord/Discord":                         false,
 			"/home/u/.local/share/Steam/ubuntu12_32/steam": false,
 		}
+	case "darwin":
+		cases = map[string]bool{
+			"/usr/sbin/mDNSResponder":                            true,
+			"/usr/libexec/timed":                                 true,
+			"/System/Library/CoreServices/Finder.app/x":          true,
+			"/Applications/Telegram.app/Contents/MacOS/Telegram": false,
+		}
 	default:
 		t.Skip("no system programs are known here")
 	}

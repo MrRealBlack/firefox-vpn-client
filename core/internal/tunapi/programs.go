@@ -21,8 +21,8 @@ func MatchProgram(pattern, name string) bool {
 
 // SystemProgram reports whether path is one of the system's own programs:
 // on Windows one in its folder (its services' svchost, for one), on Linux
-// a system daemon (systemd's, the clock's). Its UDP is no call, and no one
-// picks it to bypass the VPN.
+// and macOS a system daemon (systemd's, the clock's, mDNSResponder). Its
+// UDP is no call, and no one picks it to bypass the VPN.
 func SystemProgram(path string) bool {
 	switch runtime.GOOS {
 	case "windows":
@@ -34,6 +34,12 @@ func SystemProgram(path string) bool {
 		return len(path) > len(prefix) && strings.EqualFold(path[:len(prefix)], prefix)
 	case "linux":
 		for _, dir := range []string{"/usr/sbin/", "/sbin/", "/usr/lib/systemd/", "/lib/systemd/", "/usr/libexec/"} {
+			if strings.HasPrefix(path, dir) {
+				return true
+			}
+		}
+	case "darwin":
+		for _, dir := range []string{"/System/", "/usr/sbin/", "/sbin/", "/usr/libexec/"} {
 			if strings.HasPrefix(path, dir) {
 				return true
 			}

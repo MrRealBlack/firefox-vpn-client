@@ -16,7 +16,7 @@
 ; its folder, which the next install offers again.
 ;
 ; The TUN mode's service is the one part that needs administrator rights:
-; a checked task runs core\firefox-vpn-tun.exe install, which asks for them
+; Setup always runs core\firefox-vpn-tun.exe install, which asks for them
 ; itself and installs the service in Program Files; the uninstall removes it
 ; again.
 
@@ -155,26 +155,8 @@ pt.DirNotWritable=O Firefox VPN não consegue gravar nesta pasta. Ele guarda sua
 vi.DirNotWritable=Firefox VPN không thể ghi vào thư mục này. Tài khoản và cài đặt của bạn được lưu ngay cạnh ứng dụng, nên cần một thư mục bạn có thể thay đổi mà không cần quyền quản trị (không phải Program Files). Hãy chọn thư mục khác.
 bn.DirNotWritable=Firefox VPN এই ফোল্ডারে লিখতে পারছে না। আপনার অ্যাকাউন্ট ও সেটিংস অ্যাপের পাশেই রাখা হয়, তাই এমন একটি ফোল্ডার দরকার যা অ্যাডমিনিস্ট্রেটর অনুমতি ছাড়াই বদলানো যায় (Program Files নয়)। অন্য একটি ফোল্ডার বেছে নিন।
 
-; The TUN mode's service (core\firefox-vpn-tun.exe), installed with its own
-; administrator prompt; checked by default. Not offered when it is installed
-; already: an installed service updates itself from the app's copy.
-TunTask=Install the service for TUN mode (asks for administrator permission)
-fa.TunTask=نصب سرویس حالت TUN (اجازه Administrator لازم است)
-ar.TunTask=تثبيت خدمة وضع TUN (يطلب إذن المسؤول)
-ru.TunTask=Установить службу для режима TUN (потребуется разрешение администратора)
-tr.TunTask=TUN modu için hizmeti yükle (yönetici izni ister)
-az.TunTask=TUN rejimi üçün xidməti quraşdır (administrator icazəsi tələb edir)
-id.TunTask=Pasang layanan untuk mode TUN (meminta izin administrator)
-es.TunTask=Instalar el servicio del modo TUN (pide permiso de administrador)
-fr.TunTask=Installer le service du mode TUN (demande l'autorisation administrateur)
-hu.TunTask=A TUN mód szolgáltatásának telepítése (rendszergazdai engedélyt kér)
-pt.TunTask=Instalar o serviço do modo TUN (pede permissão de administrador)
-vi.TunTask=Cài đặt dịch vụ cho chế độ TUN (cần quyền quản trị)
-bn.TunTask=TUN মোডের সার্ভিস ইনস্টল করুন (অ্যাডমিনিস্ট্রেটর অনুমতি চায়)
-
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "tun"; Description: "{cm:TunTask}"; Check: not TunServiceInstalled
 
 ; Versions before 1.1.2 kept the core beside the app; it is in core\ now.
 [InstallDelete]
@@ -189,9 +171,11 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]
+; The TUN service, always (no task to choose), with its own administrator
+; prompt; declined, the app installs it the first time TUN mode is chosen.
 ; Not in a silent run: no prompt there, and an installed service updates
 ; itself from the app.
-Filename: "{app}\core\firefox-vpn-tun.exe"; Parameters: "install"; Tasks: tun; Flags: waituntilterminated skipifsilent; Check: not TunServiceInstalled
+Filename: "{app}\core\firefox-vpn-tun.exe"; Parameters: "install"; Flags: waituntilterminated skipifsilent; Check: not TunServiceInstalled
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 ; The TUN service goes with the app: through its pipe, with no prompt while
