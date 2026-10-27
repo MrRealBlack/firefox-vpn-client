@@ -29,6 +29,10 @@ const state = {
   testing: false,
   logs: [],
   logSource: null,
+  logTab: "log",
+  conns: [],
+  connsClearedAfter: 0,
+  connTimer: null,
   signin: null,
   pollTimer: null,
 };
@@ -375,6 +379,7 @@ function showView(name) {
   if (name === "accounts") loadAccounts().catch(reportError);
   if (name === "locations") loadLocations().catch(reportError);
   if (name === "logs") renderLogs(true);
+  syncConnections();
   if (name === "help") renderHelp();
 }
 
@@ -1419,6 +1424,82 @@ $("#log-level").addEventListener("change", () => renderLogs());
 $("#log-search").addEventListener("input", () => renderLogs());
 $("#log-clear").addEventListener("click", () => { state.logs = []; renderLogs(); renderRecentLog(); });
 
+// ----------------------------------------------------------- connections
+
+const ROUTES = {
+  vpn: ["Proxy", "ok"],
+  direct: ["Direct", "accent"],
+  blocked: ["Blocked", ""],
+  port: ["Port refused", "warn"],
+  failed: ["Failed", "bad"],
+};
+
+// The Logs page's second tab: the proxy's connections, read once a second
+// while it is shown. Clear hides the ones listed so far, open ones too.
+function showLogTab(tab) {
+  state.logTab = tab;
+  for (const seg of document.querySelectorAll(".seg[data-logtab]")) seg.classList.toggle("active", seg.dataset.logtab === tab);
+  $("#logs-log").hidden = tab !== "log";
+  $("#logs-connections").hidden = tab !== "connections";
+  syncConnections();
+}
+
+function syncConnections() {
+  const shown = state.view === "logs" && state.logTab === "connections";
+  if (shown && !state.connTimer) {
+    loadConnections().catch(reportError);
+    state.connTimer = setInterval(() => loadConnections().catch(() => {}), 1000);
+  } else if (!shown && state.connTimer) {
+    clearInterval(state.connTimer);
+    state.connTimer = null;
+  }
+}
+
+async function loadConnections(clear = false) {
+  const data = await api(clear ? "DELETE" : "GET", "/api/connections");
+  state.conns = data.connections || [];
+  renderConnections();
+}
+
+function connDuration(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const two = (n) => String(n).padStart(2, "0");
+  if (s >= 3600) return `${Math.floor(s / 3600)}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}`;
+  if (s >= 60) return `${Math.floor(s / 60)}:${two(s % 60)}`;
+  return `${s}s`;
+}
+
+function renderConnections() {
+  const query = $("#conn-search").value.trim().toLowerCase();
+  const listed = state.conns.filter((c) => c.id > state.connsClearedAfter);
+  const shown = listed.filter((c) => !query || c.target.toLowerCase().includes(query) || (c.client || "").toLowerCase().includes(query));
+  const now = Date.now();
+  $("#conn-open").textContent = `${listed.filter((c) => !c.end).length} open`;
+  $("#conn-empty").hidden = shown.length > 0;
+  $("#conn-rows").replaceChildren(...shown.map((c) => {
+    const start = new Date(c.start);
+    const [label, kind] = ROUTES[c.route] || ["…", ""];
+    const end = c.end ? new Date(c.end).getTime() : now;
+    return el("tr", { class: c.end ? "closed" : "" },
+      el("td", { text: start.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) }),
+      el("td", { class: "dest", text: c.target, title: c.client }),
+      el("td", {}, el("span", { class: "chip " + kind, text: label })),
+      el("td", { text: (c.network || "").toUpperCase() }),
+      el("td", { class: "hide-sm", text: `↑ ${formatBytes(c.up)}  ↓ ${formatBytes(c.down)}` }),
+      el("td", { class: "hide-sm" }, c.end ? "" : el("span", { class: "open-dot" }), connDuration(end - start.getTime())));
+  }));
+  if ($("#conn-follow").checked) $("#conn-card").scrollTop = $("#conn-card").scrollHeight;
+}
+
+for (const seg of document.querySelectorAll(".seg[data-logtab]")) {
+  seg.addEventListener("click", () => showLogTab(seg.dataset.logtab));
+}
+$("#conn-search").addEventListener("input", () => renderConnections());
+$("#conn-clear").addEventListener("click", () => {
+  if (state.conns.length) state.connsClearedAfter = Math.max(state.connsClearedAfter, state.conns[state.conns.length - 1].id);
+  loadConnections(true).catch(reportError);
+});
+
 // -------------------------------------------------------------- settings
 
 const DNS_PRESETS = {
@@ -1692,6 +1773,7 @@ function stopPolling() {
   clearInterval(state.pollTimer);
   state.pollTimer = null;
   if (state.logSource) { state.logSource.close(); state.logSource = null; }
+  if (state.connTimer) { clearInterval(state.connTimer); state.connTimer = null; }
 }
 
 async function refresh() {

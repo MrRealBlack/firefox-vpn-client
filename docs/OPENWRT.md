@@ -65,7 +65,7 @@ cd /root/firefox-vpn
 
 - The panel and the proxy now listen on **0.0.0.0** (every address of the router), not only on `127.0.0.1` (the router itself). If the panel ever stops opening from your devices, check this, and run this step again.
 - It prints the **panel** login and the **proxy** login. **Write them down**: they are shown only once.
-- Your own panel password: run `./firefox-vpn-core -set-dashboard-login` now.
+- Your own panel password: run `./firefox-vpn-core -panel` now.
 - Never open the ports 10810 and 10820 on WAN.
 
 ## 3. Start it with the router
@@ -166,7 +166,7 @@ rm -r /root/firefox-vpn
 | Is it running? | `/root/firefox-vpn/firefox-vpn-core -status` |
 | See the log | `logread -e firefox-vpn` |
 | Panel does not open | the service runs? `netstat -ltn \| grep 1082` shows `127.0.0.1:10820` instead of `0.0.0.0` or `:::`? then run step 2 again; use the router's address, not `127.0.0.1` |
-| Forgot the panel password | `/root/firefox-vpn/firefox-vpn-core -set-dashboard-login`, then `/etc/init.d/firefox-vpn restart` |
+| Forgot the panel password | `/root/firefox-vpn/firefox-vpn-core -panel`, then `/etc/init.d/firefox-vpn restart` |
 | Proxy port does not answer | add a working account (step 4); the panel's Overview says why it waits |
 | Accounts from the desktop app | stop the service, copy only the `user-data/accounts` folder (not `config.json`: it would replace the router's settings, and then step 2 is needed again), start it |
 | Slow or times out | panel: **Settings → Connection → Protocol: HTTP/2** |

@@ -749,6 +749,7 @@
   "modeSystemProxyHint": "Windows and most apps go through the proxy.",
   "modeSystemProxyHintOther": "Browsers and most apps go through the proxy.",
   "suggestedApps": "Suggested apps",
+  "showSystemApps": "Show system apps",
   "suggestedAdded": "{count, plural, =0{The suggested apps are already selected} =1{1 suggested app selected} other{{count} suggested apps selected}}",
   "@suggestedAdded": {
     "placeholders": {
@@ -919,5 +920,41 @@
   "addProgramFile": "Choose a file…",
   "addProgramName": "Type a name…",
   "programNameHint": "A program's file name, such as steam.exe; * stands for any text (steam* is every Steam program).",
-  "runningProgramsEmpty": "No other programs are running."
+  "runningProgramsEmpty": "No other programs are running.",
+  "tabLog": "Log",
+  "tabConnections": "Connections",
+  "@tabConnections": {
+    "description": "Logs page: the tab that lists the proxy's connections (GET /api/connections)."
+  },
+  "connectionsEmpty": "No connections yet.",
+  "connectionsOpen": "{count} open",
+  "@connectionsOpen": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "connTime": "Time",
+  "connRoute": "Rule",
+  "connDestination": "Destination",
+  "connInbound": "Inbound",
+  "@connInbound": {
+    "description": "How the client came: SOCKS5, HTTP, or TUN."
+  },
+  "connProtocol": "Protocol",
+  "@connProtocol": {
+    "description": "TCP or UDP."
+  },
+  "connColumns": "Columns",
+  "connTraffic": "Traffic",
+  "connDuration": "Duration",
+  "connRouteVpn": "Proxy",
+  "connRouteDirect": "Direct",
+  "connRouteBlocked": "Blocked",
+  "connRoutePort": "Port refused",
+  "@connRoutePort": {
+    "description": "Mozilla's proxy connects to ports 80, 443, 8080, and 8443 only."
+  },
+  "connRouteFailed": "Failed"
 }

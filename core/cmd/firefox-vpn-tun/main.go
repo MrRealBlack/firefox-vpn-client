@@ -16,6 +16,9 @@
 // On macOS, install and uninstall take -prompt, the reason the
 // administrator prompt shows (the app passes it in the user's language).
 //
+// Started with no command, as from Explorer, it explains what it is and
+// links the project (on Windows in a console window of its own).
+//
 // Exit status: 0 done, 1 failed (the reason on the standard error), 2 bad
 // arguments, 3 the administrator permission was not given.
 package main
@@ -35,8 +38,12 @@ const (
 )
 
 func main() {
+	// Opened by hand (no command): say what this is, and end without an
+	// error: Windows Terminal keeps a window whose program failed open and
+	// starts it again on Enter.
 	if len(os.Args) < 2 {
-		usage()
+		showIntro()
+		return
 	}
 	switch os.Args[1] {
 	case "-version", "--version", "version":

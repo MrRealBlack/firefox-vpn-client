@@ -79,11 +79,27 @@ func (m *trafficMeter) traffic() Traffic {
 }
 
 // countingConn counts what a client sends (written to the destination) and
-// receives (read from it).
+// receives (read from it). route, when set, is the route the tunnel took
+// (RoutedOpener), for the list of connections.
 type countingConn struct {
 	net.Conn
 	up, down *atomic.Int64
+	route    string
+	// onClose, when set, runs once when the connection closes.
+	onClose   func()
+	closeOnce sync.Once
 }
+
+func (c *countingConn) Close() error {
+	err := c.Conn.Close()
+	if c.onClose != nil {
+		c.closeOnce.Do(c.onClose)
+	}
+	return err
+}
+
+// Route is the route the tunnel took, or "".
+func (c *countingConn) Route() string { return c.route }
 
 func (c *countingConn) Read(p []byte) (int, error) {
 	n, err := c.Conn.Read(p)
@@ -105,7 +121,16 @@ func (c halfClosingCountingConn) CloseWrite() error {
 }
 
 func countConn(conn net.Conn, up, down *atomic.Int64) net.Conn {
-	counted := &countingConn{Conn: conn, up: up, down: down}
+	return countRouted(conn, up, down, "")
+}
+
+// countRouted is countConn for a tunnel that took route.
+func countRouted(conn net.Conn, up, down *atomic.Int64, route string) net.Conn {
+	return wrapCounting(&countingConn{Conn: conn, up: up, down: down, route: route})
+}
+
+func wrapCounting(counted *countingConn) net.Conn {
+	conn := counted.Conn
 	if _, ok := conn.(interface{ CloseWrite() error }); ok {
 		return halfClosingCountingConn{counted}
 	}

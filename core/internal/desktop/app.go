@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -157,11 +156,12 @@ func RunApp(paths service.DataPaths, verbose bool) error {
 	if tunOK && listsPrograms {
 		d.RunningPrograms = runningPrograms
 	}
-	// The app's own updates (Windows): this core is core\ in the app's
-	// folder. After an update, an older TUN service updates itself.
+	// The app's own updates (Windows, Linux, macOS): this core is in core/
+	// of the app's folder, or in the macOS bundle's Contents/MacOS. After
+	// an update, an older TUN service updates itself.
 	refreshTun := false
 	if exe, err := os.Executable(); err == nil {
-		appDir := filepath.Dir(filepath.Dir(exe))
+		appDir := update.AppDir(exe)
 		if why := update.Supported(appDir, paths.Dir, version.Current); why == "" {
 			d.Updater = update.New(update.Options{DataDir: paths.Dir, AppDir: appDir, Current: version.Current, Transports: d.UpdateTransports})
 			last := d.Updater.Status().Last

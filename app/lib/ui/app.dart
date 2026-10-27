@@ -232,7 +232,10 @@ class _ShellState extends State<Shell> {
                       settings: widget.settings,
                       opening: _settingsOpening,
                     ),
-                    _Page.logs => LogsPage(core: core),
+                    _Page.logs => LogsPage(
+                      core: core,
+                      settings: widget.settings,
+                    ),
                     _Page.about => AboutPage(core: core),
                   },
           ),

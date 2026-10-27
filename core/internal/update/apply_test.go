@@ -49,7 +49,7 @@ func readResult(t *testing.T, dataDir string) Result {
 
 func TestApplySwapsAPortableCopyAndStartsTheApp(t *testing.T) {
 	if !platformSupported {
-		t.Skip("Windows only")
+		t.Skip("Windows, Linux, and macOS only")
 	}
 	newRelease(t, "1.2.3").serve(t)
 	appDir, dataDir := appFolder(t, "1.0.0", false)
@@ -88,7 +88,7 @@ func TestApplySwapsAPortableCopyAndStartsTheApp(t *testing.T) {
 // uninstaller, and gets its new version in Windows' list.
 func TestApplySwapsAnInstalledCopyAndSetsItsVersion(t *testing.T) {
 	if !platformSupported {
-		t.Skip("Windows only")
+		t.Skip("Windows, Linux, and macOS only")
 	}
 	newRelease(t, "1.2.3").serve(t)
 	appDir, dataDir := appFolder(t, "1.0.0", true)
@@ -110,7 +110,7 @@ func TestApplySwapsAnInstalledCopyAndSetsItsVersion(t *testing.T) {
 // list keeps its version.
 func TestAFailedApplyStartsTheOldVersion(t *testing.T) {
 	if !platformSupported {
-		t.Skip("Windows only")
+		t.Skip("Windows, Linux, and macOS only")
 	}
 	newRelease(t, "1.2.3").serve(t)
 	appDir, dataDir := appFolder(t, "1.0.0", true)
@@ -141,7 +141,7 @@ func TestAFailedApplyStartsTheOldVersion(t *testing.T) {
 
 func TestApplyLeavesARunningAppAlone(t *testing.T) {
 	if !platformSupported {
-		t.Skip("Windows only")
+		t.Skip("Windows, Linux, and macOS only")
 	}
 	newRelease(t, "1.2.3").serve(t)
 	appDir, dataDir := appFolder(t, "1.0.0", false)
@@ -162,7 +162,7 @@ func TestApplyLeavesARunningAppAlone(t *testing.T) {
 
 func TestWaitForExitWaitsForRealProcesses(t *testing.T) {
 	if !platformSupported {
-		t.Skip("Windows only")
+		t.Skip("Windows, Linux, and macOS only")
 	}
 	// This process does not exit: the wait times out. A process id that
 	// does not exist counts as exited.
@@ -176,21 +176,42 @@ func TestWaitForExitWaitsForRealProcesses(t *testing.T) {
 
 func TestOnlyOneUpdateOfAnAppRunsAtATime(t *testing.T) {
 	if !platformSupported {
-		t.Skip("Windows only")
+		t.Skip("Windows, Linux, and macOS only")
 	}
-	appDir := t.TempDir()
-	unlock, err := lockApp(appDir)
+	dataDir := t.TempDir()
+	unlock, err := lockApp(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !updating(appDir) || updating(t.TempDir()) {
+	if !updating(dataDir) || updating(t.TempDir()) {
 		t.Fatal("updating() is wrong")
 	}
-	if _, err := lockApp(appDir); err == nil {
-		t.Fatal("locked twice")
+	if _, err := lockApp(dataDir); !errors.Is(err, errUpdateRunning) {
+		t.Fatalf("locked twice: %v", err)
 	}
 	unlock()
-	if updating(appDir) {
+	if updating(dataDir) {
 		t.Fatal("still updating")
+	}
+}
+
+// Beside another update of the same data folder, Apply does nothing: that
+// update starts the app again.
+func TestApplyLeavesTheAppToAnotherUpdate(t *testing.T) {
+	if !platformSupported {
+		t.Skip("Windows, Linux, and macOS only")
+	}
+	newRelease(t, "1.2.3").serve(t)
+	appDir, dataDir := appFolder(t, "1.0.0", false)
+	installed(t, appDir, dataDir)
+	var f fakeProcesses
+	f.install(t)
+	unlock, err := lockApp(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	if err := Apply(dataDir); !errors.Is(err, errUpdateRunning) || f.started != nil || f.waited != nil {
+		t.Fatalf("Apply: %v, waited %v, started %v", err, f.waited, f.started)
 	}
 }

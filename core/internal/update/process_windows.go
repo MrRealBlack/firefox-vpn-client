@@ -18,16 +18,26 @@ import (
 
 const platformSupported = true
 
-// mutexName names the lock that an update of the app in appDir holds while
-// it runs (Apply), so a core started meanwhile leaves its files alone.
-func mutexName(appDir string) string {
-	sum := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(appDir))))
+// dataDirOK: the data folder is the app's own user-data, so the update's
+// renames stay on one drive.
+func dataDirOK(appDir, dataDir string) string {
+	if !strings.EqualFold(filepath.Clean(dataDir), filepath.Join(filepath.Clean(appDir), "user-data")) {
+		return "the data folder is not the app's own (user-data beside it)"
+	}
+	return ""
+}
+
+// mutexName names the lock that an update holds while it runs (Apply), by
+// the data folder it installs from (the app's user-data), so a core that
+// uses that folder and starts meanwhile leaves the update's files alone.
+func mutexName(dataDir string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(dataDir))))
 	return `Local\FirefoxVPNUpdate-` + hex.EncodeToString(sum[:8])
 }
 
-// updating reports whether an update of the app in appDir runs now.
-func updating(appDir string) bool {
-	name, err := windows.UTF16PtrFromString(mutexName(appDir))
+// updating reports whether an update that uses the data folder runs now.
+func updating(dataDir string) bool {
+	name, err := windows.UTF16PtrFromString(mutexName(dataDir))
 	if err != nil {
 		return false
 	}
@@ -39,10 +49,10 @@ func updating(appDir string) bool {
 	return true
 }
 
-// lockApp takes the lock of updating(appDir) until the returned function
-// is called; it fails while another update of the same app runs.
-func lockApp(appDir string) (func(), error) {
-	name, err := windows.UTF16PtrFromString(mutexName(appDir))
+// lockApp takes the lock of updating(dataDir) until the returned function
+// is called; it fails with errUpdateRunning while another update runs.
+func lockApp(dataDir string) (func(), error) {
+	name, err := windows.UTF16PtrFromString(mutexName(dataDir))
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +62,7 @@ func lockApp(appDir string) (func(), error) {
 			windows.CloseHandle(h)
 		}
 		if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-			return nil, errors.New("another update of this app is running")
+			return nil, errUpdateRunning
 		}
 		return nil, err
 	}
@@ -152,7 +162,7 @@ func startUpdater(exe, dataDir string) error {
 
 // startApp starts the app in appDir with args.
 func startApp(appDir string, args []string) error {
-	cmd := exec.Command(filepath.Join(appDir, AppExe), args...)
+	cmd := exec.Command(filepath.Join(appDir, thePackage.app), args...)
 	cmd.Dir = appDir
 	if err := cmd.Start(); err != nil {
 		return err

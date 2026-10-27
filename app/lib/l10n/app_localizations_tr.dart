@@ -1161,6 +1161,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get suggestedApps => 'Önerilen uygulamalar';
 
   @override
+  String get showSystemApps => 'Sistem uygulamalarını göster';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1420,4 +1423,57 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => 'Çalışan başka program yok.';
+
+  @override
+  String get tabLog => 'Günlük';
+
+  @override
+  String get tabConnections => 'Bağlantılar';
+
+  @override
+  String get connectionsEmpty => 'Henüz bağlantı yok.';
+
+  @override
+  String connectionsOpen(int count) {
+    return '$count açık';
+  }
+
+  @override
+  String get connTime => 'Zaman';
+
+  @override
+  String get connRoute => 'Kural';
+
+  @override
+  String get connDestination => 'Hedef';
+
+  @override
+  String get connInbound => 'Giriş';
+
+  @override
+  String get connProtocol => 'Protokol';
+
+  @override
+  String get connColumns => 'Sütunlar';
+
+  @override
+  String get connTraffic => 'Trafik';
+
+  @override
+  String get connDuration => 'Süre';
+
+  @override
+  String get connRouteVpn => 'Proxy';
+
+  @override
+  String get connRouteDirect => 'Doğrudan';
+
+  @override
+  String get connRouteBlocked => 'Engellendi';
+
+  @override
+  String get connRoutePort => 'Port reddedildi';
+
+  @override
+  String get connRouteFailed => 'Başarısız';
 }

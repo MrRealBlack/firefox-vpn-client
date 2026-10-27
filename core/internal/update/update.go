@@ -1,19 +1,24 @@
-// Package update installs new versions of the Windows desktop app. The app
-// finds a newer release on GitHub and asks its core to download it: the
-// core fetches the release's SHA256SUMS.txt and its signature
-// (SHA256SUMS.txt.sig, Ed25519, checked against the key built into the
-// core, internal/signing), then the release's zip, whose SHA-256 must be
-// the one in the signed list. Through the proxy while it is on, as GitHub
-// may be blocked; directly otherwise.
+// Package update installs new versions of the desktop app on Windows,
+// Linux, and macOS. The app finds a newer release on GitHub and asks its
+// core to download it: the core fetches the release's SHA256SUMS.txt and
+// its signature (SHA256SUMS.txt.sig, Ed25519, checked against the key built
+// into the core, internal/signing), then the release's zip (Windows) or
+// tar.gz (Linux, for the processor; macOS, the app's bundle), whose SHA-256
+// must be the one in the signed list. Through the proxy while it is on, as
+// GitHub may be blocked; directly otherwise. On Linux the app lives in the
+// user's folder (the desktop install of install.sh), and on macOS in a
+// folder the user may change (Applications, for an administrator), so no
+// administrator is asked.
 //
-// To install, the core unpacks the zip into the update folder, copies
+// To install, the core unpacks the package into the update folder, copies
 // itself there, and starts the copy with -update (Apply); the app and the
 // core then quit as usual (the system proxy is restored). The copy waits
 // until both have exited and swaps the app's files: each of the package's
 // files and folders replaces the one of the same name, all by renames on
 // one drive, and the replaced ones are kept aside to be put back on any
 // failure (a file a virus scanner holds, say). The data folder (user-data)
-// and anything else in the app's folder stay. For a copy that Setup
+// and anything else in the app's folder stay; on macOS the app's folder is
+// its bundle, whose Contents is replaced. For a copy that Setup
 // installed, it also sets the version in Windows' list of installed apps;
 // the uninstaller removes the app's files whichever version put them there
 // ([UninstallDelete] in app/windows/installer/firefox-vpn.iss). The new
@@ -26,12 +31,16 @@
 //
 // Everything lives in the data folder's "update" folder:
 //
-//	<version>/            the release's signed list and zip, once downloaded
-//	new/                  the unpacked zip, while it is installed
+//	<version>/            the release's signed list and package, once downloaded
+//	new/                  the unpacked package, while it is installed
 //	backup/               the replaced files, until the next start
 //	updater/              the copy of the core that runs -update
 //	pending.json          what the copy is to do
 //	result.json           what it did, for the next start
+//
+// While the copy installs, it holds a lock on the data folder (a mutex on
+// Windows, update.lock beside update/ elsewhere), so a core that uses the
+// same folder and starts meanwhile leaves these files alone.
 package update
 
 import (
@@ -72,11 +81,37 @@ const (
 	SigFile  = SumsFile + ".sig"
 )
 
-// AppExe and CoreExe are the app and the core inside the app's folder.
-const (
-	AppExe  = "firefox-vpn.exe"
-	CoreExe = "core/firefox-vpn-core.exe"
-)
+// appPackage is how the app comes in a release: the file of a version, the
+// app and its core inside it (relative to the app's folder, with "/"), and
+// how the file unpacks.
+type appPackage struct {
+	name      func(v string) string
+	app, core string
+	unpack    func(file, dir string) error
+}
+
+// windowsPackage is the Windows app's zip.
+var windowsPackage = appPackage{
+	name:   func(v string) string { return "Firefox-VPN-" + v + "-Windows-x64.zip" },
+	app:    "firefox-vpn.exe",
+	core:   "core/firefox-vpn-core.exe",
+	unpack: unzip,
+}
+
+// thePackage is this system's: the Windows zip, or the Linux or macOS
+// archive (untar.go; process_linux.go and process_darwin.go set it).
+var thePackage = windowsPackage
+
+// AppDir is the app's folder for the core at exe: the folder that holds
+// the package's core (core/ on Windows and Linux, Contents/MacOS in the
+// macOS bundle, whose folder is the bundle).
+func AppDir(exe string) string {
+	dir := exe
+	for range strings.Split(thePackage.core, "/") {
+		dir = filepath.Dir(dir)
+	}
+	return dir
+}
 
 // releasesURL is where GitHub serves a release's files:
 // <releasesURL>v<version>/<file>.
@@ -101,8 +136,8 @@ const (
 	packageTimeout = 20 * time.Minute
 )
 
-// AssetName is the release's zip of version v.
-func AssetName(v string) string { return "Firefox-VPN-" + v + "-Windows-x64.zip" }
+// AssetName is the release's file of version v for this system.
+func AssetName(v string) string { return thePackage.name(v) }
 
 // Status is the update's state, for the app (GET /api/status, "update").
 type Status struct {
@@ -144,8 +179,17 @@ type pending struct {
 	On   bool  `json:"on,omitempty"`
 }
 
+// errNotSupported: updates install by themselves on these systems only
+// (platformSupported); elsewhere the app offers the download.
+var errNotSupported = errors.New("updates install by themselves on Windows, Linux, and macOS only")
+
+// errUpdateRunning: another update that uses the same data folder runs;
+// it starts the app again when it is done.
+var errUpdateRunning = errors.New("another update of this app is running")
+
 // AppArgs are the app's arguments that an update passes on to the next
-// start: started with the computer, or hidden in the tray.
+// start: started with the computer, or hidden in the tray. A copy started
+// with its own data folder also keeps "--data-dir=<that folder>" (Install).
 var AppArgs = []string{"--autostart", "--hidden"}
 
 // InstallRequest is the app's request to install a downloaded version.
@@ -153,7 +197,8 @@ type InstallRequest struct {
 	Version string
 	// PID is the app's process, which quits once the request returns.
 	PID int
-	// Args are the app's arguments for its next start (AppArgs only).
+	// Args are the app's arguments for its next start: AppArgs, and
+	// "--data-dir=" naming this core's data folder.
 	Args []string
 	// On: the proxy is on, so the next start turns it on again.
 	On bool
@@ -164,7 +209,8 @@ type Options struct {
 	// DataDir is the app's data folder (user-data); the update keeps its
 	// files in its "update" folder.
 	DataDir string
-	// AppDir is the app's folder, with firefox-vpn.exe and core\.
+	// AppDir is the app's folder (AppDir): the app and core/, or the
+	// macOS app's bundle.
 	AppDir string
 	// Current is this version (version.Current).
 	Current string
@@ -186,22 +232,24 @@ type Manager struct {
 }
 
 // Supported reports whether this core can update the app it belongs to: on
-// Windows, with an update key built in, a version number, the app beside
-// it, and the app's own data folder (user-data in the app's folder, so the
-// update's renames stay on one drive). It returns "" when it can, else why
-// not.
+// Windows, Linux, or macOS, with an update key built in, a version number,
+// the app beside it, and a data folder where the update's renames work
+// (dataDirOK: on Windows the app's own user-data, elsewhere one on the
+// app's drive, with an app the user may change). It returns "" when it can,
+// else why not.
 func Supported(appDir, dataDir, current string) string {
 	switch {
 	case !platformSupported:
-		return "updates install by themselves on Windows only"
+		return errNotSupported.Error()
 	case !signing.Available():
 		return signing.ErrNoKey.Error()
 	case current == "" || current == "0.0.0":
 		return "a development build has no version to update from"
-	case !strings.EqualFold(filepath.Clean(dataDir), filepath.Join(filepath.Clean(appDir), "user-data")):
-		return "the data folder is not the app's own (user-data beside it)"
 	}
-	if _, err := os.Stat(filepath.Join(appDir, AppExe)); err != nil {
+	if why := dataDirOK(appDir, dataDir); why != "" {
+		return why
+	}
+	if _, err := os.Stat(filepath.Join(appDir, filepath.FromSlash(thePackage.app))); err != nil {
 		return "the app is not beside this core"
 	}
 	return ""
@@ -223,7 +271,7 @@ func New(opts Options) *Manager {
 		}
 		logx.Info("update: releases from server=%s", server)
 	}
-	if updating(opts.AppDir) {
+	if updating(opts.DataDir) {
 		logx.Warn("update: another update of this app is running; its files stay")
 		return m
 	}
@@ -278,11 +326,12 @@ func (m *Manager) takeResult() *Result {
 	return &r
 }
 
-// clean removes what an earlier update left: the unpacked zip, the old
-// files, its instructions, and the copy of the core (which may still be
-// exiting, so it is tried again for a while).
+// clean removes what an earlier update left: the unpacked package (also an
+// unpacking that stopped halfway), the old files, its instructions, and the
+// copy of the core (which may still be exiting, so it is tried again for a
+// while).
 func (m *Manager) clean() {
-	for _, p := range []string{m.newDir(), m.backupDir(), m.pendingFile()} {
+	for _, p := range []string{m.newDir(), m.newDir() + ".part", m.backupDir(), m.pendingFile()} {
 		if err := os.RemoveAll(p); err != nil {
 			logx.Warn("update: removing %s failed err=%s", p, logx.Err(err))
 		}
@@ -479,21 +528,22 @@ func get(client *http.Client, u string, limit int64) ([]byte, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusNotFound {
-			return nil, bad("the release has no %s", path(u))
+			return nil, bad("the release has no %s", fileOf(u))
 		}
-		return nil, fmt.Errorf("%s: HTTP %d", path(u), resp.StatusCode)
+		return nil, fmt.Errorf("%s: HTTP %d", fileOf(u), resp.StatusCode)
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return nil, err
 	}
 	if int64(len(data)) > limit {
-		return nil, bad("%s is too large", path(u))
+		return nil, bad("%s is too large", fileOf(u))
 	}
 	return data, nil
 }
 
-func path(u string) string { return u[strings.LastIndex(u, "/")+1:] }
+// fileOf is the file name at the end of URL u.
+func fileOf(u string) string { return u[strings.LastIndex(u, "/")+1:] }
 
 // getPackage downloads the package into file, counting its bytes in the
 // status, and checks its SHA-256 against want.
@@ -515,12 +565,12 @@ func (m *Manager) getPackage(client *http.Client, u, file, want string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusNotFound {
-			return bad("the release has no %s", path(u))
+			return bad("the release has no %s", fileOf(u))
 		}
-		return fmt.Errorf("%s: HTTP %d", path(u), resp.StatusCode)
+		return fmt.Errorf("%s: HTTP %d", fileOf(u), resp.StatusCode)
 	}
 	if resp.ContentLength > maxPackageSize {
-		return bad("%s is too large", path(u))
+		return bad("%s is too large", fileOf(u))
 	}
 	m.setStatus(func(s *Status) { s.Done, s.Total = 0, max(resp.ContentLength, 0) })
 	f, err := os.Create(file)
@@ -536,7 +586,7 @@ func (m *Manager) getPackage(client *http.Client, u, file, want string) error {
 		return stalled(ctx, err)
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != want {
-		return bad("%s does not match the release's checksum", path(u))
+		return bad("%s does not match the release's checksum", fileOf(u))
 	}
 	return nil
 }
@@ -632,13 +682,13 @@ func (m *Manager) checkPackage(v string) (string, error) {
 }
 
 // Install installs the downloaded version req.Version: it checks the
-// package again, unpacks a zip, and starts a copy of this core with
+// package again, unpacks it, and starts a copy of this core with
 // -update, which waits until the app (req.PID) and this core have exited.
 // The app quits once it returns; it must not return an error for the app
 // to quit.
 func (m *Manager) Install(req InstallRequest) error {
 	for _, a := range req.Args {
-		if !slices.Contains(AppArgs, a) {
+		if !slices.Contains(AppArgs, a) && !m.ownDataDir(a) {
 			return fmt.Errorf("the app's argument %q is not passed on", a)
 		}
 	}
@@ -663,6 +713,18 @@ func (m *Manager) Install(req InstallRequest) error {
 	return nil
 }
 
+// ownDataDir reports whether the app's argument a is "--data-dir=" naming
+// this core's data folder: a copy started with it starts again with it.
+func (m *Manager) ownDataDir(a string) bool {
+	dir, ok := strings.CutPrefix(a, "--data-dir=")
+	if !ok || dir == "" {
+		return false
+	}
+	have, err1 := filepath.Abs(dir)
+	want, err2 := filepath.Abs(m.opts.DataDir)
+	return err1 == nil && err2 == nil && have == want
+}
+
 // prepare readies everything the copy of the core needs, and starts it.
 func (m *Manager) prepare(req InstallRequest) error {
 	pkg, err := m.checkPackage(req.Version)
@@ -672,11 +734,11 @@ func (m *Manager) prepare(req InstallRequest) error {
 	if err := os.RemoveAll(m.newDir()); err != nil {
 		return err
 	}
-	if err := unzip(pkg, m.newDir()); err != nil {
+	if err := thePackage.unpack(pkg, m.newDir()); err != nil {
 		os.RemoveAll(m.newDir())
 		return fmt.Errorf("unpacking %s: %w", filepath.Base(pkg), err)
 	}
-	for _, f := range []string{AppExe, CoreExe} {
+	for _, f := range []string{thePackage.app, thePackage.core} {
 		if _, err := os.Stat(filepath.Join(m.newDir(), filepath.FromSlash(f))); err != nil {
 			os.RemoveAll(m.newDir())
 			return bad("%s has no %s", filepath.Base(pkg), f)
@@ -711,6 +773,7 @@ func (m *Manager) prepare(req InstallRequest) error {
 	return nil
 }
 
+// copyFile copies the executable at from to a new executable at to.
 func copyFile(from, to string) error {
 	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 		return err
@@ -720,7 +783,7 @@ func copyFile(from, to string) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.Create(to)
+	out, err := os.OpenFile(to, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
 	if err != nil {
 		return err
 	}

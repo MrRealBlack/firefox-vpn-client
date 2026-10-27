@@ -1165,6 +1165,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get suggestedApps => 'Рекомендуемые приложения';
 
   @override
+  String get showSystemApps => 'Показывать системные приложения';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1424,4 +1427,57 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => 'Других запущенных программ нет.';
+
+  @override
+  String get tabLog => 'Лог';
+
+  @override
+  String get tabConnections => 'Подключения';
+
+  @override
+  String get connectionsEmpty => 'Подключений пока нет.';
+
+  @override
+  String connectionsOpen(int count) {
+    return 'Открыто: $count';
+  }
+
+  @override
+  String get connTime => 'Время';
+
+  @override
+  String get connRoute => 'Правило';
+
+  @override
+  String get connDestination => 'Назначение';
+
+  @override
+  String get connInbound => 'Вход';
+
+  @override
+  String get connProtocol => 'Протокол';
+
+  @override
+  String get connColumns => 'Столбцы';
+
+  @override
+  String get connTraffic => 'Трафик';
+
+  @override
+  String get connDuration => 'Длительность';
+
+  @override
+  String get connRouteVpn => 'Прокси';
+
+  @override
+  String get connRouteDirect => 'Напрямую';
+
+  @override
+  String get connRouteBlocked => 'Заблокировано';
+
+  @override
+  String get connRoutePort => 'Порт отклонён';
+
+  @override
+  String get connRouteFailed => 'Ошибка';
 }

@@ -1169,6 +1169,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get suggestedApps => 'التطبيقات المقترحة';
 
   @override
+  String get showSystemApps => 'عرض تطبيقات النظام';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1432,4 +1435,57 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => 'لا توجد برامج أخرى قيد التشغيل.';
+
+  @override
+  String get tabLog => 'السجل';
+
+  @override
+  String get tabConnections => 'الاتصالات';
+
+  @override
+  String get connectionsEmpty => 'لا توجد اتصالات بعد.';
+
+  @override
+  String connectionsOpen(int count) {
+    return 'مفتوح: $count';
+  }
+
+  @override
+  String get connTime => 'الوقت';
+
+  @override
+  String get connRoute => 'القاعدة';
+
+  @override
+  String get connDestination => 'الوجهة';
+
+  @override
+  String get connInbound => 'الوارد';
+
+  @override
+  String get connProtocol => 'البروتوكول';
+
+  @override
+  String get connColumns => 'الأعمدة';
+
+  @override
+  String get connTraffic => 'حركة البيانات';
+
+  @override
+  String get connDuration => 'المدة';
+
+  @override
+  String get connRouteVpn => 'بروكسي';
+
+  @override
+  String get connRouteDirect => 'مباشر';
+
+  @override
+  String get connRouteBlocked => 'محظور';
+
+  @override
+  String get connRoutePort => 'منفذ مرفوض';
+
+  @override
+  String get connRouteFailed => 'فشل';
 }

@@ -48,11 +48,6 @@ String apkName(String abi) =>
 String windowsName({required bool installed}) =>
     installed ? 'Windows-Setup-x64.exe' : 'Windows-x64.zip';
 
-/// The Linux archive's name part for the processor in Dart's
-/// [platformVersion] ("... on "linux_arm64"").
-String linuxName(String platformVersion) =>
-    'Linux-${platformVersion.contains('arm64') ? 'arm64' : 'amd64'}.tar.gz';
-
 /// The file `Firefox-VPN-<version>-[name]` in the release whose page is
 /// [releaseUrl] (".../releases/tag/v1.2.3"): its versioned name, so the
 /// downloaded file says which version it is.
@@ -87,11 +82,12 @@ String? updateProxy(CoreStatus? status) {
 /// notification while the window is in the tray. The About page looks at
 /// once, whenever asked.
 ///
-/// The Windows app installs it itself (its core: core/internal/update):
-/// Update downloads it through the VPN while it runs, and the app closes
-/// and opens again as the new version. With automatic updates (on unless
-/// turned off), a version found downloads in the background and installs
-/// the next time the app starts. Elsewhere the notice opens the download.
+/// The desktop apps (Windows, Linux, macOS) install it themselves (their
+/// core: core/internal/update): Update downloads it through the VPN while it
+/// runs, and the app closes and opens again as the new version. With
+/// automatic updates (on unless turned off), a version found downloads in
+/// the background and installs the next time the app starts. On Android, or
+/// when the core cannot install it, the notice opens the download.
 abstract final class Updates {
   /// How long a successful look holds.
   static const every = Duration(days: 5);
@@ -122,7 +118,7 @@ abstract final class Updates {
   static AppSettings? _settings;
 
   /// The app's arguments that its next start keeps (core/internal/update
-  /// AppArgs).
+  /// AppArgs, and a copy's own --data-dir).
   static List<String> _startArgs = const [];
 
   /// The version the user asked to install: it installs once downloaded.
@@ -135,8 +131,9 @@ abstract final class Updates {
   /// failed one waits for the next start.
   static final _downloadsAsked = <String>{};
 
-  /// Starts looking. [args] are the app's own (`--autostart`, `--hidden`),
-  /// which a new version installed at the start keeps.
+  /// Starts looking. [args] are the app's own (`--autostart`, `--hidden`,
+  /// `--data-dir=`), which a new version installed at the start keeps; an
+  /// install from the Update button keeps `--data-dir=`.
   static void start(
     CoreController core,
     AppSettings settings, {
@@ -147,7 +144,10 @@ abstract final class Updates {
     _settings = settings;
     _startArgs = [
       for (final a in args)
-        if (a == '--autostart' || a == '--hidden') a,
+        if (a == '--autostart' ||
+            a == '--hidden' ||
+            a.startsWith('--data-dir='))
+          a,
     ];
     // A version found earlier, unless this app is already that one.
     if (newerVersion(settings.updateVersion, appVersion)) {
@@ -257,9 +257,12 @@ abstract final class Updates {
   }
 
   /// The arguments of the next start after an install now: in the tray if
-  /// the window is there.
-  static List<String> _restartArgs() =>
-      windowHidden() ? const ['--hidden'] : const [];
+  /// the window is there, and with this copy's own data folder.
+  static List<String> _restartArgs() => [
+    if (windowHidden()) '--hidden',
+    for (final a in _startArgs)
+      if (a.startsWith('--data-dir=')) a,
+  ];
 
   /// Asks the core to install [version], then quits the app; false when the
   /// core refused (the reason in [failure] or the core's status).

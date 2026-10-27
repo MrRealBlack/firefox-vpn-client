@@ -27,7 +27,7 @@ func main() {
 		fmt.Fprintln(out, "       firefox-vpn-core -tray [-data-dir DIR]")
 		fmt.Fprintln(out, "       firefox-vpn-core -app [-data-dir DIR] [-verbose]   (started by the desktop app)")
 		fmt.Fprintln(out, "       firefox-vpn-core -update -data-dir DIR   (a copy started by the app's core, to install an update)")
-		fmt.Fprintln(out, "       firefox-vpn-core -add-account | -list-accounts | -set-dashboard-login [-data-dir DIR]")
+		fmt.Fprintln(out, "       firefox-vpn-core -add-account | -list-accounts | -panel [-data-dir DIR]")
 		fmt.Fprintln(out, "       firefox-vpn-core -setup-server USERNAME [-data-dir DIR]   (install.sh, new Linux servers)")
 		fmt.Fprintln(out)
 		fmt.Fprintln(out, "Without a command, runs the proxy service and its web dashboard (default")
@@ -49,7 +49,7 @@ func main() {
 	addAccount := flag.Bool("add-account", false, "Sign in on the terminal and add the account, then exit")
 	listAccounts := flag.Bool("list-accounts", false, "List the accounts with status and quota, then exit")
 	status := flag.Bool("status", false, "Print the running service's proxy state, account, and data left in a few lines, then exit")
-	setLogin := flag.Bool("set-dashboard-login", false, "Set or remove the dashboard username and password on the terminal, then exit")
+	setLogin := flag.Bool("panel", false, "Set the panel username and password on the terminal (a random one for each left empty), then exit")
 	setupServer := flag.String("setup-server", "", "Open the dashboard and the proxy to the network (the dashboard login for USERNAME, \"-\" for a random one, and a random proxy login, each with a random password), print the logins, then exit (install.sh runs it on a new server)")
 	tray := flag.Bool("tray", false, "Show the tray icon; runs the service in-process unless one is already running")
 	app := flag.Bool("app", false, "Run the service for the desktop app (no tray icon or status screen); stops when standard input ends")
@@ -123,7 +123,7 @@ func runCommand(opts commandOptions) error {
 		}
 	}
 	if commands > 1 {
-		return errors.New("use only one of -add-account, -list-accounts, -status, -set-dashboard-login, -setup-server, -tray, -app, -update")
+		return errors.New("use only one of -add-account, -list-accounts, -status, -panel, -setup-server, -tray, -app, -update")
 	}
 	if opts.app && opts.plain {
 		return errors.New("-plain applies to the terminal; -app logs to the log file only")
@@ -140,7 +140,7 @@ func runCommand(opts commandOptions) error {
 	case opts.listAccounts:
 		return runListAccounts(paths)
 	case opts.setLogin:
-		return runSetDashboardLogin(paths)
+		return runPanelLogin(paths)
 	case opts.setupServer != "":
 		return runSetupServer(paths, opts.setupServer)
 	case opts.update:

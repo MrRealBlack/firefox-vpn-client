@@ -53,7 +53,8 @@ Without a command, on a terminal, a menu offers them by number.
 Commands:
   install              Install or update the binary and the service, then start it
   update               Update to the newest release, keeping the accounts and settings
-  uninstall            Stop and remove the service (PURGE=1 also deletes $INSTALL_DIR)
+  uninstall            Remove the service, and this command; on a terminal it asks first
+                       and whether to delete $INSTALL_DIR (else PURGE=1 does)
   status               Show the service state and the runtime status file
   start                Start the service
   stop                 Stop the service (until start, or the next boot when enabled)
@@ -63,7 +64,8 @@ Commands:
   logs                 Show the service log
   add-account          Sign in to a Firefox Account on this terminal
   list-accounts        List accounts, status, and quota
-  set-dashboard-login  Set or remove the dashboard username and password
+  panel                Set the panel's username and password (random when left empty)
+  panel-info           Show the panel's addresses and username
   setup-server [user]  Open the dashboard and the proxy to the network: the dashboard
                        login for user (a random one without it) and a random proxy
                        login, each with a random password; print the logins
@@ -74,7 +76,7 @@ Environment:
   SERVICE_NAME, SERVICE_USER
 
 The dashboard is at http://<address>:10820/app/. It opens to other devices only
-with a login (set-dashboard-login, or setup-server, which install.sh runs on a
+with a login (panel, or setup-server, which install.sh runs on a
 new server); without one it answers this machine only, and an SSH tunnel
 (ssh -L 10820:127.0.0.1:10820 host) reaches it.
 EOF
@@ -214,17 +216,34 @@ cmd_update() {
   env "${vars[@]}" bash -c "$script" install.sh server
 }
 
+# cmd_uninstall removes the service. On a terminal it asks first, and
+# whether to delete the accounts and settings too (else PURGE=1 does); the
+# firefox-vpn command that install.sh made goes with it.
 cmd_uninstall() {
   need_root
+  if [ -t 0 ] && [ -t 1 ]; then
+    local reply
+    printf '  Remove Firefox VPN from this server? [y/N] '
+    read -r reply || reply=""
+    case "$reply" in [yY]*) ;; *) printf '  Nothing removed.\n'; return 0 ;; esac
+    printf '  Delete the accounts and settings too? [y/N] '
+    read -r reply || reply=""
+    case "$reply" in [yY]*) PURGE=1 ;; *) PURGE=0 ;; esac
+  fi
   systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
   rm -f "$UNIT_FILE"
   systemctl daemon-reload
   if [ "$PURGE" = "1" ]; then
-    log "deleting $INSTALL_DIR including accounts and settings"
     rm -rf "$INSTALL_DIR"
     userdel "$SERVICE_USER" >/dev/null 2>&1 || true
+  fi
+  if [ "$SELF" = /usr/local/bin/firefox-vpn ]; then
+    rm -f "$SELF"
+  fi
+  if [ "$PURGE" = "1" ]; then
+    done_ok "Firefox VPN is removed, with its accounts and settings."
   else
-    log "service removed; $INSTALL_DIR kept (PURGE=1 deletes it)"
+    done_ok "Firefox VPN is removed; its accounts and settings stay in $DATA_DIR."
   fi
 }
 
@@ -254,34 +273,101 @@ cmd_status() {
   fi
 }
 
+# dashboard_field <name> <config.json>: a field of the "dashboard" settings
+# (the proxy has a listen and a username of its own).
+dashboard_field() {
+  awk -v key="\"$1\":" '/"dashboard": *\{/ { d = 1 } d && index($0, key) { sub(/^[^:]*: *"/, ""); sub(/".*/, ""); print; exit }' "$2"
+}
+
+# public_ip: the address the Internet sees, from the first of several
+# services that answers (one may be down or filtered), or nothing.
+public_ip() {
+  local ip url
+  for url in https://api.ipify.org https://checkip.amazonaws.com https://ipv4.icanhazip.com https://api.ip.sb/ip; do
+    ip="$(curl -fsS -4 --max-time 3 "$url" 2>/dev/null | tr -d '[:space:]' || true)"
+    if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "$ip"
+      return 0
+    fi
+  done
+}
+
+# cmd_panel_info: where the panel opens, and its username. Its password is
+# kept only as a hash, so it cannot be shown: "panel" sets a new one.
+cmd_panel_info() {
+  need_root
+  local cfg="$DATA_DIR/config.json" listen user port host lan wan
+  [ -f "$cfg" ] || done_fail "No settings yet: $cfg" || return
+  listen="$(dashboard_field listen "$cfg")"
+  user="$(dashboard_field username "$cfg")"
+  port="${listen##*:}"
+  host="${listen%:*}"
+  printf '\n  %s%sFirefox VPN panel%s\n' "$BOLD" "$FOX" "$OFF"
+  printf '  %s──────────────────────────────────────────────────────%s\n' "$DIM" "$OFF"
+  case "$host" in
+    127.* | localhost | "[::1]")
+      printf '    %-11s %shttp://%s/app/%s  %s(this server only)%s\n' "Address" "$CYAN" "$listen" "$OFF" "$DIM" "$OFF"
+      ;;
+    *)
+      lan="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }')"
+      wan="$(public_ip)"
+      [ "$lan" != "$wan" ] || lan=""
+      [ -z "$lan" ] || printf '    %-11s %shttp://%s:%s/app/%s\n' "Local" "$CYAN" "$lan" "$port" "$OFF"
+      [ -z "$wan" ] || printf '    %-11s %shttp://%s:%s/app/%s\n' "Global" "$CYAN" "$wan" "$port" "$OFF"
+      ;;
+  esac
+  if [ -n "$user" ]; then
+    printf '    %-11s %s%s%s\n' "Username" "$BOLD" "$user" "$OFF"
+  else
+    printf '    %-11s none: set one with %s panel\n' "Username" "$NAME"
+  fi
+}
+
 # menu: the everyday commands by number, for the command without
 # arguments on a terminal; it runs the one picked.
 menu() {
   local reply
-  local -a cmds=(status start stop restart enable disable logs add-account list-accounts set-dashboard-login update)
-  local -a labels=(
-    "Status"
-    "Start"
-    "Stop"
-    "Restart"
-    "Start with the server"
-    "Do not start with the server"
-    "Show the log"
-    "Add a Firefox Account"
-    "List the accounts and their quota"
-    "Set the panel's username and password"
-    "Update to the newest version"
+  # The commands in groups, "-" between them (a rule in the menu):
+  # updating and removing, the panel, the service and its log, starting
+  # with the server, the accounts. Numbers count the commands only.
+  local -a items=(
+    "update|Update"
+    "uninstall|Uninstall"
+    -
+    "panel|Set panel login"
+    "panel-info|View panel info"
+    -
+    "status|Status"
+    "start|Start"
+    "stop|Stop"
+    "restart|Restart"
+    "logs|Show the log"
+    -
+    "enable|Enable autostart"
+    "disable|Disable autostart"
+    -
+    "add-account|Add a Firefox Account"
+    "list-accounts|List the accounts"
   )
-  local i
+  local -a cmds=()
+  local item rule
+  rule="$(printf '  %s────────────────────────────────────────────────────────────────────────────%s' "$DIM" "$OFF")"
   # Back to the menu after each command, until 0.
   while :; do
+    cmds=()
     printf '\n  %s%sFirefox VPN%s\n' "$BOLD" "$FOX" "$OFF"
-    printf '  %s────────────────────────────────────────────────────────────────────────────%s\n' "$DIM" "$OFF"
-    for i in "${!cmds[@]}"; do
-      printf '  %s%2d)%s %-40s %s%s %s%s\n' "$CYAN" $((i + 1)) "$OFF" "${labels[$i]}" "$DIM" "$NAME" "${cmds[$i]}" "$OFF"
-    done
+    printf '%s\n' "$rule"
     printf '  %s 0)%s Exit\n' "$CYAN" "$OFF"
-    printf '  %s────────────────────────────────────────────────────────────────────────────%s\n' "$DIM" "$OFF"
+    printf '%s\n' "$rule"
+    for item in "${items[@]}"; do
+      if [ "$item" = - ]; then
+        printf '%s\n' "$rule"
+        continue
+      fi
+      cmds+=("${item%%|*}")
+      printf '  %s%2d)%s %-40s %s%s %s%s\n' "$CYAN" "${#cmds[@]}" "$OFF" "${item#*|}" "$DIM" "$NAME" "${item%%|*}" "$OFF"
+    done
+    printf '%s\n' "$rule"
     while :; do
       printf '  Enter a number [0-%d]: ' "${#cmds[@]}"
       read -r reply || exit 0
@@ -298,6 +384,10 @@ menu() {
     trap ':' INT
     ( main "$COMMAND_NAME" ) || true
     trap - INT
+    # Removed: nothing is left to manage.
+    if [ "$COMMAND_NAME" = uninstall ] && [ ! -f "$UNIT_FILE" ]; then
+      exit 0
+    fi
     # A blank line below the prompt too, so it never sits on the window's
     # bottom edge: print it, then move the cursor back up onto the prompt.
     printf '\n\n\033[1A  %s↵  Press Enter to return to the menu%s ' "$CYAN" "$OFF"
@@ -323,7 +413,8 @@ case "${1:-}" in
   disable) need_root; systemctl disable --quiet "${SERVICE_NAME}.service" && done_ok "Does not start with the server." || done_fail "Failed" ;;
   add-account) need_root; run_as_service_user -add-account && systemctl restart "${SERVICE_NAME}.service" ;;
   list-accounts) need_root; run_as_service_user -list-accounts ;;
-  set-dashboard-login) need_root; run_as_service_user -set-dashboard-login && systemctl restart "${SERVICE_NAME}.service" ;;
+  panel) need_root; run_as_service_user -panel && systemctl restart "${SERVICE_NAME}.service" ;;
+  panel-info) cmd_panel_info ;;
   setup-server) need_root; run_as_service_user -setup-server "${2:--}" && systemctl restart "${SERVICE_NAME}.service" ;;
   "")
     # On a terminal, the menu; otherwise (scripts, pipes) the help.

@@ -1160,6 +1160,9 @@ class AppLocalizationsAz extends AppLocalizations {
   String get suggestedApps => 'Təklif olunan tətbiqlər';
 
   @override
+  String get showSystemApps => 'Sistem tətbiqlərini göstər';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1419,4 +1422,57 @@ class AppLocalizationsAz extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => 'Başqa işləyən proqram yoxdur.';
+
+  @override
+  String get tabLog => 'Log';
+
+  @override
+  String get tabConnections => 'Bağlantılar';
+
+  @override
+  String get connectionsEmpty => 'Hələ bağlantı yoxdur.';
+
+  @override
+  String connectionsOpen(int count) {
+    return '$count açıq';
+  }
+
+  @override
+  String get connTime => 'Vaxt';
+
+  @override
+  String get connRoute => 'Qayda';
+
+  @override
+  String get connDestination => 'Təyinat';
+
+  @override
+  String get connInbound => 'Giriş';
+
+  @override
+  String get connProtocol => 'Protokol';
+
+  @override
+  String get connColumns => 'Sütunlar';
+
+  @override
+  String get connTraffic => 'Trafik';
+
+  @override
+  String get connDuration => 'Müddət';
+
+  @override
+  String get connRouteVpn => 'Proksi';
+
+  @override
+  String get connRouteDirect => 'Birbaşa';
+
+  @override
+  String get connRouteBlocked => 'Bloklanıb';
+
+  @override
+  String get connRoutePort => 'Port rədd edildi';
+
+  @override
+  String get connRouteFailed => 'Uğursuz';
 }

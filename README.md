@@ -110,21 +110,32 @@ $ sudo firefox-vpn
 
   Firefox VPN
   ────────────────────────────────────────────────────────────────────────────
-   1) Status                                   firefox-vpn status
-   2) Start                                    firefox-vpn start
-   3) Stop                                     firefox-vpn stop
-   4) Restart                                  firefox-vpn restart
-   5) Start with the server                    firefox-vpn enable
-   6) Do not start with the server             firefox-vpn disable
-   7) Show the log                             firefox-vpn logs
-   8) Add a Firefox Account                    firefox-vpn add-account
-   9) List the accounts and their quota        firefox-vpn list-accounts
-  10) Set the panel's username and password    firefox-vpn set-dashboard-login
-  11) Update to the newest version             firefox-vpn update
    0) Exit
   ────────────────────────────────────────────────────────────────────────────
-  Enter a number [0-11]:
+   1) Update                                   firefox-vpn update
+   2) Uninstall                                firefox-vpn uninstall
+  ────────────────────────────────────────────────────────────────────────────
+   3) Set panel login                          firefox-vpn panel
+   4) View panel info                          firefox-vpn panel-info
+  ────────────────────────────────────────────────────────────────────────────
+   5) Status                                   firefox-vpn status
+   6) Start                                    firefox-vpn start
+   7) Stop                                     firefox-vpn stop
+   8) Restart                                  firefox-vpn restart
+   9) Show the log                             firefox-vpn logs
+  ────────────────────────────────────────────────────────────────────────────
+  10) Enable autostart                         firefox-vpn enable
+  11) Disable autostart                        firefox-vpn disable
+  ────────────────────────────────────────────────────────────────────────────
+  12) Add a Firefox Account                    firefox-vpn add-account
+  13) List the accounts                        firefox-vpn list-accounts
+  ────────────────────────────────────────────────────────────────────────────
+  Enter a number [0-13]:
 ```
+
+## OpenWrt routers
+
+To install on an OpenWrt router, see the [OpenWrt guide](docs/OPENWRT.md).
 
 ## Known limitations
 

@@ -7,7 +7,8 @@ class MainFlutterWindow: NSWindow {
 
   override func awakeFromNib() {
     let project = FlutterDartProject()
-    // The Dart side reads --autostart and --data-dir from its arguments.
+    // The Dart side reads --autostart, --hidden, and --data-dir from its
+    // arguments.
     project.dartEntrypointArguments = Array(CommandLine.arguments.dropFirst())
     let flutterViewController = FlutterViewController(project: project)
     self.contentViewController = flutterViewController
@@ -55,8 +56,11 @@ class DesktopBridge: NSObject, NSWindowDelegate, UNUserNotificationCenterDelegat
   }
 
   @objc private func didFinishLaunching(_ notification: Notification) {
-    // Started at sign-in: stay in the menu bar.
-    if CommandLine.arguments.contains("--autostart") {
+    // Started at sign-in, or by an update of the app that was in the menu
+    // bar: stay in the menu bar, without a Dock icon (the menu bar icon
+    // follows in a moment, from setTray).
+    if CommandLine.arguments.contains("--autostart") || CommandLine.arguments.contains("--hidden") {
+      NSApp.setActivationPolicy(.accessory)
       hide()
     }
     // Opening the app again (Finder, the Dock, Spotlight) brings the

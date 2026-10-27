@@ -1162,6 +1162,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get suggestedApps => 'Suggested apps';
 
   @override
+  String get showSystemApps => 'Show system apps';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1419,4 +1422,57 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => 'No other programs are running.';
+
+  @override
+  String get tabLog => 'Log';
+
+  @override
+  String get tabConnections => 'Connections';
+
+  @override
+  String get connectionsEmpty => 'No connections yet.';
+
+  @override
+  String connectionsOpen(int count) {
+    return '$count open';
+  }
+
+  @override
+  String get connTime => 'Time';
+
+  @override
+  String get connRoute => 'Rule';
+
+  @override
+  String get connDestination => 'Destination';
+
+  @override
+  String get connInbound => 'Inbound';
+
+  @override
+  String get connProtocol => 'Protocol';
+
+  @override
+  String get connColumns => 'Columns';
+
+  @override
+  String get connTraffic => 'Traffic';
+
+  @override
+  String get connDuration => 'Duration';
+
+  @override
+  String get connRouteVpn => 'Proxy';
+
+  @override
+  String get connRouteDirect => 'Direct';
+
+  @override
+  String get connRouteBlocked => 'Blocked';
+
+  @override
+  String get connRoutePort => 'Port refused';
+
+  @override
+  String get connRouteFailed => 'Failed';
 }

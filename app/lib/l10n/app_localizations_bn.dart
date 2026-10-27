@@ -1162,6 +1162,9 @@ class AppLocalizationsBn extends AppLocalizations {
   String get suggestedApps => 'প্রস্তাবিত অ্যাপ';
 
   @override
+  String get showSystemApps => 'সিস্টেম অ্যাপ দেখান';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1416,4 +1419,57 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => 'আর কোনো প্রোগ্রাম চলছে না।';
+
+  @override
+  String get tabLog => 'লগ';
+
+  @override
+  String get tabConnections => 'সংযোগ';
+
+  @override
+  String get connectionsEmpty => 'এখনও কোনো সংযোগ নেই।';
+
+  @override
+  String connectionsOpen(int count) {
+    return '$countটি খোলা';
+  }
+
+  @override
+  String get connTime => 'সময়';
+
+  @override
+  String get connRoute => 'নিয়ম';
+
+  @override
+  String get connDestination => 'গন্তব্য';
+
+  @override
+  String get connInbound => 'ইনবাউন্ড';
+
+  @override
+  String get connProtocol => 'প্রোটোকল';
+
+  @override
+  String get connColumns => 'কলাম';
+
+  @override
+  String get connTraffic => 'ট্রাফিক';
+
+  @override
+  String get connDuration => 'সময়কাল';
+
+  @override
+  String get connRouteVpn => 'প্রক্সি';
+
+  @override
+  String get connRouteDirect => 'সরাসরি';
+
+  @override
+  String get connRouteBlocked => 'অবরুদ্ধ';
+
+  @override
+  String get connRoutePort => 'পোর্ট প্রত্যাখ্যাত';
+
+  @override
+  String get connRouteFailed => 'ব্যর্থ';
 }

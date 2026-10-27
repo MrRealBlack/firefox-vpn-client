@@ -1162,6 +1162,9 @@ class AppLocalizationsId extends AppLocalizations {
   String get suggestedApps => 'Aplikasi yang disarankan';
 
   @override
+  String get showSystemApps => 'Tampilkan aplikasi sistem';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1417,4 +1420,57 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => 'Tidak ada program lain yang berjalan.';
+
+  @override
+  String get tabLog => 'Log';
+
+  @override
+  String get tabConnections => 'Koneksi';
+
+  @override
+  String get connectionsEmpty => 'Belum ada koneksi.';
+
+  @override
+  String connectionsOpen(int count) {
+    return '$count terbuka';
+  }
+
+  @override
+  String get connTime => 'Waktu';
+
+  @override
+  String get connRoute => 'Aturan';
+
+  @override
+  String get connDestination => 'Tujuan';
+
+  @override
+  String get connInbound => 'Masuk';
+
+  @override
+  String get connProtocol => 'Protokol';
+
+  @override
+  String get connColumns => 'Kolom';
+
+  @override
+  String get connTraffic => 'Lalu lintas';
+
+  @override
+  String get connDuration => 'Durasi';
+
+  @override
+  String get connRouteVpn => 'Proxy';
+
+  @override
+  String get connRouteDirect => 'Langsung';
+
+  @override
+  String get connRouteBlocked => 'Diblokir';
+
+  @override
+  String get connRoutePort => 'Port ditolak';
+
+  @override
+  String get connRouteFailed => 'Gagal';
 }

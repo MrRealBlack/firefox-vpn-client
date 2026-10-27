@@ -60,7 +60,7 @@ func (s *SOCKSServer) serveHTTP(client *bufferedConn, clientAddr string, start t
 
 	if req.Method == http.MethodConnect {
 		target := withDefaultPort(req.Host, "443")
-		upstream, err := s.openTarget(client, target, clientAddr)
+		upstream, err := s.openTarget(client, target, clientAddr, s.inbound("http"))
 		if err != nil {
 			writeHTTPError(client, httpStatusFor(err), httpErrorText(target, err), "")
 			return
@@ -79,7 +79,7 @@ func (s *SOCKSServer) serveHTTP(client *bufferedConn, clientAddr string, start t
 		return
 	}
 	target := withDefaultPort(req.URL.Host, "80")
-	upstream, err := s.openTarget(client, target, clientAddr)
+	upstream, err := s.openTarget(client, target, clientAddr, s.inbound("http"))
 	if err != nil {
 		writeHTTPError(client, httpStatusFor(err), httpErrorText(target, err), "")
 		return
@@ -103,9 +103,10 @@ func (s *SOCKSServer) serveHTTP(client *bufferedConn, clientAddr string, start t
 	_ = resp.Write(client)
 }
 
-// openTarget opens a tunnel to target for a SOCKS5 or HTTP client and
-// notes and logs a port Mozilla's proxy refuses, and a loop.
-func (s *SOCKSServer) openTarget(client net.Conn, target, clientAddr string) (net.Conn, error) {
+// openTarget opens a tunnel to target for a SOCKS5 or HTTP client, lists
+// it (Conns), and notes and logs a port Mozilla's proxy refuses, and a loop.
+func (s *SOCKSServer) openTarget(client net.Conn, target, clientAddr, inbound string) (net.Conn, error) {
+	tracked := s.Conns.begin(inbound, clientAddr, target)
 	if egress.OwnDial(target) {
 		if loop, warn := loops.note(target, time.Now()); loop {
 			host, _, _ := net.SplitHostPort(target)
@@ -124,8 +125,13 @@ func (s *SOCKSServer) openTarget(client net.Conn, target, clientAddr string) (ne
 	}
 	if err == nil {
 		logx.Debug("upstream tunnel open succeeded client=%s target=%s", clientAddr, logx.Target(target))
-		return conn, nil
+		transport := ""
+		if s.Transport != nil {
+			transport = s.Transport()
+		}
+		return s.Conns.opened(tracked, conn, transport), nil
 	}
+	s.Conns.failed(tracked, target, err)
 	if portRefused(target, err) {
 		host, port, _ := net.SplitHostPort(target)
 		s.Notices.record(NoticePort, port, host)

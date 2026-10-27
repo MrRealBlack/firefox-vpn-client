@@ -689,3 +689,63 @@ void showError(BuildContext context, String message) {
       ),
     );
 }
+
+/// An on/off choice in a "⋮" menu, as narrow as its name: a check box
+/// that shows the state, then the name (CheckedPopupMenuItem keeps a
+/// check's room even when off, which leaves the menu wide and empty).
+PopupMenuItem<void> checkMenuItem({
+  required String label,
+  required bool checked,
+  required VoidCallback onTap,
+}) => PopupMenuItem<void>(
+  onTap: onTap,
+  child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(
+        checked
+            ? Icons.check_box_rounded
+            : Icons.check_box_outline_blank_rounded,
+        size: 22,
+      ),
+      const SizedBox(width: 12),
+      Flexible(child: Text(label)),
+    ],
+  ),
+);
+
+/// A small on/off switch with its name beside it, for a page's toolbar
+/// (auto-scroll in the logs); the name toggles it too.
+class LabeledSwitch extends StatelessWidget {
+  const LabeledSwitch({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(8),
+    onTap: () => onChanged(!value),
+    child: Padding(
+      padding: const EdgeInsetsDirectional.only(start: 8, end: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // A narrow phone, or a long name: the name gives way.
+          Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 4),
+          Transform.scale(
+            scale: 0.75,
+            child: Switch(value: value, onChanged: onChanged),
+          ),
+        ],
+      ),
+    ),
+  );
+}

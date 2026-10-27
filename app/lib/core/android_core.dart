@@ -6,10 +6,13 @@ import 'core_api.dart';
 /// An app installed on the phone.
 @immutable
 class InstalledApp {
-  const InstalledApp(this.package, this.label);
+  const InstalledApp(this.package, this.label, {this.launcher = true});
 
   final String package;
   final String label;
+
+  /// It has a launcher icon; the others are mostly the system's.
+  final bool launcher;
 }
 
 /// Which apps use the VPN (CoreService.kt), in v2rayN's words: bypass the
@@ -20,7 +23,8 @@ class AppRouting {
     required this.bypass,
     required this.only,
     required this.suggested,
-  });
+    Set<String>? declined,
+  }) : declined = declined ?? {};
 
   /// Proxy selected apps; otherwise bypass them.
   bool onlyChosen;
@@ -32,21 +36,32 @@ class AppRouting {
   final Set<String> only;
 
   /// The routing region's apps (from the core), suggested for bypassing:
-  /// checked at first, then only by the user's choice.
+  /// the installed ones are checked by themselves (CoreService.suggest),
+  /// unless the user unchecked them ([declined]).
   final Set<String> suggested;
+
+  /// The suggested apps the user unchecked: never checked again by
+  /// themselves, only by the user or "Suggested apps".
+  final Set<String> declined;
 
   Set<String> get _chosen => onlyChosen ? only : bypass;
 
   /// Whether [package] is checked in the current mode.
   bool checked(String package) => _chosen.contains(package);
 
-  void toggle(String package, bool on) =>
-      on ? _chosen.add(package) : _chosen.remove(package);
+  void toggle(String package, bool on) {
+    on ? _chosen.add(package) : _chosen.remove(package);
+    if (!onlyChosen && suggested.contains(package)) {
+      on ? declined.remove(package) : declined.add(package);
+    }
+  }
 
-  /// Checks the suggested apps that are installed; returns how many were
-  /// not checked yet.
+  /// Checks the suggested apps that are installed, also those unchecked
+  /// before; returns how many were not checked yet.
   int checkSuggested(Iterable<String> installed) {
-    final add = installed.where(suggested.contains).toSet()..removeAll(bypass);
+    final mine = installed.where(suggested.contains).toSet();
+    declined.removeAll(mine);
+    final add = mine..removeAll(bypass);
     bypass.addAll(add);
     return add.length;
   }
@@ -145,14 +160,18 @@ class AndroidCore {
     }
   }
 
-  /// The apps with a launcher icon, but this one.
+  /// The installed apps but this one, the system's too.
   static Future<List<InstalledApp>> installedApps() async {
     final list = await _channel.invokeListMethod<Map<Object?, Object?>>(
       'installedApps',
     );
     return [
       for (final m in list ?? const <Map<Object?, Object?>>[])
-        InstalledApp('${m['package']}', '${m['label']}'),
+        InstalledApp(
+          '${m['package']}',
+          '${m['label']}',
+          launcher: m['launcher'] != false,
+        ),
     ];
   }
 
@@ -173,6 +192,7 @@ class AndroidCore {
       bypass: set('bypass'),
       only: set('only'),
       suggested: set('region'),
+      declined: set('declined'),
     );
   }
 
@@ -182,6 +202,7 @@ class AndroidCore {
         'mode': r.onlyChosen ? 'include' : 'exclude',
         'bypass': r.bypass.toList(),
         'only': r.only.toList(),
+        'declined': r.declined.toList(),
         'apply': apply,
       });
 

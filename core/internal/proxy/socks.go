@@ -41,7 +41,13 @@ type SOCKSServer struct {
 	// Allow, when set, refuses at once a target (host, port) it rejects,
 	// without trying it: the TUN mode's rule for the ports Mozilla's proxy
 	// does not carry.
-	Allow            func(host, port string) bool
+	Allow func(host, port string) bool
+	// Conns, when set, lists the connections (the dashboard's Connections),
+	// as Inbound: "tun", or by the client's protocol (socks5, http) when
+	// empty. Transport tells h2 or h3 for a connection through Mozilla.
+	Conns            *Connections
+	Inbound          string
+	Transport        func() string
 	upstream         tunnelOpener
 	handshakeTimeout time.Duration
 	idleTimeout      time.Duration
@@ -133,12 +139,13 @@ func (s *SOCKSServer) handleConn(conn net.Conn) {
 	if s.Allow != nil {
 		if host, port, err := net.SplitHostPort(target); err != nil || !s.Allow(host, port) {
 			logx.Debug("SOCKS5 CONNECT refused at once: Mozilla's proxy does not carry the port client=%s target=%s", clientAddr, logx.Target(target))
+			s.Conns.refused(s.inbound("socks5"), clientAddr, target, RoutePort)
 			_ = writeSOCKSReply(conn, socksReplyNotAllow, nil)
 			return
 		}
 	}
 
-	upstreamConn, err := s.openTarget(conn, target, clientAddr)
+	upstreamConn, err := s.openTarget(conn, target, clientAddr, s.inbound("socks5"))
 	if err != nil {
 		reply := mapUpstreamError(err)
 		if portRefused(target, err) {
@@ -158,6 +165,15 @@ func (s *SOCKSServer) handleConn(conn net.Conn) {
 
 	proxyBidirectional(client, upstreamConn, s.idleTimeout)
 	logx.Debug("client disconnected client=%s target=%s duration=%s", clientAddr, logx.Target(target), time.Since(start).Round(time.Millisecond))
+}
+
+// inbound is how a client came, for the list of connections: the server's
+// Inbound, else protocol.
+func (s *SOCKSServer) inbound(protocol string) string {
+	if s.Inbound != "" {
+		return s.Inbound
+	}
+	return protocol
 }
 
 func clientAffinityKey(addr net.Addr) string {

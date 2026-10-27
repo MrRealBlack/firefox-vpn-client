@@ -1158,6 +1158,9 @@ class AppLocalizationsFa extends AppLocalizations {
   String get suggestedApps => 'برنامه‌های پیشنهادی';
 
   @override
+  String get showSystemApps => 'نمایش برنامه‌های سیستمی';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1411,4 +1414,57 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => 'برنامه دیگری در حال اجرا نیست.';
+
+  @override
+  String get tabLog => 'لاگ';
+
+  @override
+  String get tabConnections => 'اتصال‌ها';
+
+  @override
+  String get connectionsEmpty => 'هنوز اتصالی نیست.';
+
+  @override
+  String connectionsOpen(int count) {
+    return 'باز: $count';
+  }
+
+  @override
+  String get connTime => 'زمان';
+
+  @override
+  String get connRoute => 'قانون';
+
+  @override
+  String get connDestination => 'مقصد';
+
+  @override
+  String get connInbound => 'ورودی';
+
+  @override
+  String get connProtocol => 'پروتکل';
+
+  @override
+  String get connColumns => 'ستون‌ها';
+
+  @override
+  String get connTraffic => 'حجم';
+
+  @override
+  String get connDuration => 'مدت';
+
+  @override
+  String get connRouteVpn => 'پروکسی';
+
+  @override
+  String get connRouteDirect => 'مستقیم';
+
+  @override
+  String get connRouteBlocked => 'مسدود';
+
+  @override
+  String get connRoutePort => 'پورت غیرمجاز';
+
+  @override
+  String get connRouteFailed => 'ناموفق';
 }

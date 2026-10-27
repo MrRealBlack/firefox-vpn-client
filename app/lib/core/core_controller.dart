@@ -93,6 +93,10 @@ class CoreController extends ChangeNotifier {
   int logsClearedAfter = 0;
   DateTime? logsClearedAt;
 
+  /// The last connection the Connections tab listed when it was cleared:
+  /// it lists only later ones, for as long as the app runs.
+  int connectionsClearedAfter = 0;
+
   /// Accounts with an action in progress.
   final Set<String> busyAccounts = {};
 

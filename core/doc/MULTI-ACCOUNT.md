@@ -11,11 +11,11 @@ Accounts are managed in the [dashboard](DASHBOARD.md) (add, sign in again, reord
 | `firefox-vpn-core` | Run the service: dashboard and proxy |
 | `firefox-vpn-core -add-account` | Sign in on the terminal (email, password, emailed code) and store the account at the end of the priority order |
 | `firefox-vpn-core -list-accounts` | Print accounts in priority order with status, usage, and the active account |
-| `firefox-vpn-core -set-dashboard-login` | Set or remove the dashboard login |
+| `firefox-vpn-core -panel` | Set the panel login (random when left empty) |
 | `-data-dir PATH` | Use another data folder (with any of the above) |
 | `-verbose` | Force verbose logs regardless of the config |
 
-Accounts added from the dashboard take effect immediately. After `-add-account` or `-set-dashboard-login` on the terminal, restart a running service.
+Accounts added from the dashboard take effect immediately. After `-add-account` or `-panel` on the terminal, restart a running service.
 
 ## Portable data folder
 
@@ -59,7 +59,7 @@ Files are written atomically with owner-only permissions on POSIX systems. On Wi
 | `accounts.switch_threshold_percent` | `95` | Used share of an account's quota at which the next account takes over (47.5 GB of 50 GB); with no other account to take over, the active one goes on to the end of its quota |
 | `accounts.order` | `[]` | Priority order: `{"id": "...", "enabled": true}` entries |
 | `dashboard.enabled` / `listen` | `true` / `127.0.0.1:10820` | Web dashboard; `enabled` can only be changed in the file |
-| `dashboard.username` / `password_hash` | empty | Dashboard login; set from Settings or `-set-dashboard-login` (bcrypt hash) |
+| `dashboard.username` / `password_hash` | empty | Dashboard login; set from Settings or `-panel` (bcrypt hash) |
 | `network.api_relay` | empty | The user's own relay (an `https://` URL; a Cloudflare Worker or a PHP file, [scripts/relay](../scripts/relay)) for the FxA, Guardian, Remote Settings, geo-file, and flag requests; see [OPERATOR.md](OPERATOR.md#guardian-returns-http-451-region_unavailable) |
 | `network.guardian_endpoint` | `https://vpn.mozilla.org` | Guardian API endpoint |
 | `dns.servers` | DNS over HTTPS to 1.1.1.1, 8.8.8.8, and 9.9.9.9 ("Automatic") | DNS servers for the names this program resolves itself (Mozilla's and Firefox Accounts' servers), queried together (first answer wins): `https://…/dns-query` (DNS over HTTPS), `tls://host` (DNS over TLS), or an IP address (plain DNS). Empty uses the system resolver. Connections routed directly use the system resolver whatever this says: they go to the local country's sites, which its DNS answers best. See [OPERATOR.md](OPERATOR.md#dns-and-filtering) |

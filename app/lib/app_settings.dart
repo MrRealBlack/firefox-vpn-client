@@ -57,6 +57,11 @@ class AppSettings extends ChangeNotifier {
   /// (UDP); on unless the user turned it off.
   bool udpNotice = true;
 
+  /// The columns the Logs page's Connections tab hides (ConnectionsView):
+  /// at first all but the time, the destination, the rule, and the
+  /// protocol. Kept in this file.
+  Set<String> hiddenConnectionColumns = {'inbound', 'traffic', 'duration'};
+
   /// The app's languages, in the order the language menus list them.
   /// 'zh' is Simplified and 'zh_Hant' Traditional Chinese.
   static const supportedLanguages = [
@@ -175,6 +180,9 @@ class AppSettings extends ChangeNotifier {
         s.autoConnect = j['auto_connect'] == true;
         s.autoUpdate = j['auto_update'] != false;
         s.udpNotice = j['udp_notice'] != false;
+        if (j['hidden_connection_columns'] case final List<Object?> v) {
+          s.hiddenConnectionColumns = {...v.whereType<String>()};
+        }
       }
     } on FileSystemException {
       // First run: defaults, and the welcome page.
@@ -200,7 +208,10 @@ class AppSettings extends ChangeNotifier {
     bool? autoConnect,
     bool? autoUpdate,
     bool? udpNotice,
+    Set<String>? hiddenConnectionColumns,
   }) {
+    this.hiddenConnectionColumns =
+        hiddenConnectionColumns ?? this.hiddenConnectionColumns;
     this.udpNotice = udpNotice ?? this.udpNotice;
     this.autoUpdate = autoUpdate ?? this.autoUpdate;
     this.autostart = autostart ?? this.autostart;
@@ -240,6 +251,7 @@ class AppSettings extends ChangeNotifier {
           'auto_connect': autoConnect,
           'auto_update': autoUpdate,
           'udp_notice': udpNotice,
+          'hidden_connection_columns': hiddenConnectionColumns.toList(),
         }),
       );
     } on FileSystemException {

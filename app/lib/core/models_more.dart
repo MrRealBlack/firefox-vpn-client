@@ -195,3 +195,39 @@ class DnsTestHost {
   /// The network answered with a block-page address (the core decides).
   final bool filtered;
 }
+
+/// One of the proxy's connections (`GET /api/connections`): open while
+/// [end] is null.
+class ProxyConnection {
+  ProxyConnection.fromJson(Map<String, Object?> j)
+    : id = _int(j['id']),
+      start = _time(j['start']),
+      end = _time(j['end']),
+      inbound = _str(j['inbound']),
+      client = _str(j['client']),
+      target = _str(j['target']),
+      network = _str(j['network']),
+      route = _str(j['route']),
+      transport = _str(j['transport']),
+      up = _int(j['up']),
+      down = _int(j['down']);
+
+  final int id;
+  final DateTime? start, end;
+
+  /// socks5, http, or tun.
+  final String inbound;
+  final String client, target;
+
+  /// tcp (the proxy carries TCP only).
+  final String network;
+
+  /// vpn, direct, blocked, port (Mozilla refuses the port), or failed.
+  final String route;
+
+  /// h2 or h3, through Mozilla.
+  final String transport;
+  final int up, down;
+
+  bool get open => end == null;
+}

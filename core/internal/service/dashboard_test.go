@@ -379,6 +379,19 @@ func TestDashboardLogsEndpoint(t *testing.T) {
 	}
 }
 
+// The connection list is an array even when empty, and clearing answers
+// the list (proxy.Connections has the rest).
+func TestDashboardConnectionsEndpoint(t *testing.T) {
+	d := newTestDaemon(t)
+	c := newDashboardClient(t, d)
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		res := c.do(method, "/api/connections", nil)
+		if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"connections":[]`) {
+			t.Fatalf("%s: %d %s", method, res.Code, res.Body.String())
+		}
+	}
+}
+
 // tunnelToServer opens every tunnel to one local server, standing in for
 // the upstream CONNECT proxy.
 type tunnelToServer struct{ addr string }

@@ -1,21 +1,37 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app_settings.dart';
 import '../core/core_api.dart';
 import '../core/core_controller.dart';
 import '../core/models.dart';
 import '../l10n/app_localizations.dart';
+import 'connections_view.dart';
 import 'format.dart';
 import 'widgets.dart';
 
 /// The core's live log: a level and text filter, auto-scroll,
-/// clear, and copy.
+/// clear, and copy; on a computer also the proxy's connections, in a
+/// second tab. On a narrow screen (a phone) the tools take two rows: the
+/// filter with the level, then auto-scroll with the actions.
 class LogsPage extends StatefulWidget {
-  const LogsPage({super.key, required this.core});
+  const LogsPage({
+    super.key,
+    required this.core,
+    this.settings,
+    this.connections,
+  });
 
   final CoreController core;
+
+  /// Keeps the Connections tab's columns; without it they are not kept.
+  final AppSettings? settings;
+
+  /// The Connections tab is offered; by default on a computer.
+  final bool? connections;
 
   @override
   State<LogsPage> createState() => _LogsPageState();
@@ -34,6 +50,9 @@ class _LogsPageState extends State<LogsPage> {
   String _minLevel = 'DEBUG';
   String _text = '';
   bool _follow = true;
+
+  /// The Connections tab is shown (computers only).
+  bool _connections = false;
 
   /// logging.verbose in the core's settings; null until read.
   bool? _verbose;
@@ -132,6 +151,163 @@ class _LogsPageState extends State<LogsPage> {
     ];
   }
 
+  /// A computer's tools: the levels and the filter, then the switches,
+  /// with the actions as icons on the far side (their names in tooltips):
+  /// the same layout as the Connections tab.
+  Widget _wideTools(AppLocalizations l, List<LogEntry> visible) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: [
+              for (final level in _levels)
+                ButtonSegment(value: level, label: Text(_levelName(l, level))),
+            ],
+            selected: {_minLevel},
+            onSelectionChanged: (v) => setState(() => _minLevel = v.first),
+          ),
+          SizedBox(width: 280, child: _filterField(l)),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: Wrap(
+              spacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _followSwitch(l),
+                // Every destination in the log, for finding problems.
+                if (_verbose case final verbose?)
+                  LabeledSwitch(
+                    label: l.verboseLogs,
+                    value: verbose,
+                    onChanged: _setVerbose,
+                  ),
+              ],
+            ),
+          ),
+          _copyButton(l, visible),
+          _clearButton(l),
+        ],
+      ),
+    ],
+  );
+
+  /// A phone's tools, in two rows: the filter with the level beside it,
+  /// then auto-scroll with the actions; the full log is in the menu.
+  Widget _narrowTools(AppLocalizations l, List<LogEntry> visible) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        children: [
+          Expanded(child: _filterField(l)),
+          const SizedBox(width: 8),
+          _levelMenu(l),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Row(
+        children: [
+          Expanded(
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: _followSwitch(l),
+            ),
+          ),
+          _copyButton(l, visible),
+          _clearButton(l),
+          if (_verbose case final verbose?)
+            PopupMenuButton<void>(
+              itemBuilder: (context) => [
+                checkMenuItem(
+                  label: l.verboseLogs,
+                  checked: verbose,
+                  onTap: () => _setVerbose(!verbose),
+                ),
+              ],
+            ),
+        ],
+      ),
+    ],
+  );
+
+  static String _levelName(AppLocalizations l, String level) =>
+      level == 'DEBUG' ? l.levelAll : level;
+
+  Widget _filterField(AppLocalizations l) => TextField(
+    decoration: InputDecoration(
+      isDense: true,
+      prefixIcon: const Icon(Icons.filter_list_rounded, size: 20),
+      hintText: l.filter,
+      border: const OutlineInputBorder(),
+    ),
+    onChanged: (v) => setState(() => _text = v),
+  );
+
+  /// The level as a small menu, as tall as the filter beside it.
+  Widget _levelMenu(AppLocalizations l) {
+    final theme = Theme.of(context);
+    return PopupMenuButton<String>(
+      initialValue: _minLevel,
+      onSelected: (v) => setState(() => _minLevel = v),
+      itemBuilder: (context) => [
+        for (final level in _levels)
+          PopupMenuItem(value: level, child: Text(_levelName(l, level))),
+      ],
+      child: Container(
+        height: 48,
+        padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.colorScheme.outline),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_levelName(l, _minLevel)),
+            const Icon(Icons.arrow_drop_down_rounded),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _followSwitch(AppLocalizations l) => LabeledSwitch(
+    label: l.follow,
+    value: _follow,
+    onChanged: (v) => setState(() => _follow = v),
+  );
+
+  Widget _copyButton(AppLocalizations l, List<LogEntry> visible) => IconButton(
+    tooltip: l.copyAll,
+    icon: const Icon(Icons.copy_rounded),
+    onPressed: visible.isEmpty
+        ? null
+        : () {
+            Clipboard.setData(
+              ClipboardData(text: visible.map(_line).join('\n')),
+            );
+            showError(context, l.logsCopied);
+          },
+  );
+
+  Widget _clearButton(AppLocalizations l) => IconButton(
+    tooltip: l.clear,
+    icon: const Icon(Icons.delete_sweep_outlined),
+    onPressed: () => setState(() {
+      widget.core.logsClearedAfter = _after;
+      widget.core.logsClearedAt = DateTime.now();
+      _entries.clear();
+    }),
+  );
+
   static String _line(LogEntry e) {
     final t = e.time;
     final time = t == null
@@ -151,88 +327,62 @@ class _LogsPageState extends State<LogsPage> {
         children: [
           PageTitle(l.navLogs),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SegmentedButton<String>(
+          if (widget.connections ?? !Platform.isAndroid) ...[
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: SegmentedButton<bool>(
                 showSelectedIcon: false,
                 segments: [
-                  ButtonSegment(value: 'DEBUG', label: Text(l.levelAll)),
-                  const ButtonSegment(value: 'INFO', label: Text('INFO')),
-                  const ButtonSegment(value: 'WARN', label: Text('WARN')),
-                  const ButtonSegment(value: 'ERROR', label: Text('ERROR')),
-                ],
-                selected: {_minLevel},
-                onSelectionChanged: (v) => setState(() => _minLevel = v.first),
-              ),
-              SizedBox(
-                width: 220,
-                child: TextField(
-                  decoration: InputDecoration(
-                    isDense: true,
-                    prefixIcon: const Icon(Icons.filter_list_rounded, size: 20),
-                    hintText: l.filter,
-                    border: const OutlineInputBorder(),
+                  ButtonSegment(
+                    value: false,
+                    icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                    label: Text(l.tabLog),
                   ),
-                  onChanged: (v) => setState(() => _text = v),
-                ),
+                  ButtonSegment(
+                    value: true,
+                    icon: const Icon(Icons.swap_vert_rounded, size: 18),
+                    label: Text(l.tabConnections),
+                  ),
+                ],
+                selected: {_connections},
+                onSelectionChanged: (v) =>
+                    setState(() => _connections = v.first),
               ),
-              FilterChip(
-                label: Text(l.follow),
-                selected: _follow,
-                onSelected: (v) => setState(() => _follow = v),
-              ),
-              // Every destination in the log, for finding problems.
-              if (_verbose case final verbose?)
-                FilterChip(
-                  avatar: const Icon(Icons.article_outlined, size: 18),
-                  label: Text(l.verboseLogs),
-                  selected: verbose,
-                  onSelected: _setVerbose,
-                ),
-              TextButton.icon(
-                onPressed: () => setState(() {
-                  widget.core.logsClearedAfter = _after;
-                  widget.core.logsClearedAt = DateTime.now();
-                  _entries.clear();
-                }),
-                icon: const Icon(Icons.clear_all_rounded),
-                label: Text(l.clear),
-              ),
-              TextButton.icon(
-                onPressed: visible.isEmpty
-                    ? null
-                    : () {
-                        Clipboard.setData(
-                          ClipboardData(text: visible.map(_line).join('\n')),
-                        );
-                        showError(context, l.logsCopied);
-                      },
-                icon: const Icon(Icons.copy_rounded),
-                label: Text(l.copyAll),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: Card(
-              margin: EdgeInsets.zero,
-              clipBehavior: Clip.antiAlias,
-              child: visible.isEmpty
-                  ? Center(child: Text(l.noLogs))
-                  : SelectionArea(
-                      child: ListView.builder(
-                        controller: _scroll,
-                        padding: const EdgeInsets.all(12),
-                        itemCount: visible.length,
-                        itemBuilder: (context, i) =>
-                            _LogLine(entry: visible[i]),
-                      ),
-                    ),
             ),
-          ),
+            const SizedBox(height: 16),
+          ],
+          if (_connections)
+            Expanded(
+              child: ConnectionsView(
+                core: widget.core,
+                settings: widget.settings,
+              ),
+            )
+          else ...[
+            LayoutBuilder(
+              builder: (context, box) => box.maxWidth < 600
+                  ? _narrowTools(l, visible)
+                  : _wideTools(l, visible),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: Card(
+                margin: EdgeInsets.zero,
+                clipBehavior: Clip.antiAlias,
+                child: visible.isEmpty
+                    ? Center(child: Text(l.noLogs))
+                    : SelectionArea(
+                        child: ListView.builder(
+                          controller: _scroll,
+                          padding: const EdgeInsets.all(12),
+                          itemCount: visible.length,
+                          itemBuilder: (context, i) =>
+                              _LogLine(entry: visible[i]),
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -254,8 +404,10 @@ class _LogLine extends StatelessWidget {
       'DEBUG' => theme.colorScheme.onSurfaceVariant,
       _ => theme.colorScheme.primary,
     };
+    // Consolas on Windows; elsewhere the system's monospace font.
     const mono = TextStyle(
       fontFamily: 'Consolas',
+      fontFamilyFallback: ['Menlo', 'DejaVu Sans Mono', 'monospace'],
       fontSize: 12.5,
       height: 1.45,
     );

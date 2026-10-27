@@ -8,10 +8,12 @@
 # desktop" installs it for the current user. The version is
 # "major.minor.patch" from app/pubspec.yaml.
 #
-# Updates of an installed TUN service must be signed (Ed25519): with a
-# signing key (FIREFOX_VPN_SIGNING_KEY, CI's secret, or the file named by
-# FIREFOX_VPN_SIGNING_KEY_FILE), the service accepts updates signed with it,
-# and core/firefox-vpn-tun.sig is written beside it. Without one it takes no
+# Updates must be signed (Ed25519): with a signing key
+# (FIREFOX_VPN_SIGNING_KEY, CI's secret, or the file named by
+# FIREFOX_VPN_SIGNING_KEY_FILE), the core installs only releases whose
+# SHA256SUMS.txt is signed with it, an installed TUN service accepts updates
+# signed with it, and core/firefox-vpn-tun.sig is written beside it. Without
+# one the app's updates are downloaded by hand, and the TUN service takes no
 # updates: a newer one is installed again, with the administrator prompt.
 #
 # Needs Flutter, GTK 3 headers, clang, cmake, ninja, and pkg-config
@@ -35,8 +37,10 @@ public=""
 if [ -n "${FIREFOX_VPN_SIGNING_KEY:-}${FIREFOX_VPN_SIGNING_KEY_FILE:-}" ]; then
   public="$(cd "$root/core" && go run ./tools/sign -public)"
 else
-  echo "warning: no signing key (FIREFOX_VPN_SIGNING_KEY or FIREFOX_VPN_SIGNING_KEY_FILE): this build's TUN service takes no updates" >&2
+  echo "warning: no signing key (FIREFOX_VPN_SIGNING_KEY or FIREFOX_VPN_SIGNING_KEY_FILE): this build installs no updates" >&2
 fi
+goflags="-s -w -X $module/internal/version.Current=$version"
+[ -z "$public" ] || goflags="$goflags -X $module/internal/signing.Key=$public"
 
 (cd "$root/app" && flutter pub get && flutter build linux --release --no-pub --dart-define=APP_VERSION="$version")
 
@@ -48,13 +52,10 @@ if [ -n "${CORE:-}" ]; then
   install -D -m 0755 "$CORE" "$app/core/firefox-vpn-core"
 else
   (cd "$root/core" && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
-    -ldflags "-s -w -X $module/internal/version.Current=$version" \
-    -o "$app/core/firefox-vpn-core" ./cmd/firefox-vpn-core)
+    -ldflags "$goflags" -o "$app/core/firefox-vpn-core" ./cmd/firefox-vpn-core)
 fi
-tunflags="-s -w -X $module/internal/version.Current=$version"
-[ -z "$public" ] || tunflags="$tunflags -X $module/internal/signing.Key=$public"
 (cd "$root/core" && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -tags with_gvisor -trimpath \
-  -ldflags "$tunflags" -o "$app/core/firefox-vpn-tun" ./cmd/firefox-vpn-tun)
+  -ldflags "$goflags" -o "$app/core/firefox-vpn-tun" ./cmd/firefox-vpn-tun)
 [ -z "$public" ] || (cd "$root/core" && go run ./tools/sign "$app/core/firefox-vpn-tun")
 install -m 0644 "$root/LICENSE" "$app/LICENSE"
 

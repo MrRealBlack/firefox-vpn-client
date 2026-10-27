@@ -82,7 +82,17 @@ banner() {
   printf '\n  %s%sFirefox VPN%s %sinstaller%s\n' "$BOLD" "$FOX" "$OFF" "$DIM" "$OFF"
   printf '  %s%s%s\n' "$DIM" "$(rule 34)" "$OFF"
   field "System" "$(os_name)"
-  field "Processor" "$(uname -m)"
+  field "Processor" "$(processor_name)"
+}
+
+# processor_name: the processor by the name its files carry (amd64,
+# arm64), else the kernel's.
+processor_name() {
+  case "$(uname -m)" in
+    x86_64 | amd64) echo amd64 ;;
+    aarch64 | arm64) echo arm64 ;;
+    *) uname -m ;;
+  esac
 }
 
 # os_name: this system's name and version, such as "Ubuntu 24.04.1 LTS".
@@ -257,13 +267,23 @@ local_ip() {
 # public_ip: the address the Internet sees, or nothing when it cannot be
 # asked (a filtered network, for one).
 public_ip() {
-  local ip=""
-  if command -v curl >/dev/null 2>&1; then
-    ip="$(curl -fsS -4 --max-time 5 https://api.ipify.org 2>/dev/null || true)"
-  elif command -v wget >/dev/null 2>&1; then
-    ip="$(wget -qO- -T 5 https://api.ipify.org 2>/dev/null || true)"
-  fi
-  [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && echo "$ip"
+  local ip="" url
+  # Several services, the first that answers with an address: one may be
+  # down or filtered.
+  for url in https://api.ipify.org https://checkip.amazonaws.com https://ipv4.icanhazip.com https://api.ip.sb/ip; do
+    if command -v curl >/dev/null 2>&1; then
+      ip="$(curl -fsS -4 --max-time 3 "$url" 2>/dev/null || true)"
+    elif command -v wget >/dev/null 2>&1; then
+      ip="$(wget -qO- -4 -T 3 "$url" 2>/dev/null || true)"
+    fi
+    ip="$(printf '%s' "$ip" | tr -d '[:space:]')"
+    # Not "[[ ]] && echo": without an answer that is a failure, which
+    # set -e turned into the installer ending without a word.
+    if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "$ip"
+      return 0
+    fi
+  done
 }
 
 install_server() {
@@ -308,7 +328,7 @@ install_server() {
   step "Opening the panel and the proxy to the network"
   local out
   out="$($SUDO env ${SERVICE_ENV[@]+"${SERVICE_ENV[@]}"} bash "$COMMAND" setup-server "$user")" ||
-    die "setting up the logins failed; set them with: sudo firefox-vpn set-dashboard-login"
+    die "setting up the logins failed; set them with: sudo firefox-vpn panel"
   value() { printf '%s\n' "$out" | sed -n "s/^$1=//p"; }
   local panel_user panel_pass panel_port proxy_user proxy_pass proxy_port lan wan
   panel_user="$(value dashboard_username)"
@@ -347,24 +367,87 @@ command_menu() {
   local width=58
   section "Firefox VPN commands"
   printf '  %s%s%s\n' "$DIM" "$(rule $width)" "$OFF"
+  # In the groups of the firefox-vpn menu, a rule between them.
   menu_line "firefox-vpn" "The menu: pick a command by its number"
+  printf '  %s%s%s\n' "$DIM" "$(rule $width)" "$OFF"
+  menu_line "firefox-vpn update" "Update"
+  menu_line "firefox-vpn uninstall" "Uninstall"
+  printf '  %s%s%s\n' "$DIM" "$(rule $width)" "$OFF"
+  menu_line "firefox-vpn panel" "Set panel login"
+  menu_line "firefox-vpn panel-info" "View panel info"
+  printf '  %s%s%s\n' "$DIM" "$(rule $width)" "$OFF"
   menu_line "firefox-vpn status" "The service's state"
   menu_line "firefox-vpn start" "Start the service"
   menu_line "firefox-vpn stop" "Stop the service"
   menu_line "firefox-vpn restart" "Restart the service"
-  menu_line "firefox-vpn enable" "Start with the server"
-  menu_line "firefox-vpn disable" "Do not start with the server"
   menu_line "firefox-vpn logs" "Show the log"
-  menu_line "firefox-vpn add-account" "Add a Firefox Account"
-  menu_line "firefox-vpn list-accounts" "Accounts and their quota"
-  menu_line "firefox-vpn set-dashboard-login" "The panel's username and password"
-  menu_line "firefox-vpn update" "Update to the newest version"
   printf '  %s%s%s\n' "$DIM" "$(rule $width)" "$OFF"
-  log "Remove: run the install command again."
+  menu_line "firefox-vpn enable" "Enable autostart"
+  menu_line "firefox-vpn disable" "Disable autostart"
+  printf '  %s%s%s\n' "$DIM" "$(rule $width)" "$OFF"
+  menu_line "firefox-vpn add-account" "Add a Firefox Account"
+  menu_line "firefox-vpn list-accounts" "List the accounts"
+  printf '  %s%s%s\n' "$DIM" "$(rule $width)" "$OFF"
   printf '\n'
 }
 
 menu_line() { printf '  %s%-33s%s %s\n' "$CYAN" "$1" "$OFF" "$2"; }
+
+# linux_system_parts: what the app needs from the system, with one sudo
+# (its password asked here, in the terminal): the tray icon's library when
+# it is missing, and the TUN mode's service, as Setup installs it on
+# Windows, so the app asks for nothing later. Without sudo or a terminal,
+# or when either fails, the install goes on: the tray library is named,
+# and the app asks for the service the first time TUN mode is chosen.
+linux_system_parts() {
+  local pkg="" install="" tun="$APP_DIR/core/firefox-vpn-tun" want_tun=0
+  if ! { ldconfig -p 2>/dev/null | grep -qE 'lib(ayatana-)?appindicator3\.so'; }; then
+    if command -v apt-get >/dev/null 2>&1; then
+      install="apt-get install -y" pkg=libayatana-appindicator3-1
+    elif command -v dnf >/dev/null 2>&1; then
+      install="dnf install -y" pkg=libappindicator-gtk3
+    elif command -v pacman >/dev/null 2>&1; then
+      install="pacman -S --noconfirm --needed" pkg=libappindicator-gtk3
+    elif command -v zypper >/dev/null 2>&1; then
+      install="zypper --non-interactive install" pkg=libayatana-appindicator3-1
+    else
+      pkg=libayatana-appindicator3
+    fi
+  fi
+  # An installed service updates itself from the app.
+  if [ -x "$tun" ] && [ ! -x "$TUN_LINUX" ] && command -v systemctl >/dev/null 2>&1; then
+    want_tun=1
+  fi
+  [ -n "$pkg" ] || [ "$want_tun" = 1 ] || return 0
+  if [ -z "$install" ] || ! command -v sudo >/dev/null 2>&1 || ! have_tty; then
+    [ -z "$pkg" ] || warn "no tray icon library: install $pkg for the tray icon"
+    return 0
+  fi
+  step "Installing what the app needs from the system ${DIM}(sudo)"
+  if ! sudo -v </dev/tty; then
+    [ -z "$pkg" ] || warn "no tray icon library: install $pkg for the tray icon"
+    warn "the TUN mode's service is not installed; the app asks for it when TUN mode is chosen"
+    return 0
+  fi
+  if [ -n "$pkg" ]; then
+    # apt's package lists may be old: once more after an update.
+    # shellcheck disable=SC2086
+    if sudo $install "$pkg" >"$tmp/pkg.log" 2>&1 ||
+      { [ "${install%% *}" = apt-get ] && sudo apt-get update >>"$tmp/pkg.log" 2>&1 &&
+        sudo $install "$pkg" >>"$tmp/pkg.log" 2>&1; }; then
+      ok "installed $pkg (the tray icon)"
+    else
+      warn "could not install $pkg; install it for the tray icon"
+    fi
+  fi
+  if [ "$want_tun" = 1 ]; then
+    if sudo "$tun" install >"$tmp/tun.log" 2>&1; then
+      ok "installed the TUN mode's service"
+    else
+      warn "the TUN mode's service is not installed; the app asks for it when TUN mode is chosen"
+    fi
+  fi
+}
 
 install_linux_app() {
   local file
@@ -387,7 +470,7 @@ install_linux_app() {
 [Desktop Entry]
 Type=Application
 Name=Firefox VPN
-Comment=Mozilla's VPN servers through your Firefox Accounts
+Comment=Free VPN through Mozilla's servers
 Exec="$APP_DIR/firefox-vpn"
 Icon=$APP_DIR/data/app_icon.png
 Terminal=false
@@ -399,9 +482,7 @@ EOF
   fi
 
   ok "installed in $APP_DIR"
-  if ! { ldconfig -p 2>/dev/null | grep -qE 'lib(ayatana-)?appindicator3\.so'; }; then
-    warn "no tray icon library: install libayatana-appindicator3-1 (Debian, Ubuntu) or libappindicator-gtk3 (Fedora, Arch) for the tray icon"
-  fi
+  linux_system_parts
   printf '\n  %s%s Firefox VPN is installed.%s\n' "$GREEN$BOLD" "$TICK" "$OFF"
   section "Open it"
   field "Menu" "Firefox VPN in the applications menu"

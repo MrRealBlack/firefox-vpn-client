@@ -67,3 +67,14 @@ func TestPowerFromABrowserIsNotGivenUp(t *testing.T) {
 		t.Fatal("a browser's connect was given up")
 	}
 }
+
+// A daemon set off before it runs (the desktop and phone apps start it so)
+// says so from the first status: the app shows a starting state as
+// connecting, and routing loads before the run reaches the engine.
+func TestADaemonSetOffSaysOffBeforeItRuns(t *testing.T) {
+	d := newTestDaemon(t)
+	d.Off()
+	if d.state.Phase != PhaseOff || d.state.Message != "Proxy off" {
+		t.Fatalf("state %q %q before the run", d.state.Phase, d.state.Message)
+	}
+}

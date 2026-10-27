@@ -135,12 +135,12 @@ Sources: core side `internal/desktop/tun.go` (`tunSync`: dial, hello, update an 
 
 ## Change the app's updates
 
-Sources: `internal/update` (download, check, `Apply`, swap, the update folder), `internal/service/update.go` (API, download transports), `internal/desktop/app.go` (the updater, the reconnect, the TUN service refresh), `internal/signing`, `tools/sign`; the app's `app/lib/core/updates.dart`; CI's release job signs `SHA256SUMS.txt`.
+Sources: `internal/update` (download, check, `Apply`, swap, the update folder; `process_windows.go`, `process_unix.go`, `process_linux.go`, and `process_darwin.go` for the lock, the wait, and the starts; `untar.go` for the Linux and macOS archives), `internal/service/update.go` (API, download transports), `internal/desktop/app.go` (the updater, the reconnect, the TUN service refresh), `internal/signing`, `tools/sign`; the app's `app/lib/core/updates.dart`; CI's release job signs `SHA256SUMS.txt`.
 
 - Install only what the signed list names, and only a newer version; re-check the package before installing. Never run the release's Setup for an update (its rollback keeps replaced files).
 - Never touch `user-data`, the portable marker, or Setup's uninstaller, nor anything in the app's folder that the new version does not replace; every failure must leave the old version whole and runnable.
-- The release files' names and `SHA256SUMS.txt.sig` are a contract with the apps already installed: a change there breaks their updates.
-- Update [OPERATOR.md](OPERATOR.md#app-updates-windows), [DASHBOARD.md](DASHBOARD.md) for the API, and [TESTING.md](TESTING.md).
+- The release files' names, the packages' layout (the zip's and the Linux tar.gz's top folder with the app and `core/`; the macOS tar.gz's `Firefox VPN.app`), `SHA256SUMS.txt.sig`, and `.github/updates.json` (its place, keys, and values, read by `app/lib/app_info.dart`) are a contract with the apps already installed: a change there breaks their updates.
+- Update [OPERATOR.md](OPERATOR.md#app-updates), [DASHBOARD.md](DASHBOARD.md) for the API, and [TESTING.md](TESTING.md).
 
 ## Change status, persistence, or logs
 

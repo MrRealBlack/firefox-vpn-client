@@ -13,7 +13,8 @@ struct _MyApplication {
   char** dart_entrypoint_arguments;
   GtkWindow* window;
   DesktopBridge* bridge;
-  // Started at sign-in (--autostart): the window stays in the tray.
+  // Started at sign-in (--autostart), or by an update of the app that was in
+  // the tray (--hidden): the window stays in the tray.
   gboolean start_hidden;
 };
 
@@ -106,9 +107,9 @@ static gboolean my_application_local_command_line(GApplication* application,
   MyApplication* self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
   self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
-  self->start_hidden =
-      g_strv_contains(const_cast<const gchar* const*>(*arguments + 1),
-                      "--autostart");
+  const gchar* const* args = const_cast<const gchar* const*>(*arguments + 1);
+  self->start_hidden = g_strv_contains(args, "--autostart") ||
+                       g_strv_contains(args, "--hidden");
 
   g_autoptr(GError) error = nullptr;
   if (!g_application_register(application, nullptr, &error)) {

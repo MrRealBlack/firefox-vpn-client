@@ -144,11 +144,11 @@ func TestAppExitNeedsLocalTokenAndHost(t *testing.T) {
 	}
 }
 
-// Only the program on this computer can reset the dashboard login; the new
-// random login works and ends the old sessions.
-func TestResetDashboardLogin(t *testing.T) {
+// Only the program on this computer can set the panel login: a random one,
+// or the one asked for; the new login works and ends the old sessions.
+func TestSetDashboardLogin(t *testing.T) {
 	d := newTestDaemon(t)
-	d.localToken = "reset-token"
+	d.localToken = "set-token"
 	cfg := d.config()
 	cfg.Dashboard.Username = "admin"
 	forgotten := "forgotten password"
@@ -156,8 +156,8 @@ func TestResetDashboardLogin(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := newDashboardClient(t, d)
-	reset := func(token string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPost, "/api/dashboard/reset-login", strings.NewReader("{}"))
+	set := func(token, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/dashboard/set-login", strings.NewReader(body))
 		req.Host = "127.0.0.1:10820"
 		req.Header.Set("Content-Type", "application/json")
 		if token != "" {
@@ -167,22 +167,34 @@ func TestResetDashboardLogin(t *testing.T) {
 		c.handler.ServeHTTP(rec, req)
 		return rec
 	}
-	if rec := reset(""); rec.Code == http.StatusOK {
-		t.Fatal("a browser must not reset the login")
+	if rec := set("", "{}"); rec.Code == http.StatusOK {
+		t.Fatal("a browser must not set the login")
 	}
-	rec := reset(d.localToken)
+	rec := set(d.localToken, "{}")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("reset: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("random: %d %s", rec.Code, rec.Body.String())
 	}
 	login := decodeBody[map[string]string](t, rec)
-	if !strings.HasPrefix(login["username"], "admin-") || len(login["password"]) != 16 {
-		t.Fatalf("new login %+v", login)
+	if !strings.HasPrefix(login["username"], "panel") || len(login["password"]) != 16 {
+		t.Fatalf("random login %+v", login)
 	}
 	if rec := c.do(http.MethodPost, "/api/session", map[string]string{"username": login["username"], "password": login["password"]}); rec.Code != http.StatusOK {
 		t.Fatalf("the new login must work: %d", rec.Code)
 	}
 	if rec := c.do(http.MethodPost, "/api/session", map[string]string{"username": "admin", "password": forgotten}); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("the old login must not: %d", rec.Code)
+	}
+
+	// The user's own; a short password is refused.
+	if rec := set(d.localToken, `{"username":"me","password":"short"}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("a five-character password: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = set(d.localToken, `{"username":"me","password":"secret12"}`)
+	if login := decodeBody[map[string]string](t, rec); rec.Code != http.StatusOK || login["username"] != "me" || login["password"] != "secret12" {
+		t.Fatalf("own login: %d %+v", rec.Code, login)
+	}
+	if rec := c.do(http.MethodPost, "/api/session", map[string]string{"username": "me", "password": "secret12"}); rec.Code != http.StatusOK {
+		t.Fatalf("the own login must work: %d", rec.Code)
 	}
 }
 

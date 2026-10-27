@@ -1163,6 +1163,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get suggestedApps => 'Ứng dụng gợi ý';
 
   @override
+  String get showSystemApps => 'Hiện ứng dụng hệ thống';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1419,4 +1422,57 @@ class AppLocalizationsVi extends AppLocalizations {
   @override
   String get runningProgramsEmpty =>
       'Không có chương trình nào khác đang chạy.';
+
+  @override
+  String get tabLog => 'Nhật ký';
+
+  @override
+  String get tabConnections => 'Kết nối';
+
+  @override
+  String get connectionsEmpty => 'Chưa có kết nối nào.';
+
+  @override
+  String connectionsOpen(int count) {
+    return '$count đang mở';
+  }
+
+  @override
+  String get connTime => 'Thời gian';
+
+  @override
+  String get connRoute => 'Quy tắc';
+
+  @override
+  String get connDestination => 'Đích';
+
+  @override
+  String get connInbound => 'Đầu vào';
+
+  @override
+  String get connProtocol => 'Giao thức';
+
+  @override
+  String get connColumns => 'Cột';
+
+  @override
+  String get connTraffic => 'Lưu lượng';
+
+  @override
+  String get connDuration => 'Thời lượng';
+
+  @override
+  String get connRouteVpn => 'Proxy';
+
+  @override
+  String get connRouteDirect => 'Trực tiếp';
+
+  @override
+  String get connRouteBlocked => 'Bị chặn';
+
+  @override
+  String get connRoutePort => 'Cổng bị từ chối';
+
+  @override
+  String get connRouteFailed => 'Thất bại';
 }

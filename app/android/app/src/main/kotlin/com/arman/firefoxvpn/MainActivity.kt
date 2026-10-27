@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -104,15 +105,20 @@ class MainActivity : FlutterActivity() {
                     val pkg = call.argument<String>("package") ?: ""
                     inBackground(result) { appIcon(pkg) }
                 }
-                "appRouting" -> {
-                    CoreService.suggestOnce(this)
-                    result.success(
+                "appRouting" -> inBackground(result) {
+                    // The page shows the region's apps installed since the
+                    // last look checked; the VPN takes them at once.
+                    if (CoreService.appMode(this) == CoreService.MODE_EXCLUDE &&
+                        CoreService.suggest(this, force = true)
+                    ) {
+                        CoreService.reconnect(this)
+                    }
                     mapOf(
                         "mode" to CoreService.appMode(this),
                         "bypass" to CoreService.appSet(this, CoreService.BYPASS).toList(),
                         "only" to CoreService.appSet(this, CoreService.ONLY).toList(),
+                        "declined" to CoreService.appSet(this, CoreService.DECLINED).toList(),
                         "region" to CoreService.regionAppList(),
-                    ),
                     )
                 }
                 "setAppRouting" -> {
@@ -123,6 +129,7 @@ class MainActivity : FlutterActivity() {
                         mapOf(
                             CoreService.BYPASS to set("bypass"),
                             CoreService.ONLY to set("only"),
+                            CoreService.DECLINED to set("declined"),
                         ),
                     )
                     if (call.argument<Boolean>("apply") == true) CoreService.reconnect(this)
@@ -159,15 +166,27 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /** The apps with a launcher icon, but this one: package and name. */
-    private fun installedApps(): List<Map<String, String>> {
+    /**
+     * The installed apps but this one: package, name, and whether it has a
+     * launcher icon (the others are mostly the system's). Packages without
+     * code (overlays, resources) use no network and are left out.
+     */
+    private fun installedApps(): List<Map<String, Any>> {
         val pm = packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        return pm.queryIntentActivities(launcher, 0)
-            .map { it.activityInfo.applicationInfo }
-            .distinctBy { it.packageName }
-            .filter { it.packageName != packageName }
-            .map { mapOf("package" to it.packageName, "label" to it.loadLabel(pm).toString()) }
+        val withIcon = pm.queryIntentActivities(launcher, 0)
+            .map { it.activityInfo.packageName }
+            .toSet()
+        @Suppress("DEPRECATION")
+        return pm.getInstalledApplications(0)
+            .filter { it.packageName != packageName && (it.flags and ApplicationInfo.FLAG_HAS_CODE) != 0 }
+            .map {
+                mapOf(
+                    "package" to it.packageName,
+                    "label" to it.loadLabel(pm).toString(),
+                    "launcher" to (it.packageName in withIcon),
+                )
+            }
     }
 
     /** An app's icon as a small PNG. */

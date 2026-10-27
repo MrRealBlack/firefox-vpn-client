@@ -1171,6 +1171,9 @@ class AppLocalizationsHu extends AppLocalizations {
   String get suggestedApps => 'Javasolt alkalmazások';
 
   @override
+  String get showSystemApps => 'Rendszeralkalmazások megjelenítése';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1429,4 +1432,57 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => 'Más program nem fut.';
+
+  @override
+  String get tabLog => 'Napló';
+
+  @override
+  String get tabConnections => 'Kapcsolatok';
+
+  @override
+  String get connectionsEmpty => 'Még nincs kapcsolat.';
+
+  @override
+  String connectionsOpen(int count) {
+    return '$count nyitott';
+  }
+
+  @override
+  String get connTime => 'Idő';
+
+  @override
+  String get connRoute => 'Szabály';
+
+  @override
+  String get connDestination => 'Cél';
+
+  @override
+  String get connInbound => 'Bejövő';
+
+  @override
+  String get connProtocol => 'Protokoll';
+
+  @override
+  String get connColumns => 'Oszlopok';
+
+  @override
+  String get connTraffic => 'Forgalom';
+
+  @override
+  String get connDuration => 'Időtartam';
+
+  @override
+  String get connRouteVpn => 'Proxy';
+
+  @override
+  String get connRouteDirect => 'Közvetlen';
+
+  @override
+  String get connRouteBlocked => 'Letiltva';
+
+  @override
+  String get connRoutePort => 'Port elutasítva';
+
+  @override
+  String get connRouteFailed => 'Sikertelen';
 }

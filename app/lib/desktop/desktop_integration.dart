@@ -87,6 +87,22 @@ class DesktopIntegration {
     settings.addListener(_applyAutostart);
     _updateTray();
     _applyAutostart();
+    // On Linux the Flutter engine takes the window's close before the
+    // runner's own handler (DesktopBridge's closeRequested) and asks to
+    // exit; without an answer the app ended at once, VPN and all. The
+    // binding keeps the listener for the app's life.
+    if (Platform.isLinux) {
+      AppLifecycleListener(onExitRequested: onExitRequested);
+    }
+  }
+
+  /// The close button, as the engine asks it on Linux: what the setting or
+  /// the close dialog says, unless the app is quitting already.
+  @visibleForTesting
+  Future<AppExitResponse> onExitRequested() async {
+    if (_quitting) return AppExitResponse.exit;
+    unawaited(_onClose());
+    return AppExitResponse.cancel;
   }
 
   /// Keeps the Run entry equal to the setting, pointing at this copy of the
@@ -370,6 +386,11 @@ class DesktopIntegration {
         if (choice == null) return;
         action = choice.action;
         if (choice.remember) settings.update(closeAction: action);
+        // A hidden window draws nothing: let the dialog finish closing
+        // (showDialog's 150 ms) first, or its last frame shows for a moment
+        // when the window opens again from the tray.
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await WidgetsBinding.instance.endOfFrame;
       }
       if (action == CloseAction.quit) {
         await quit();

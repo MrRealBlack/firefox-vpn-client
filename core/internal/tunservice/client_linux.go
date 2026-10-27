@@ -41,6 +41,9 @@ func runElevated(_ string, args ...string) error {
 	case pkexecDismissed:
 		return ErrCancelled
 	case pkexecNotAuthorized:
+		if noPromptAgent(string(out)) {
+			return fmt.Errorf("no password prompt could open here: the app was not started from the desktop (but from a terminal or over SSH, for one); start Firefox VPN from the applications menu, or install the service in a terminal: sudo %q install", self)
+		}
 		if text := strings.TrimSpace(string(out)); text != "" {
 			return fmt.Errorf("the administrator permission was refused: %s", text)
 		}
@@ -50,4 +53,13 @@ func runElevated(_ string, args ...string) error {
 		return errors.New(text)
 	}
 	return fmt.Errorf("%s failed with exit code %d", filepath.Base(self), exit.ExitCode())
+}
+
+// noPromptAgent reports whether pkexec found no polkit agent to ask with:
+// the program does not belong to a desktop session that runs one (it was
+// started from a terminal or over SSH), so pkexec tried the terminal's
+// prompt, and there is no terminal either.
+func noPromptAgent(output string) bool {
+	return strings.Contains(output, "textual authentication agent") ||
+		strings.Contains(output, "No authentication agent found")
 }

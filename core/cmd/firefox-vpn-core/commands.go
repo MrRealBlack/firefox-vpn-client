@@ -195,35 +195,33 @@ func (p paint) cyan(s string) string   { return p.wrap("36", s) }
 func (p paint) yellow(s string) string { return p.wrap("33", s) }
 func (p paint) red(s string) string    { return p.wrap("31", s) }
 
-// runSetDashboardLogin sets or clears the dashboard credentials on the
-// terminal, for headless servers whose dashboard is not reachable yet.
-func runSetDashboardLogin(paths service.DataPaths) error {
+// runPanelLogin sets the panel login on the terminal, for servers whose
+// panel is not reachable yet or whose password was forgotten: the username
+// and password typed, or a random one for each left empty, shown once.
+func runPanelLogin(paths service.DataPaths) error {
 	cfg, _, err := config.Load(paths.Config)
 	if err != nil {
 		return err
 	}
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Dashboard username (empty disables the login): ")
-	username, _ := reader.ReadString('\n')
-	username = strings.TrimSpace(username)
-	if username == "" {
-		cfg.Dashboard.Username, cfg.Dashboard.PasswordHash = "", ""
-		if err := config.Save(paths.Config, cfg); err != nil {
+	fmt.Print("Panel username (Enter for a random one): ")
+	username, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	password, err := readPassword("Panel password (Enter for a random one): ")
+	if err != nil {
+		return err
+	}
+	if password != "" {
+		confirm, err := readPassword("Repeat the password: ")
+		if err != nil {
 			return err
 		}
-		fmt.Println("Dashboard login disabled. Restart the service to apply.")
-		return nil
+		if password != confirm {
+			return errors.New("the passwords do not match")
+		}
 	}
-	password, err := readPassword("Dashboard password: ")
+	typed := password != ""
+	username, password, err = service.PanelLogin(username, password)
 	if err != nil {
 		return err
-	}
-	confirm, err := readPassword("Repeat the password: ")
-	if err != nil {
-		return err
-	}
-	if password != confirm {
-		return errors.New("the passwords do not match")
 	}
 	hash, err := service.HashDashboardPassword(password)
 	if err != nil {
@@ -233,7 +231,12 @@ func runSetDashboardLogin(paths service.DataPaths) error {
 	if err := config.Save(paths.Config, cfg); err != nil {
 		return err
 	}
-	fmt.Println("Dashboard login saved. Restart the service to apply.")
+	fmt.Println()
+	fmt.Println("  Panel login saved:")
+	fmt.Println("    Username  " + username)
+	if !typed {
+		fmt.Println("    Password  " + password + "   (write it down: it is not shown again)")
+	}
 	return nil
 }
 

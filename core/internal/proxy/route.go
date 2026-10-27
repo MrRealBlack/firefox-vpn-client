@@ -196,7 +196,7 @@ func (o *RoutedOpener) OpenTunnelForClient(authority, clientKey string) (net.Con
 				if err != nil {
 					return nil, err
 				}
-				return countConn(conn, &o.meter.directUp, &o.meter.directDown), nil
+				return countRouted(conn, &o.meter.directUp, &o.meter.directDown, RouteDirect), nil
 			case routing.Block:
 				o.blocked.Add(1)
 				logx.Debug("route blocked target=%s", logx.Target(authority))
@@ -212,7 +212,7 @@ func (o *RoutedOpener) OpenTunnelForClient(authority, clientKey string) (net.Con
 		logx.Debug("DNS through the proxy answered here target=%s", logx.Target(authority))
 		client, server := net.Pipe()
 		go serveDNS(server, o.exchange)
-		return countConn(client, &o.meter.up, &o.meter.down), nil
+		return countRouted(client, &o.meter.up, &o.meter.down, RouteVPN), nil
 	}
 	authority = throughMozilla(authority)
 	var conn net.Conn
@@ -225,5 +225,5 @@ func (o *RoutedOpener) OpenTunnelForClient(authority, clientKey string) (net.Con
 	if err != nil {
 		return nil, err
 	}
-	return countConn(conn, &o.meter.up, &o.meter.down), nil
+	return countRouted(conn, &o.meter.up, &o.meter.down, RouteVPN), nil
 }

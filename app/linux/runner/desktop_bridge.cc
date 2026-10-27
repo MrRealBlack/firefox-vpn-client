@@ -5,6 +5,7 @@
 
 #include <cstring>
 #include <initializer_list>
+#include <set>
 #include <string>
 
 namespace {
@@ -20,6 +21,8 @@ typedef void (*IndicatorSetIcon)(AppIndicator* indicator, const gchar* icon,
 typedef void (*IndicatorSetTitle)(AppIndicator* indicator, const gchar* title);
 typedef void (*IndicatorSetMenu)(AppIndicator* indicator, GtkMenu* menu);
 typedef void (*IndicatorSetTarget)(AppIndicator* indicator, GtkWidget* item);
+typedef void (*IndicatorSetThemePath)(AppIndicator* indicator,
+                                      const gchar* path);
 
 constexpr int kCategoryApplicationStatus = 0;
 constexpr int kStatusPassive = 0;
@@ -32,6 +35,7 @@ struct Indicator {
   IndicatorSetTitle set_title = nullptr;
   IndicatorSetMenu set_menu = nullptr;
   IndicatorSetTarget set_target = nullptr;
+  IndicatorSetThemePath set_theme_path = nullptr;
 
   bool Load() {
     for (const char* name : {"libayatana-appindicator3.so.1",
@@ -51,6 +55,8 @@ struct Indicator {
           dlsym(lib, "app_indicator_set_menu"));
       set_target = reinterpret_cast<IndicatorSetTarget>(
           dlsym(lib, "app_indicator_set_secondary_activate_target"));
+      set_theme_path = reinterpret_cast<IndicatorSetThemePath>(
+          dlsym(lib, "app_indicator_set_icon_theme_path"));
       if (create && set_status && set_icon && set_menu) {
         return true;
       }
@@ -69,6 +75,9 @@ struct _DesktopBridge {
   Indicator api;
   AppIndicator* indicator;
   std::string icon_path;
+  // icon_dir holds the tray icons under names of their own (tray_icon).
+  std::string icon_dir;
+  std::set<std::string> icons_copied;
   std::string app_icon;
   bool allow_close;
   GDBusConnection* bus;
@@ -155,6 +164,45 @@ static GtkWidget* build_menu(DesktopBridge* self, FlValue* items, bool rtl,
   return menu;
 }
 
+// tray_icon is the icon at path as the tray takes it: a name in an icon
+// folder of the app's own, where each icon is copied once, rather than the
+// file path, which some trays (StatusNotifierItem hosts) do not resolve.
+// The name is firefoxvpntray_<file>: no theme has it, and it has no dash,
+// since KDE looks a name up in the system's theme first and drops its
+// dashed parts until one matches ("firefox-vpn-off" showed Firefox's own
+// icon). Without the library's icon folder call, the path goes.
+static std::string tray_icon(DesktopBridge* self, const gchar* path) {
+  if (self->api.set_theme_path == nullptr || path[0] == '\0') {
+    return path;
+  }
+  if (self->icon_dir.empty()) {
+    g_autofree gchar* dir = g_build_filename(g_get_user_runtime_dir(),
+                                             "firefox-vpn-tray", nullptr);
+    g_mkdir_with_parents(dir, 0700);
+    self->icon_dir = dir;
+    self->api.set_theme_path(self->indicator, dir);
+  }
+  g_autofree gchar* base = g_path_get_basename(path);
+  gchar* dot = strrchr(base, '.');
+  if (dot) {
+    *dot = '\0';
+  }
+  std::string name = std::string("firefoxvpntray_") + base;
+  if (self->icons_copied.insert(name).second) {
+    g_autofree gchar* data = nullptr;
+    gsize length = 0;
+    std::string file = name + ".png";
+    g_autofree gchar* copy =
+        g_build_filename(self->icon_dir.c_str(), file.c_str(), nullptr);
+    if (!g_file_get_contents(path, &data, &length, nullptr) ||
+        !g_file_set_contents(copy, data, length, nullptr)) {
+      self->icons_copied.erase(name);
+      return path;
+    }
+  }
+  return name;
+}
+
 static void set_tray(DesktopBridge* self, FlValue* args) {
   if (self->indicator == nullptr) {
     return;
@@ -163,7 +211,8 @@ static void set_tray(DesktopBridge* self, FlValue* args) {
   const gchar* tooltip = string_arg(args, "tooltip");
   if (self->icon_path != icon) {
     self->icon_path = icon;
-    self->api.set_icon(self->indicator, icon, tooltip);
+    std::string name = tray_icon(self, icon);
+    self->api.set_icon(self->indicator, name.c_str(), tooltip);
   }
   if (self->api.set_title) {
     self->api.set_title(self->indicator, tooltip);

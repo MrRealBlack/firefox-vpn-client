@@ -1,17 +1,14 @@
-//go:build !windows
+//go:build !windows && !linux && !darwin
 
 package update
 
-import (
-	"errors"
-	"time"
-)
+import "time"
 
-// Updates install by themselves on Windows only; elsewhere the app offers
-// the download.
+// Updates install by themselves on Windows, Linux, and macOS only;
+// elsewhere the app offers the download.
 const platformSupported = false
 
-var errNotSupported = errors.New("updates install by themselves on Windows only")
+func dataDirOK(string, string) string { return "" }
 
 func updating(string) bool { return false }
 

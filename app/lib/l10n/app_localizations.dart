@@ -2109,6 +2109,12 @@ abstract class AppLocalizations {
   /// **'Suggested apps'**
   String get suggestedApps;
 
+  /// No description provided for @showSystemApps.
+  ///
+  /// In en, this message translates to:
+  /// **'Show system apps'**
+  String get showSystemApps;
+
   /// No description provided for @suggestedAdded.
   ///
   /// In en, this message translates to:
@@ -2522,6 +2528,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No other programs are running.'**
   String get runningProgramsEmpty;
+
+  /// No description provided for @tabLog.
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get tabLog;
+
+  /// Logs page: the tab that lists the proxy's connections (GET /api/connections).
+  ///
+  /// In en, this message translates to:
+  /// **'Connections'**
+  String get tabConnections;
+
+  /// No description provided for @connectionsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No connections yet.'**
+  String get connectionsEmpty;
+
+  /// No description provided for @connectionsOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} open'**
+  String connectionsOpen(int count);
+
+  /// No description provided for @connTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get connTime;
+
+  /// No description provided for @connRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Rule'**
+  String get connRoute;
+
+  /// No description provided for @connDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination'**
+  String get connDestination;
+
+  /// How the client came: SOCKS5, HTTP, or TUN.
+  ///
+  /// In en, this message translates to:
+  /// **'Inbound'**
+  String get connInbound;
+
+  /// TCP or UDP.
+  ///
+  /// In en, this message translates to:
+  /// **'Protocol'**
+  String get connProtocol;
+
+  /// No description provided for @connColumns.
+  ///
+  /// In en, this message translates to:
+  /// **'Columns'**
+  String get connColumns;
+
+  /// No description provided for @connTraffic.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic'**
+  String get connTraffic;
+
+  /// No description provided for @connDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get connDuration;
+
+  /// No description provided for @connRouteVpn.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy'**
+  String get connRouteVpn;
+
+  /// No description provided for @connRouteDirect.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct'**
+  String get connRouteDirect;
+
+  /// No description provided for @connRouteBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked'**
+  String get connRouteBlocked;
+
+  /// Mozilla's proxy connects to ports 80, 443, 8080, and 8443 only.
+  ///
+  /// In en, this message translates to:
+  /// **'Port refused'**
+  String get connRoutePort;
+
+  /// No description provided for @connRouteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get connRouteFailed;
 }
 
 class _AppLocalizationsDelegate

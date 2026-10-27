@@ -246,6 +246,11 @@
 
         <!-- =========================================================== logs -->
         <section id="view-logs" class="view" hidden>
+          <div class="segmented logs-tabs" role="group" aria-label="Log or connections">
+            <button class="seg active" data-logtab="log">Log</button>
+            <button class="seg" data-logtab="connections">Connections</button>
+          </div>
+          <div id="logs-log">
           <div class="toolbar-row">
             <div class="toolbar">
               <select id="log-level">
@@ -260,6 +265,26 @@
             <button id="log-clear" class="btn">Clear view</button>
           </div>
           <div id="log-list" class="terminal" role="log" aria-live="polite"></div>
+          </div>
+          <!-- The proxy's connections (GET /api/connections), in the order
+               they started, read once a second while shown. -->
+          <div id="logs-connections" hidden>
+            <div class="toolbar-row">
+              <div class="toolbar">
+                <input id="conn-search" type="search" placeholder="Filter destinations">
+                <span id="conn-open" class="muted"></span>
+                <label class="switch"><input type="checkbox" id="conn-follow" checked><span></span>Follow</label>
+              </div>
+              <button id="conn-clear" class="btn">Clear</button>
+            </div>
+            <div class="table-card card conn-card" id="conn-card">
+              <table class="table conn-table">
+                <thead><tr><th>Time</th><th>Destination</th><th>Rule</th><th>Protocol</th><th class="hide-sm">Traffic</th><th class="hide-sm">Duration</th></tr></thead>
+                <tbody id="conn-rows"></tbody>
+              </table>
+              <p id="conn-empty" class="muted conn-empty">No connections yet.</p>
+            </div>
+          </div>
         </section>
 
         <!-- ======================================================= settings -->

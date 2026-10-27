@@ -109,6 +109,7 @@ func (d *Daemon) startEngine() (*proxyEngine, error) {
 	socks := proxy.NewSOCKSServer(routed, config.HandshakeTimeout, config.IdleTimeout, cfg.Proxy.MaxConnections)
 	socks.Auth = proxy.SOCKSCredentials(cfg.Proxy.Username, cfg.Proxy.Password)
 	socks.Notices = d.notices
+	socks.Conns, socks.Transport = d.conns, engine.currentTransport
 	if socks.Auth == nil && !hostIsLoopbackListen(cfg.Proxy.Listen) {
 		logx.Warn("the SOCKS5 proxy is reachable from other devices without a password; set proxy.username and proxy.password listen=%s", cfg.Proxy.Listen)
 	}
@@ -117,6 +118,7 @@ func (d *Daemon) startEngine() (*proxyEngine, error) {
 	tunSOCKS := proxy.NewSOCKSServer(routed, config.HandshakeTimeout, config.IdleTimeout, tunMaxConnections)
 	tunSOCKS.Auth = proxy.SOCKSCredentials(tunUser, tunPassword)
 	tunSOCKS.Notices = d.notices
+	tunSOCKS.Conns, tunSOCKS.Inbound, tunSOCKS.Transport = d.conns, "tun", engine.currentTransport
 	tunSOCKS.Allow = d.TunnelAllows
 	engine.tunSOCKS = tunSOCKS
 	if err := proxy.WriteIdleStatus(engine.statusFile, proxy.StatusSleeping); err != nil {

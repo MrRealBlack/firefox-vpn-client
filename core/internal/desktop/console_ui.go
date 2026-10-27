@@ -45,7 +45,9 @@ type consoleBackend interface {
 	ping(ctx context.Context) ([]proxy.LocationPing, error)
 	setLocation(ctx context.Context, country string) error
 	setSystemProxy(ctx context.Context, mode string) error
-	resetLogin(ctx context.Context) (dashboardLogin, error)
+	// setLogin sets the panel login: username and password, a random one
+	// for each left empty.
+	setLogin(ctx context.Context, username, password string) (dashboardLogin, error)
 	logsSince(ctx context.Context, after uint64) ([]logx.Entry, error)
 }
 
@@ -66,8 +68,8 @@ func (b daemonBackend) setLocation(_ context.Context, country string) error {
 func (b daemonBackend) setSystemProxy(_ context.Context, mode string) error {
 	return b.d.SetSystemProxy(mode)
 }
-func (b daemonBackend) resetLogin(context.Context) (dashboardLogin, error) {
-	username, password, err := b.d.ResetDashboardLogin()
+func (b daemonBackend) setLogin(_ context.Context, username, password string) (dashboardLogin, error) {
+	username, password, err := b.d.SetDashboardLogin(username, password)
 	return dashboardLogin{Username: username, Password: password}, err
 }
 func (b daemonBackend) logsSince(_ context.Context, after uint64) ([]logx.Entry, error) {
@@ -98,9 +100,9 @@ func (b apiBackend) setLocation(ctx context.Context, country string) error {
 func (b apiBackend) setSystemProxy(ctx context.Context, mode string) error {
 	return b.c.SetSystemProxy(ctx, mode)
 }
-func (b apiBackend) resetLogin(ctx context.Context) (dashboardLogin, error) {
+func (b apiBackend) setLogin(ctx context.Context, username, password string) (dashboardLogin, error) {
 	var login dashboardLogin
-	err := b.c.Do(ctx, http.MethodPost, "/api/dashboard/reset-login", map[string]any{}, &login)
+	err := b.c.Do(ctx, http.MethodPost, "/api/dashboard/set-login", dashboardLogin{Username: username, Password: password}, &login)
 	return login, err
 }
 
@@ -159,12 +161,16 @@ type consoleUI struct {
 	busy     bool
 	pings    []proxy.LocationPing
 	logLines []logx.Entry
-	// newLogin is the dashboard login just reset, shown until the reset
-	// screen is left.
+	// newLogin is the panel login just set, shown until its screen is
+	// left; its password is empty when the user typed it.
 	newLogin *dashboardLogin
-	lastLog  uint64
-	quitting bool
-	input    string // the number typed at the prompt
+	// loginStep is where the panel login screen is: choosing, or typing
+	// the username (then kept in loginUser) or the password.
+	loginStep int
+	loginUser string
+	lastLog   uint64
+	quitting  bool
+	input     string // the number typed at the prompt
 
 	// sysproxy applies system_proxy.mode for the daemon in this process,
 	// as the tray and the app mode do; stopSync ends that and restores the
@@ -420,6 +426,16 @@ func normalizeKey(r rune) rune {
 
 const maxInputDigits = 3
 
+// maxLoginText is the longest username or password the login screen takes.
+const maxLoginText = 64
+
+// Steps of the panel login screen.
+const (
+	loginChoose = iota
+	loginUsername
+	loginPassword
+)
+
 // handleKey edits the number at the prompt; Enter runs it, Esc clears it
 // or goes back, Ctrl+C closes the window.
 func (ui *consoleUI) handleKey(r rune) {
@@ -441,10 +457,18 @@ func (ui *consoleUI) handleKey(r rune) {
 			ui.input = ui.input[:n-1]
 		}
 	case r == 27: // Esc
-		if ui.input != "" {
+		switch {
+		case ui.input != "":
 			ui.input = ""
-		} else {
+		case ui.loginStep != loginChoose:
+			ui.loginStep, ui.loginUser = loginChoose, ""
+		default:
 			ui.switchModeLocked(screenHome)
+		}
+	case ui.loginStep != loginChoose:
+		// Typing the panel's username or password.
+		if r >= ' ' && r != 127 && len(ui.input) < maxLoginText {
+			ui.input += string(r)
 		}
 	case r >= '0' && r <= '9' && len(ui.input) < maxInputDigits:
 		ui.input += string(r)
@@ -475,6 +499,13 @@ const (
 
 // submit runs the number typed at the prompt.
 func (ui *consoleUI) submit(text string) {
+	ui.mu.Lock()
+	typing := ui.loginStep != loginChoose
+	ui.mu.Unlock()
+	if typing {
+		ui.submitLoginText(text)
+		return
+	}
 	if text == "" {
 		return
 	}
@@ -638,32 +669,85 @@ func (ui *consoleUI) switchModeLocked(mode screenMode) {
 	}
 	if mode != screenResetLogin {
 		ui.newLogin = nil // the password is shown only once
+		ui.loginStep, ui.loginUser = loginChoose, ""
 	}
 	ui.mode = mode
 }
 
-// submitResetLogin handles the reset screen: 1 confirms, 0 goes back.
+// submitResetLogin handles the panel login screen: 1 sets a random
+// login, 2 asks for the user's own, 0 goes back.
 func (ui *consoleUI) submitResetLogin(n int) {
 	ui.mu.Lock()
-	backend, done := ui.backend, ui.newLogin != nil
+	done := ui.newLogin != nil
 	ui.mu.Unlock()
 	switch {
 	case n == 0:
 		ui.setMode(screenHome)
 	case n == 1 && !done:
-		ui.run("Creating a new dashboard login…", func(ctx context.Context) (string, error) {
-			login, err := backend.resetLogin(ctx)
-			if err != nil {
-				return "", err
-			}
-			ui.mu.Lock()
-			ui.newLogin = &login
-			ui.mu.Unlock()
-			return "New dashboard login created; write it down", nil
-		})
+		ui.setLogin("", "")
+	case n == 2 && !done:
+		ui.mu.Lock()
+		ui.loginStep = loginUsername
+		ui.message = ""
+		ui.mu.Unlock()
+	case done:
+		ui.setMessage("Enter 0 to go back", ansiYellow)
 	default:
-		ui.setMessage("Enter 1 to reset or 0 to go back", ansiYellow)
+		ui.setMessage("Enter 1, 2, or 0", ansiYellow)
 	}
+}
+
+// submitLoginText takes the username, then the password, the user typed;
+// an empty username goes back to the choice.
+func (ui *consoleUI) submitLoginText(text string) {
+	ui.mu.Lock()
+	step, username := ui.loginStep, ui.loginUser
+	ui.mu.Unlock()
+	switch {
+	case step == loginUsername && strings.TrimSpace(text) == "":
+		ui.mu.Lock()
+		ui.loginStep = loginChoose
+		ui.mu.Unlock()
+	case step == loginUsername:
+		if _, _, err := service.PanelLogin(text, "placeholder"); err != nil {
+			ui.setMessage("A username has at most 64 characters, without spaces or ':'", ansiYellow)
+			return
+		}
+		ui.mu.Lock()
+		ui.loginUser, ui.loginStep = strings.TrimSpace(text), loginPassword
+		ui.message = ""
+		ui.mu.Unlock()
+	default:
+		if _, _, err := service.PanelLogin(username, text); err != nil || text == "" {
+			ui.setMessage("The password needs at least 6 characters", ansiYellow)
+			return
+		}
+		ui.mu.Lock()
+		ui.loginStep = loginChoose
+		ui.mu.Unlock()
+		ui.setLogin(username, text)
+	}
+}
+
+// setLogin sets the panel login in the background and shows it; a password
+// the user typed is not shown back.
+func (ui *consoleUI) setLogin(username, password string) {
+	ui.mu.Lock()
+	backend := ui.backend
+	ui.mu.Unlock()
+	ui.run("Setting the panel login…", func(ctx context.Context) (string, error) {
+		login, err := backend.setLogin(ctx, username, password)
+		if err != nil {
+			return "", err
+		}
+		if password != "" {
+			login.Password = ""
+		}
+		ui.mu.Lock()
+		ui.newLogin = &login
+		ui.mu.Unlock()
+		return "Panel login set", nil
+	})
 }
 
 func (ui *consoleUI) measure(backend consoleBackend) {
@@ -791,14 +875,20 @@ func (ui *consoleUI) homeScreen(width, height int) []string {
 	}
 
 	lines = append(lines, "", ansiBold+"  What would you like to do?"+ansiReset, "")
-	for i, item := range ui.menuItems() {
+	// The actions in their groups, a rule between groups and before 0.
+	rule := ansiGrey + "    " + strings.Repeat("─", max(10, min(width-6, 60))) + ansiReset
+	items := ui.menuItems()
+	for i, item := range items {
+		if i > 0 && item.group != items[i-1].group {
+			lines = append(lines, rule)
+		}
 		lines = append(lines, menuLine(i+1, item.label))
 	}
-	closeLabel := "Close this window (Firefox VPN keeps running)"
+	closeLabel := "Close this window"
 	if ui.own != nil {
 		closeLabel = "Quit (stops the proxy)"
 	}
-	lines = append(lines, menuLine(0, closeLabel))
+	lines = append(lines, rule, menuLine(0, closeLabel))
 	return append(lines, "", ui.promptLine(), "  "+ui.messageLine())
 }
 
@@ -807,11 +897,23 @@ func menuLine(n int, label string) string {
 }
 
 func (ui *consoleUI) promptLine() string {
-	return "  " + ansiBold + "Enter a number and press Enter: " + ansiReset + ansiCyan + ui.input + "▌" + ansiReset
+	label, text := "Enter a number and press Enter: ", ui.input
+	if ui.mode == screenResetLogin {
+		switch ui.loginStep {
+		case loginUsername:
+			label = "Username: "
+		case loginPassword:
+			label, text = "Password: ", strings.Repeat("•", utf8.RuneCountInString(text))
+		}
+	}
+	return "  " + ansiBold + label + ansiReset + ansiCyan + text + "▌" + ansiReset
 }
 
 type menuItem struct {
 	action, label string
+	// group sets the menu's groups: the dashboard, the connection, the
+	// login, the log and exiting; a rule separates them.
+	group int
 }
 
 // menuItems lists the main-menu actions numbered from 1; 0 always closes
@@ -823,32 +925,28 @@ func (ui *consoleUI) menuItems() []menuItem {
 	if !browserAvailable() {
 		dashboard = "How to open the dashboard (no browser on this machine)"
 	}
-	items := []menuItem{{action: actDashboard, label: dashboard}}
+	items := []menuItem{{action: actDashboard, label: dashboard, group: 1}}
 	if online {
 		items = append(items,
-			menuItem{action: actLocation, label: "Choose a server (test the real delay)"},
-			menuItem{action: actTest, label: "Test the connection"},
-			menuItem{action: actRestart, label: "Restart the proxy"})
+			menuItem{action: actLocation, label: "Choose a server", group: 2},
+			menuItem{action: actTest, label: "Test the connection", group: 2},
+			menuItem{action: actRestart, label: "Restart the proxy", group: 2})
 		if systemProxySupported() {
 			label := "Turn on system proxy"
 			if st.SystemProxy == config.SystemProxySet {
 				label = "Turn off system proxy"
 			}
-			items = append(items, menuItem{action: actSysProxy, label: label})
+			items = append(items, menuItem{action: actSysProxy, label: label, group: 2})
 		}
 	} else if !own {
-		items = append(items, menuItem{action: actStart, label: "Start Firefox VPN"})
+		items = append(items, menuItem{action: actStart, label: "Start Firefox VPN", group: 2})
 	}
 	if online {
-		label := "Reset the dashboard login (forgotten password: new random username and password)"
-		if on, _ := st.Dashboard["login_required"].(bool); !on {
-			label = "Create a dashboard login (random username and password)"
-		}
-		items = append(items, menuItem{action: actReset, label: label})
+		items = append(items, menuItem{action: actReset, label: "Set panel login", group: 3})
 	}
-	items = append(items, menuItem{action: actLog, label: "Show the log"})
+	items = append(items, menuItem{action: actLog, label: "Show the log", group: 4})
 	if !own && st != nil && st.CanExit {
-		items = append(items, menuItem{action: actExit, label: "Exit Firefox VPN completely"})
+		items = append(items, menuItem{action: actExit, label: "Exit Firefox VPN completely", group: 4})
 	}
 	return items
 }
@@ -880,25 +978,37 @@ func (ui *consoleUI) logsScreen(width, height int) []string {
 	return append(lines, menuLine(0, "Back"), "", ui.promptLine(), "  "+ui.messageLine())
 }
 
-// resetLoginScreen asks before resetting the dashboard login and then
-// shows the new one.
+// resetLoginScreen offers a random panel login or the user's own, asks
+// for the user's, and then shows the login set.
 func (ui *consoleUI) resetLoginScreen(width, height int) []string {
 	lines := ui.header(width)
-	lines = append(lines, ansiBold+"  Reset the dashboard login"+ansiReset, "")
-	if login := ui.newLogin; login != nil {
+	lines = append(lines, ansiBold+"  Set panel login"+ansiReset, "")
+	switch login := ui.newLogin; {
+	case login != nil:
 		lines = append(lines,
-			"  The dashboard now asks for this login:", "",
-			"    "+ansiGrey+padRight("Username", 10)+ansiReset+ansiBold+ansiCyan+login.Username+ansiReset,
-			"    "+ansiGrey+padRight("Password", 10)+ansiReset+ansiBold+ansiCyan+login.Password+ansiReset, "",
-			ansiYellow+"  Write it down: the password is not shown again."+ansiReset,
-			ansiGrey+"  You can change both in the dashboard, Settings, Dashboard."+ansiReset, "",
-			menuLine(0, "Back"))
-	} else {
+			"  The panel now asks for this login:", "",
+			"    "+ansiGrey+padRight("Username", 10)+ansiReset+ansiBold+ansiCyan+login.Username+ansiReset)
+		if login.Password != "" {
+			lines = append(lines,
+				"    "+ansiGrey+padRight("Password", 10)+ansiReset+ansiBold+ansiCyan+login.Password+ansiReset, "",
+				ansiYellow+"  Write it down: the password is not shown again."+ansiReset)
+		} else {
+			lines = append(lines, "    "+ansiGrey+padRight("Password", 10)+ansiReset+"the one you typed")
+		}
+		lines = append(lines, "", menuLine(0, "Back"))
+	case ui.loginStep != loginChoose:
 		lines = append(lines,
-			"  This replaces the dashboard's username and password with new random",
-			"  ones and shows them here. Every browser signed in to the dashboard is",
-			"  signed out and must use the new login.", "",
-			menuLine(1, "Reset the login now"),
+			"  Type the username, then the password (at least 6 characters).",
+			ansiGrey+"  Esc goes back."+ansiReset)
+		if ui.loginStep == loginPassword {
+			lines = append(lines, "", "    "+ansiGrey+padRight("Username", 10)+ansiReset+ansiBold+ui.loginUser+ansiReset)
+		}
+	default:
+		lines = append(lines,
+			"  Every browser signed in to the panel is signed out and must use",
+			"  the new login.", "",
+			menuLine(1, "Random username and password"),
+			menuLine(2, "Choose my own"),
 			menuLine(0, "Back"))
 	}
 	for len(lines) < height-4 {

@@ -14,8 +14,8 @@ import (
 // exitWait bounds the wait for the app and the core to exit.
 const exitWait = 2 * time.Minute
 
-// The processes an update starts and waits for, and Windows' list of
-// installed apps (process_*.go); tests replace them.
+// The processes an update starts and waits for, and what the system keeps
+// about the app (process_*.go); tests replace them.
 var (
 	launchUpdater = startUpdater
 	waitExited    = waitForExit
@@ -42,9 +42,16 @@ func Apply(dataDir string) error {
 		return errors.New("incomplete instructions")
 	}
 	logx.Info("update: installing from=%s to=%s app=%s", p.From, p.To, p.AppDir)
-	unlock, err := lockApp(p.AppDir)
-	if err != nil {
+	unlock, err := lockApp(dataDir)
+	if errors.Is(err, errUpdateRunning) {
+		// That update starts the app again.
 		return err
+	}
+	if err != nil {
+		// The lock only keeps a core started meanwhile from cleaning up;
+		// without it the update still runs and the app comes back.
+		logx.Warn("update: going on without the lock err=%s", logx.Err(err))
+		unlock = func() {}
 	}
 	result := Result{From: p.From, To: p.To, On: p.On}
 	waitErr := waitExited(p.Wait, exitWait)
@@ -58,9 +65,11 @@ func Apply(dataDir string) error {
 		logx.Error("update: failed err=%s", logx.Err(err))
 	} else {
 		logx.Info("update: installed version=%s", p.To)
-		// A copy Setup installed: Windows' list shows the new version.
+		// What the system keeps about the app: Windows' list of installed
+		// apps shows the new version of a copy Setup installed; on macOS
+		// the bundle loses the mark of a downloaded app.
 		if merr := markInstalled(p.AppDir, p.To); merr != nil {
-			logx.Warn("update: setting the version in Windows' list of installed apps failed err=%s", logx.Err(merr))
+			logx.Warn("update: telling the system about the new version failed err=%s", logx.Err(merr))
 		}
 	}
 	if out, merr := json.MarshalIndent(result, "", "  "); merr == nil {

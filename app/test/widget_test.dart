@@ -236,6 +236,54 @@ class FakeApi implements CoreApi {
     return locations();
   }
 
+  /// The proxy's connections, in the order they started; clearing keeps
+  /// the open ones, as the core does.
+  List<Map<String, Object?>> conns = [
+    {
+      'id': 1,
+      'start': '2026-10-26T10:00:01Z',
+      'end': '2026-10-26T10:00:01Z',
+      'inbound': 'http',
+      'target': 'mail.example.com:993',
+      'network': 'tcp',
+      'route': 'port',
+    },
+    {
+      'id': 2,
+      'start': '2026-10-26T10:00:03Z',
+      'end': '2026-10-26T10:00:04Z',
+      'inbound': 'socks5',
+      'target': 'example.ir:443',
+      'network': 'tcp',
+      'route': 'direct',
+    },
+    {
+      'id': 3,
+      'start': '2026-10-26T10:00:05Z',
+      'inbound': 'tun',
+      'target': 'web.telegram.org:443',
+      'network': 'tcp',
+      'route': 'vpn',
+      'transport': 'h2',
+      'up': 2048,
+      'down': 1048576,
+    },
+  ];
+
+  @override
+  Future<List<ProxyConnection>> connections() async => [
+    for (final c in conns) ProxyConnection.fromJson(c),
+  ];
+
+  @override
+  Future<List<ProxyConnection>> clearConnections() async {
+    conns = [
+      for (final c in conns)
+        if (c['end'] == null) c,
+    ];
+    return connections();
+  }
+
   @override
   Future<List<LogEntry>> logs(int after) async => after > 0
       ? const []
@@ -872,8 +920,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
+    final api = FakeApi();
     final core = CoreController(
-      () async => FakeApi(),
+      () async => api,
       pollInterval: const Duration(hours: 1),
     );
     final settings = AppSettings();
@@ -893,6 +942,63 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('proxy started'), findsOneWidget);
     expect(find.textContaining('renewal slow'), findsOneWidget);
+
+    // The proxy's connections, in the second tab, in the order they started;
+    // how each came and its traffic only when asked for.
+    await tester.tap(find.text('Connections'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(find.text('1 open'), findsOneWidget);
+    expect(find.text('web.telegram.org:443'), findsOneWidget);
+    expect(find.text('Proxy'), findsOneWidget);
+    expect(find.text('Direct'), findsOneWidget);
+    expect(find.text('Port refused'), findsOneWidget);
+    expect(find.textContaining('1.0 MB'), findsNothing);
+    expect(find.text('TUN'), findsNothing);
+    expect(find.text('TCP'), findsNWidgets(3));
+    // The destination gets the most room.
+    expect(
+      tester.getSize(find.text('web.telegram.org:443')).width,
+      greaterThan(100),
+    );
+    expect(
+      tester.getTopLeft(find.text('example.ir:443')).dy,
+      lessThan(tester.getTopLeft(find.text('web.telegram.org:443')).dy),
+    );
+    // Columns are chosen, and the choice is kept.
+    await tester.tap(find.byTooltip('Columns'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(CheckboxMenuButton, 'Traffic'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(CheckboxMenuButton, 'Inbound'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+    expect(find.text('TUN'), findsOneWidget);
+    expect(find.textContaining('H2'), findsNothing);
+    expect(find.textContaining('1.0 MB'), findsOneWidget);
+    expect(settings.hiddenConnectionColumns, {'duration'});
+
+    // Clear empties the list, the open ones too, also when the tab opens
+    // again; later connections show.
+    await tester.tap(find.byTooltip('Clear'));
+    await tester.pumpAndSettle();
+    expect(find.text('No connections yet.'), findsOneWidget);
+    await tester.tap(find.text('Log'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Connections'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(find.text('web.telegram.org:443'), findsNothing);
+    api.conns.add({
+      'id': 4,
+      'start': '2026-10-26T10:00:09Z',
+      'target': 'new.example.com:443',
+      'route': 'vpn',
+    });
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.text('new.example.com:443'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     core.dispose();
@@ -1226,7 +1332,7 @@ void main() {
     await tester.tap(find.text('Logs'));
     await tester.pumpAndSettle();
     expect(find.textContaining('proxy started'), findsOneWidget);
-    await tester.tap(find.text('Clear'));
+    await tester.tap(find.byTooltip('Clear'));
     await tester.pumpAndSettle();
     expect(find.textContaining('proxy started'), findsNothing);
     await tester.pageBack();
@@ -1693,9 +1799,10 @@ void main() {
         update: {'state': 'ready', 'version': '9.9.9'},
         args: ['--autostart', '--data-dir=elsewhere'],
       );
-      // With the app's own arguments, and before it connects.
+      // With the app's own arguments (its data folder too, so the new
+      // version opens the same one), and before it connects.
       expect(api.installs.single.$1, '9.9.9');
-      expect(api.installs.single.$2, ['--autostart']);
+      expect(api.installs.single.$2, ['--autostart', '--data-dir=elsewhere']);
       expect(Updates.installingAtStart.value, isTrue);
       expect(quit, 1);
       await done(tester, core);

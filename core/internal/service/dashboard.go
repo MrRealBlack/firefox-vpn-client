@@ -203,7 +203,7 @@ func (s *dashboardServer) handler() http.Handler {
 	mux.HandleFunc("POST /api/session", s.handleLogin)
 	mux.HandleFunc("DELETE /api/session", s.handleLogout)
 	mux.HandleFunc("POST /api/session/link", s.handleLoginLink)
-	mux.HandleFunc("POST /api/dashboard/reset-login", s.handleResetLogin)
+	mux.HandleFunc("POST /api/dashboard/set-login", s.handleSetLogin)
 	mux.HandleFunc("POST /api/open-folder", s.handleOpenFolder)
 
 	mux.HandleFunc("GET /api/status", s.handleStatus)
@@ -240,6 +240,8 @@ func (s *dashboardServer) handler() http.Handler {
 	mux.HandleFunc("POST /api/update/install", s.handleUpdateInstall)
 
 	mux.HandleFunc("GET /api/logs", s.handleLogs)
+	mux.HandleFunc("GET /api/connections", s.handleConnections)
+	mux.HandleFunc("DELETE /api/connections", s.handleConnectionsClear)
 	mux.HandleFunc("GET /api/logs/stream", s.handleLogStream)
 	return s.guard(mux)
 }
@@ -454,15 +456,27 @@ func (s *dashboardServer) validSession(r *http.Request) bool {
 	return !out
 }
 
-// handleResetLogin gives the dashboard a new random login. Only the
+// handleSetLogin gives the panel a new login: the username and password in
+// the body, a random one for each left empty; it answers both. Only the
 // program on this computer (the status screen, holding the local token)
 // may call it: it is the way back in after a forgotten password.
-func (s *dashboardServer) handleResetLogin(w http.ResponseWriter, r *http.Request) {
+func (s *dashboardServer) handleSetLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.d.hasLocalToken(r) {
-		writeError(w, http.StatusForbidden, "only the program on this computer can reset the dashboard login")
+		writeError(w, http.StatusForbidden, "only the program on this computer can set the panel login")
 		return
 	}
-	username, password, err := s.d.ResetDashboardLogin()
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	username, password, err := s.d.SetDashboardLogin(body.Username, body.Password)
+	if errors.Is(err, errBadPanelLogin) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -470,17 +484,43 @@ func (s *dashboardServer) handleResetLogin(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]string{"username": username, "password": password})
 }
 
-// ResetDashboardLogin replaces the dashboard login with a random username
-// and password and returns them; every signed-in browser is signed out.
-func (d *Daemon) ResetDashboardLogin() (username, password string, err error) {
-	username = "admin-" + randomText(4, "abcdefghijkmnpqrstuvwxyz23456789")
-	password = randomText(16, passwordAlphabet)
+// SetDashboardLogin replaces the panel login with username and password, a
+// random one for each left empty (PanelLogin), and returns them; every
+// signed-in browser is signed out.
+func (d *Daemon) SetDashboardLogin(username, password string) (string, string, error) {
+	username, password, err := PanelLogin(username, password)
+	if err != nil {
+		return "", "", err
+	}
 	cfg := d.config()
 	cfg.Dashboard.Username = username
 	if _, err := d.updateSettings(cfg, &password); err != nil {
 		return "", "", err
 	}
-	logx.Info("dashboard login reset on this computer username=%s", username)
+	logx.Info("panel login set on this computer username=%s", username)
+	return username, password, nil
+}
+
+// errBadPanelLogin is a username or password PanelLogin refuses.
+var errBadPanelLogin = errors.New("bad panel login")
+
+// PanelLogin is the panel login someone asked for: the username and the
+// password as given, or a random one for each left empty (PanelUsername;
+// 16 letters and digits).
+func PanelLogin(username, password string) (string, string, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		username = PanelUsername()
+	}
+	if len(username) > 64 || strings.ContainsAny(username, ": \t") {
+		return "", "", fmt.Errorf("%w: the username has at most 64 characters, without spaces or ':'", errBadPanelLogin)
+	}
+	if password == "" {
+		password = randomText(16, passwordAlphabet)
+	}
+	if len(password) < minPasswordLength {
+		return "", "", fmt.Errorf("%w: the password must have at least %d characters", errBadPanelLogin, minPasswordLength)
+	}
 	return username, password, nil
 }
 
@@ -497,16 +537,16 @@ type ServerLogin struct {
 // a random password, and a random proxy login (ProxyUsername), so the proxy
 // can be shared on the local network. The ports stay as configured.
 func SetupServer(cfg *config.Config, username string) (ServerLogin, error) {
-	username = strings.TrimSpace(username)
-	if username == "" || username == "-" {
-		username = PanelUsername()
+	if strings.TrimSpace(username) == "-" {
+		username = ""
 	}
-	if len(username) > 64 || strings.ContainsAny(username, ": \t") {
-		return ServerLogin{}, errors.New("the username has at most 64 characters, without spaces or ':'")
+	username, password, err := PanelLogin(username, "")
+	if err != nil {
+		return ServerLogin{}, err
 	}
 	login := ServerLogin{
 		DashboardUsername: username,
-		DashboardPassword: randomText(16, passwordAlphabet),
+		DashboardPassword: password,
 		ProxyUsername:     ProxyUsername(),
 		ProxyPassword:     randomText(16, passwordAlphabet),
 		DashboardPort:     listenPort(cfg.Dashboard.Listen, "10820"),

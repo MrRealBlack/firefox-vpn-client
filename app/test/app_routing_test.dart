@@ -21,9 +21,20 @@ void main() {
     expect(r.checked('cab.snapp.passenger'), isFalse); // not installed
     expect(r.checkSuggested(['ir.bale']), 0);
 
-    // The user may uncheck one, and it stays unchecked.
+    // The user may uncheck one, and it stays unchecked: the phone does not
+    // check it again by itself (CoreService.suggest).
     r.toggle('ir.bale', false);
     expect(r.checked('ir.bale'), isFalse);
+    expect(r.declined, {'ir.bale'});
+    // An app of the user's own is not "declined" when unchecked.
+    r.toggle('my.bank', false);
+    expect(r.declined, {'ir.bale'});
+    // Checked again, by hand or with the button, it is the user's again.
+    r.toggle('ir.bale', true);
+    expect(r.declined, isEmpty);
+    r.toggle('ir.bale', false);
+    expect(r.checkSuggested(['ir.bale']), 1);
+    expect(r.declined, isEmpty);
   });
 
   test('proxy selected apps keeps its own choice', () {

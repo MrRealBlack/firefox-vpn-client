@@ -292,20 +292,21 @@ class CoreApi {
 
   Future<void> openFolder() => _json('POST', '/api/open-folder', const {});
 
-  /// Starts downloading [version] of the app (the Windows app's core; 409
+  /// Starts downloading [version] of the app (the desktop app's core; 409
   /// for a copy that does not update itself).
   Future<void> downloadUpdate(String version) =>
       _json('POST', '/api/update/download', {'version': version});
 
   /// Installs the downloaded [version]: the core starts the installation,
   /// which waits for this app ([pid]) and its core to quit, then starts the
-  /// app again with [args].
+  /// app again with [args]. The core unpacks the new version before it
+  /// answers, which a slow disk makes take a while.
   Future<void> installUpdate(String version, int pid, List<String> args) =>
       _json('POST', '/api/update/install', {
         'version': version,
         'pid': pid,
         'args': args,
-      });
+      }, _slowest);
 
   /// A sign-in link to the web dashboard: it opens signed in, once, within
   /// 15 minutes.
@@ -353,6 +354,20 @@ class CoreApi {
       DestinationTest.fromJson(
         await _json('POST', '/api/routing/test', {'target': target}, _slow),
       );
+
+  /// The proxy's open connections and the last closed ones, in the order
+  /// they started (`GET /api/connections`).
+  Future<List<ProxyConnection>> connections() async =>
+      _connections(await _json('GET', '/api/connections'));
+
+  /// Forgets the closed connections.
+  Future<List<ProxyConnection>> clearConnections() async =>
+      _connections(await _json('DELETE', '/api/connections'));
+
+  static List<ProxyConnection> _connections(Map<String, Object?> j) => [
+    for (final c in (j['connections'] as List<Object?>? ?? const []))
+      if (c is Map<String, Object?>) ProxyConnection.fromJson(c),
+  ];
 
   /// The programs running on the computer, for the TUN settings' choice of
   /// programs that skip the VPN (the desktop app's core only).

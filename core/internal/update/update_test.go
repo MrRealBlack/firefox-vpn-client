@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +22,11 @@ import (
 
 	"github.com/armanlife/firefox-vpn-client/core/internal/signing"
 )
+
+// The tests make the Windows zip on every system; untar_test.go tries the
+// Linux and macOS archives. (The init of process_linux.go or
+// process_darwin.go runs first: its file sorts first.)
+func init() { thePackage = windowsPackage }
 
 // release is a test release: its files by name, served under
 // /releases/download/v<version>/.
@@ -330,8 +336,12 @@ func installed(t *testing.T, appDir, dataDir string, args ...string) pending {
 	if len(started) != 2 || started[1] != dataDir || !strings.HasPrefix(started[0], filepath.Join(dataDir, "update", "updater")) {
 		t.Fatalf("started %v", started)
 	}
-	if _, err := os.Stat(started[0]); err != nil {
+	info, err := os.Stat(started[0])
+	if err != nil {
 		t.Fatalf("the copy of the core: %v", err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o100 == 0 {
+		t.Fatalf("the copy of the core is not executable: %v", info.Mode())
 	}
 	var p pending
 	if err := json.Unmarshal([]byte(read(t, filepath.Join(dataDir, "update", "pending.json"))), &p); err != nil {
@@ -523,6 +533,10 @@ func TestANewStartReadsTheResultAndCleansUp(t *testing.T) {
 
 func TestSupportedNeedsAKeyAVersionAndTheApp(t *testing.T) {
 	appDir, dataDir := appFolder(t, "1.0.0", false)
+	if runtime.GOOS != "windows" {
+		// Linux and macOS keep the data outside the app.
+		dataDir = t.TempDir()
+	}
 	old := signing.Key
 	t.Cleanup(func() { signing.Key = old })
 	signing.Key = ""
@@ -536,10 +550,42 @@ func TestSupportedNeedsAKeyAVersionAndTheApp(t *testing.T) {
 	if Supported(t.TempDir(), dataDir, "1.0.0") == "" && platformSupported {
 		t.Error("supported without the app")
 	}
-	if Supported(appDir, t.TempDir(), "1.0.0") == "" && platformSupported {
-		t.Error("supported with another data folder")
+	// Windows wants the app's own user-data; Linux and macOS a folder on
+	// the app's drive outside the app (a portable macOS copy keeps it in
+	// the bundle, which the swap replaces).
+	others := []string{t.TempDir()}
+	if runtime.GOOS != "windows" {
+		others = []string{filepath.Join(t.TempDir(), "missing"), filepath.Join(appDir, "user-data")}
 	}
-	if got := Supported(appDir, dataDir, "1.0.0"); (got == "") != platformSupported {
+	for _, other := range others {
+		if Supported(appDir, other, "1.0.0") == "" && platformSupported {
+			t.Errorf("supported with the data folder %s", other)
+		}
+	}
+	// A copy run as root does not update itself (Linux and macOS).
+	want := platformSupported && (runtime.GOOS == "windows" || os.Geteuid() != 0)
+	if got := Supported(appDir, dataDir, "1.0.0"); (got == "") != want {
 		t.Errorf("got %q", got)
+	}
+}
+
+// A copy started with its own data folder starts again with it after the
+// update; another folder is not passed on.
+func TestInstallKeepsTheDataFolderOfACopyStartedWithOne(t *testing.T) {
+	newRelease(t, "1.2.3").serve(t)
+	appDir, dataDir := appFolder(t, "1.0.0", false)
+	p := installed(t, appDir, dataDir, "--hidden", "--data-dir="+dataDir)
+	if strings.Join(p.Args, " ") != "--hidden --data-dir="+dataDir {
+		t.Fatalf("args %v", p.Args)
+	}
+}
+
+// A start after an unpacking that stopped halfway removes what it left.
+func TestANewStartRemovesAHalfUnpackedVersion(t *testing.T) {
+	appDir, dataDir := appFolder(t, "1.0.0", false)
+	write(t, filepath.Join(dataDir, "update", "new.part", "3"), "half")
+	newManager(appDir, dataDir)
+	if _, err := os.Stat(filepath.Join(dataDir, "update", "new.part")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("the half-unpacked version stayed")
 	}
 }

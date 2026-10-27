@@ -48,7 +48,7 @@ func TestALoopMakesANotice(t *testing.T) {
 	defer client.Close()
 	defer other.Close()
 	for _, target := range []string{"203.0.113.21:443", "203.0.113.22:443"} {
-		_, _ = s.openTarget(client, target, "127.0.0.1:40000")
+		_, _ = s.openTarget(client, target, "127.0.0.1:40000", "socks5")
 	}
 	notices := s.Notices.Since(time.Time{})
 	if len(notices) != 1 || notices[0].Kind != NoticeLoop || notices[0].Count != 1 {
@@ -59,7 +59,7 @@ func TestALoopMakesANotice(t *testing.T) {
 	loops = loopWatch{}
 	s2 := &SOCKSServer{upstream: &recordingOpener{}, Notices: &Notices{}}
 	for _, target := range []string{"198.51.100.1:443", "198.51.100.2:443"} {
-		_, _ = s2.openTarget(client, target, "127.0.0.1:40000")
+		_, _ = s2.openTarget(client, target, "127.0.0.1:40000", "socks5")
 	}
 	for _, n := range s2.Notices.Since(time.Time{}) {
 		if n.Kind == NoticeLoop {

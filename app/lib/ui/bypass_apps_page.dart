@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../core/android_core.dart';
 import '../l10n/app_localizations.dart';
+import 'widgets.dart';
 
 /// Android, per-app proxy (v2rayN's words): bypass the selected apps, or
 /// proxy only the selected apps. The routing region's list (Iran's banks,
 /// messengers, and the like) is a suggestion: checked at first, and again
-/// with "Suggested apps", never forced. The choice is kept by the app
-/// (CoreService.kt) and applied when the page closes.
+/// with "Suggested apps", never forced. The apps without a launcher icon
+/// (mostly the system's) show on request, or when chosen. The choice is
+/// kept by the app (CoreService.kt) and applied when the page closes.
 class BypassAppsPage extends StatefulWidget {
   const BypassAppsPage({super.key, this.region});
 
@@ -21,6 +23,9 @@ class BypassAppsPage extends StatefulWidget {
 }
 
 class _BypassAppsPageState extends State<BypassAppsPage> {
+  /// The system's apps are listed too; kept while the app runs.
+  static bool _showSystem = false;
+
   List<InstalledApp>? _apps;
   AppRouting? _routing;
 
@@ -67,9 +72,10 @@ class _BypassAppsPageState extends State<BypassAppsPage> {
     final q = _query.trim().toLowerCase();
     final apps = [
       for (final a in _apps ?? const <InstalledApp>[])
-        if (q.isEmpty ||
-            a.label.toLowerCase().contains(q) ||
-            a.package.toLowerCase().contains(q))
+        if ((a.launcher || _showSystem || routing!.checked(a.package)) &&
+            (q.isEmpty ||
+                a.label.toLowerCase().contains(q) ||
+                a.package.toLowerCase().contains(q)))
           a,
     ];
     return PopScope(
@@ -80,7 +86,20 @@ class _BypassAppsPageState extends State<BypassAppsPage> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(l.bypassApps)),
+        appBar: AppBar(
+          title: Text(l.bypassApps),
+          actions: [
+            PopupMenuButton<void>(
+              itemBuilder: (context) => [
+                checkMenuItem(
+                  label: l.showSystemApps,
+                  checked: _showSystem,
+                  onTap: () => setState(() => _showSystem = !_showSystem),
+                ),
+              ],
+            ),
+          ],
+        ),
         body: routing == null || _apps == null
             ? const Center(child: CircularProgressIndicator())
             : ListView.builder(

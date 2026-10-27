@@ -1123,6 +1123,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get suggestedApps => '推荐应用';
 
   @override
+  String get showSystemApps => '显示系统应用';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -1365,6 +1368,59 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get runningProgramsEmpty => '没有其他正在运行的程序。';
+
+  @override
+  String get tabLog => '日志';
+
+  @override
+  String get tabConnections => '连接';
+
+  @override
+  String get connectionsEmpty => '暂无连接。';
+
+  @override
+  String connectionsOpen(int count) {
+    return '$count 个打开';
+  }
+
+  @override
+  String get connTime => '时间';
+
+  @override
+  String get connRoute => '规则';
+
+  @override
+  String get connDestination => '目标';
+
+  @override
+  String get connInbound => '入站';
+
+  @override
+  String get connProtocol => '协议';
+
+  @override
+  String get connColumns => '列';
+
+  @override
+  String get connTraffic => '流量';
+
+  @override
+  String get connDuration => '时长';
+
+  @override
+  String get connRouteVpn => '代理';
+
+  @override
+  String get connRouteDirect => '直连';
+
+  @override
+  String get connRouteBlocked => '已拦截';
+
+  @override
+  String get connRoutePort => '端口被拒';
+
+  @override
+  String get connRouteFailed => '失败';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -2483,6 +2539,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get suggestedApps => '推薦的應用程式';
 
   @override
+  String get showSystemApps => '顯示系統應用程式';
+
+  @override
   String suggestedAdded(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -2728,4 +2787,57 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get runningProgramsEmpty => '沒有其他正在執行的程式。';
+
+  @override
+  String get tabLog => '記錄';
+
+  @override
+  String get tabConnections => '連線';
+
+  @override
+  String get connectionsEmpty => '尚無連線。';
+
+  @override
+  String connectionsOpen(int count) {
+    return '$count 個開啟';
+  }
+
+  @override
+  String get connTime => '時間';
+
+  @override
+  String get connRoute => '規則';
+
+  @override
+  String get connDestination => '目標';
+
+  @override
+  String get connInbound => '入站';
+
+  @override
+  String get connProtocol => '協定';
+
+  @override
+  String get connColumns => '欄';
+
+  @override
+  String get connTraffic => '流量';
+
+  @override
+  String get connDuration => '時長';
+
+  @override
+  String get connRouteVpn => '代理';
+
+  @override
+  String get connRouteDirect => '直連';
+
+  @override
+  String get connRouteBlocked => '已封鎖';
+
+  @override
+  String get connRoutePort => '連接埠被拒';
+
+  @override
+  String get connRouteFailed => '失敗';
 }

@@ -51,6 +51,35 @@ jobs:
             echo "::error::tag $GITHUB_REF_NAME does not match app/pubspec.yaml ($v)"
             exit 1
           fi
+      # The apps read .github/updates.json from the default branch as soon
+      # as it is pushed (app/lib/app_info.dart): the version each system's
+      # app offers.
+      - name: Update notice
+        run: |
+          jq -e 'type == "object"
+            and all(keys[]; IN("android", "linux", "macos", "windows"))
+            and all(.[]; type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' .github/updates.json >/dev/null || {
+            echo "::error::updates.json must be an object whose keys are android, linux, macos, or windows, each with a \"major.minor.patch\" version"
+            exit 1
+          }
+          # A version that is never released would stop that system's
+          # updates without a word.
+          v="${{ steps.version.outputs.version }}"
+          ahead="$(jq -r --arg v "$v" '($v | split(".") | map(tonumber)) as $app
+            | to_entries[] | select((.value | split(".") | map(tonumber)) > $app) | "\(.key) \(.value)"' .github/updates.json | xargs)"
+          if [ -n "$ahead" ]; then
+            echo "::error::updates.json names versions newer than app/pubspec.yaml ($v): $ahead"
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            v="${GITHUB_REF_NAME#v}"
+            systems="$(jq -r --arg v "$v" 'to_entries[] | select(.value == $v) | .key' .github/updates.json | xargs)"
+            if [ -z "$systems" ]; then
+              echo "::warning::updates.json gives $v to no system: the apps that read it do not offer this release"
+            else
+              echo "updates.json offers $v to: $systems"
+            fi
+          fi
       - uses: actions/setup-go@v7
         with:
           go-version-file: core/go.mod
@@ -256,8 +285,8 @@ jobs:
           test ! -e /opt/firefox-vpn-tun
       - name: Build
         env:
-          # The key the TUN service's updates are signed with; without it
-          # the service takes none.
+          # The key updates are signed with: the core and the TUN service
+          # take only updates it signed; without it they take none.
           FIREFOX_VPN_SIGNING_KEY: ${{ secrets.FIREFOX_VPN_SIGNING_KEY }}
         run: bash scripts/build-linux.sh
       - name: Release name
@@ -286,13 +315,22 @@ jobs:
           channel: stable
           cache: true
       # What runs only on macOS: the system proxy, the TUN service and its
-      # socket, DNS settings, and the core's binding outside the TUN.
+      # socket, DNS settings, the core's binding outside the TUN, and the
+      # app's update.
       - name: Core tests on macOS
         working-directory: core
         run: |
           go vet ./...
-          go test ./internal/desktop ./internal/config ./internal/egress ./internal/netstate ./internal/tunapi ./internal/tunservice
+          go test -skip "$MAC_UPDATE_TESTS" ./internal/desktop ./internal/config ./internal/egress ./internal/netstate ./internal/tunapi ./internal/tunservice ./internal/update
           go test -tags with_gvisor ./internal/tunstack/
+        env:
+          MAC_UPDATE_TESTS: TestTheAppOpensWithItsArguments|TestTheBundleLosesTheQuarantineMark
+      # The update's Launch Services and quarantine tests. Not yet run on a
+      # Mac but here, so a failure shows without holding the release back.
+      - name: Update tests that need a Mac
+        continue-on-error: true
+        working-directory: core
+        run: go test -v -run 'TestTheAppOpensWithItsArguments|TestTheBundleLosesTheQuarantineMark' ./internal/update
       # A real TUN, as root, for a minute (internal/tunservice/e2e_test.go):
       # this computer is CI's. Not yet run on a Mac but here, so a failure
       # shows without holding the release back.
@@ -318,14 +356,33 @@ jobs:
           test ! -e "/Library/Application Support/Firefox VPN TUN"
       - name: Build
         env:
-          # The key the TUN service's updates are signed with; without it
-          # the service takes none.
+          # The key updates are signed with: the core and the TUN service
+          # take only updates it signed; without it they take none.
           FIREFOX_VPN_SIGNING_KEY: ${{ secrets.FIREFOX_VPN_SIGNING_KEY }}
         run: bash scripts/build-macos.sh
+      # The app's own update, end to end: the app just built, in
+      # /Applications, updates itself to a test release on loopback
+      # (scripts/test-update-macos.sh). Not yet run on a Mac but here, so a
+      # failure shows without holding the release back.
+      - name: App update end to end
+        continue-on-error: true
+        # Its own waits end within about 10 minutes; a dialog nobody answers
+        # must not hold the release for the job's 6 hours.
+        timeout-minutes: 20
+        run: bash scripts/test-update-macos.sh "$RUNNER_TEMP/update-test"
+      # Its screenshots and logs; not on a release, which takes every
+      # artifact of the run.
+      - uses: actions/upload-artifact@v7
+        if: always() && !startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: macos-update-test
+          path: ${{ runner.temp }}/update-test
+          if-no-files-found: ignore
       - name: Release name
         run: |
           mkdir out
           mv "dist/Firefox-VPN-${{ needs.test.outputs.version }}-macOS.dmg" out/Firefox-VPN-macOS.dmg
+          mv "dist/Firefox-VPN-${{ needs.test.outputs.version }}-macOS.tar.gz" out/Firefox-VPN-macOS.tar.gz
       - uses: actions/upload-artifact@v7
         with:
           name: macos

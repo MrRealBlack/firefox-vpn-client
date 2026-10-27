@@ -2,7 +2,6 @@ package desktop
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -140,46 +139,29 @@ func TestScreenChangeClearsTheMessage(t *testing.T) {
 	}
 }
 
-// resetBackend answers the reset screen; other calls are not made.
+// resetBackend answers the panel login screen and the poll; other calls
+// are not made.
 type resetBackend struct {
 	consoleBackend
-	resets int
+	sets []string // "username password" asked for
 }
 
+// status keeps the menu as it is (the background poll after a task asks).
 func (b *resetBackend) status(context.Context) (service.StatusView, error) {
-	return service.StatusView{}, errors.New("not used")
+	return service.StatusView{CanExit: true, Dashboard: map[string]any{"login_required": true}}, nil
 }
 func (b *resetBackend) logsSince(context.Context, uint64) ([]logx.Entry, error) { return nil, nil }
-func (b *resetBackend) resetLogin(context.Context) (dashboardLogin, error) {
-	b.resets++
-	return dashboardLogin{Username: "admin-abcd", Password: "Secret12345678ab"}, nil
+func (b *resetBackend) setLogin(_ context.Context, username, password string) (dashboardLogin, error) {
+	b.sets = append(b.sets, username+" "+password)
+	if username == "" {
+		username, password = "panel2345", "Secret12345678ab"
+	}
+	return dashboardLogin{Username: username, Password: password}, nil
 }
 
-// The reset asks first, shows the new login once, and forgets it when the
-// screen is left.
-func TestResetLoginScreen(t *testing.T) {
-	backend := &resetBackend{}
-	ui := &consoleUI{backend: backend, status: &service.StatusView{CanExit: true, Dashboard: map[string]any{"login_required": true}}}
-	index := 0
-	for i, it := range ui.menuItems() {
-		if it.action == actReset {
-			index = i + 1
-			if !strings.Contains(it.label, "Reset the dashboard login") {
-				t.Fatalf("label %q", it.label)
-			}
-		}
-	}
-	if index == 0 {
-		t.Fatal("no reset item")
-	}
-	ui.submit(strconv.Itoa(index))
-	if ui.mode != screenResetLogin || backend.resets != 0 {
-		t.Fatal("choosing the item must ask first, not reset")
-	}
-	if text := strings.Join(ui.resetLoginScreen(80, 30), "\n"); !strings.Contains(text, "Reset the login now") {
-		t.Fatalf("confirmation screen:\n%s", text)
-	}
-	ui.submit("1")
+// waitLogin waits until the login set shows.
+func waitLogin(t *testing.T, ui *consoleUI) string {
+	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		ui.mu.Lock()
@@ -191,14 +173,77 @@ func TestResetLoginScreen(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	ui.mu.Lock()
-	text := strings.Join(ui.resetLoginScreen(80, 30), "\n")
-	ui.mu.Unlock()
-	if backend.resets != 1 || !strings.Contains(text, "admin-abcd") || !strings.Contains(text, "Secret12345678ab") {
-		t.Fatalf("after confirming (resets %d):\n%s", backend.resets, text)
+	defer ui.mu.Unlock()
+	return strings.Join(ui.resetLoginScreen(80, 30), "\n")
+}
+
+// The panel login: one menu item; a random login, shown once and
+// forgotten when the screen is left, or the user's own, typed with the
+// password hidden and not shown back.
+func TestResetLoginScreen(t *testing.T) {
+	backend := &resetBackend{}
+	ui := &consoleUI{backend: backend, status: &service.StatusView{CanExit: true, Dashboard: map[string]any{"login_required": true}}}
+	index := 0
+	for i, it := range ui.menuItems() {
+		if it.action == actReset {
+			index = i + 1
+			if it.label != "Set panel login" {
+				t.Fatalf("label %q", it.label)
+			}
+		}
+	}
+	if index == 0 {
+		t.Fatal("no panel login item")
+	}
+	ui.submit(strconv.Itoa(index))
+	if ui.mode != screenResetLogin || len(backend.sets) != 0 {
+		t.Fatal("choosing the item must ask first, not set")
+	}
+	if text := strings.Join(ui.resetLoginScreen(80, 30), "\n"); !strings.Contains(text, "Random username and password") || !strings.Contains(text, "Choose my own") {
+		t.Fatalf("choice screen:\n%s", text)
+	}
+	ui.submit("1")
+	text := waitLogin(t, ui)
+	if len(backend.sets) != 1 || backend.sets[0] != " " || !strings.Contains(text, "panel2345") || !strings.Contains(text, "Secret12345678ab") {
+		t.Fatalf("random (sets %q):\n%s", backend.sets, text)
 	}
 	ui.submit("0")
 	if ui.mode != screenHome || ui.newLogin != nil {
 		t.Fatal("leaving the screen must forget the password")
+	}
+
+	// The user's own: a short password is refused, the typed one is
+	// hidden and not shown back.
+	ui.submit(strconv.Itoa(index))
+	ui.submit("2")
+	typeLine := func(text string) {
+		for _, r := range text {
+			ui.handleKey(r)
+		}
+		ui.handleKey('\r')
+	}
+	typeLine("me")
+	for _, r := range "secret" {
+		ui.handleKey(r)
+	}
+	ui.mu.Lock()
+	prompt := ui.promptLine()
+	ui.mu.Unlock()
+	if strings.Contains(prompt, "secret") || !strings.Contains(prompt, "••••••") {
+		t.Fatalf("the password must be hidden: %q", prompt)
+	}
+	ui.handleKey('\r')
+	text = waitLogin(t, ui)
+	if len(backend.sets) != 2 || backend.sets[1] != "me secret" || !strings.Contains(text, "me") || strings.Contains(text, "secret") {
+		t.Fatalf("own (sets %q):\n%s", backend.sets, text)
+	}
+	ui.submit("0")
+	ui.submit(strconv.Itoa(index))
+	ui.submit("2")
+	typeLine("you")
+	typeLine("short")
+	if len(backend.sets) != 2 || !strings.Contains(ui.message, "at least 6") {
+		t.Fatalf("a short password: sets %q, message %q", backend.sets, ui.message)
 	}
 }
 

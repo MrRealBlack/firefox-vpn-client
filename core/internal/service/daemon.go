@@ -97,6 +97,9 @@ type Daemon struct {
 	// notices outlives engine restarts, so the dashboard can still explain
 	// a refused request after the proxy restarted.
 	notices *proxy.Notices
+	// conns lists the proxy's connections for the dashboard's Connections
+	// (memory only); it too outlives engine restarts.
+	conns *proxy.Connections
 	// sessionKey signs the dashboard's session cookies.
 	sessionKey []byte
 	// autoTesting is set while an automatic connection test runs.
@@ -156,7 +159,7 @@ type Daemon struct {
 	// desktop app's core on Windows and Linux lists them).
 	RunningPrograms func() ([]RunningProgram, error)
 	// Updater installs new versions of the desktop app (update.go); nil
-	// when this copy does not update itself (not the Windows app's core).
+	// when this copy does not update itself (update.Supported).
 	Updater *update.Manager
 	// tun is the TUN mode's listener and state (tun.go).
 	tun struct {
@@ -246,6 +249,7 @@ func NewDaemon(paths DataPaths, forceVerbose bool) (*Daemon, error) {
 		paths:        paths,
 		sessionKey:   sessionKey,
 		notices:      &proxy.Notices{},
+		conns:        &proxy.Connections{},
 		routing:      routingState{wake: make(chan struct{}, 1)},
 		forceVerbose: forceVerbose,
 		store:        store,
@@ -650,10 +654,16 @@ func (d *Daemon) Speed() (down, up int64) {
 	return t.DownRate, t.UpRate
 }
 
-// Off makes Run start with the proxy off; call it before Run.
+// Off makes Run start with the proxy off; call it before Run. The state
+// says off from then on: the API answers before Run reaches the engine
+// (routing loads meanwhile), and the app would show "starting" as
+// connecting.
 func (d *Daemon) Off() {
 	d.mu.Lock()
 	d.off = true
+	if d.engine == nil {
+		d.state = engineState{Phase: PhaseOff, Message: "Proxy off", Since: time.Now()}
+	}
 	d.mu.Unlock()
 }
 

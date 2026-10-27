@@ -827,6 +827,18 @@ func (s *dashboardServer) handleLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"entries": logx.Logs.Since(after)})
 }
 
+// handleConnections lists the proxy's open connections and the last closed
+// ones, in the order they started.
+func (s *dashboardServer) handleConnections(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"connections": s.d.conns.List()})
+}
+
+// handleConnectionsClear forgets the closed connections.
+func (s *dashboardServer) handleConnectionsClear(w http.ResponseWriter, _ *http.Request) {
+	s.d.conns.Clear()
+	writeJSON(w, http.StatusOK, map[string]any{"connections": s.d.conns.List()})
+}
+
 // handleLogStream streams new log entries as server-sent events.
 func (s *dashboardServer) handleLogStream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)

@@ -1854,9 +1854,10 @@ class _NoticesState extends State<_Notices> {
   }
 }
 
-/// A newer version on GitHub. The Windows app installs it itself: Update
-/// downloads it (its progress shows here), then the app closes and opens
-/// again as the new version; elsewhere the button opens its download.
+/// A newer version on GitHub. The desktop apps (Windows, Linux, macOS)
+/// install it themselves: Update downloads it (its progress shows here),
+/// then the app closes and opens again as the new version; on Android the
+/// button opens its download.
 /// After an update, what it did. Closed, a version's notice stays away
 /// until a later version.
 class _UpdateNotice extends StatelessWidget {
@@ -2078,8 +2079,10 @@ class _UpdateBanner extends StatelessWidget {
 /// TUN mode refused a program's UDP that looks like a call or a game
 /// (Mozilla does not carry UDP): the program by name, with a way to send its
 /// UDP directly (its other traffic stays in the VPN, so a messenger blocked
-/// in the country keeps working), or to see this card no more.
-class _UdpNotice extends StatelessWidget {
+/// in the country keeps working), or to see this card no more. Once seen, it
+/// goes after a minute, and stays away while the same program is the one
+/// refused and the TUN runs.
+class _UdpNotice extends StatefulWidget {
   const _UdpNotice({
     required this.core,
     required this.status,
@@ -2091,6 +2094,76 @@ class _UdpNotice extends StatelessWidget {
   final CoreStatus status;
   final AppSettings settings;
   final _HomePalette palette;
+
+  @override
+  State<_UdpNotice> createState() => _UdpNoticeState();
+}
+
+class _UdpNoticeState extends State<_UdpNotice> {
+  static const _showFor = Duration(seconds: 60);
+
+  /// The program the card is out for, and whether its minute is over; the
+  /// minute starts when the card can first be seen (the window is shown, the
+  /// app in front), also when the home page is built again meanwhile.
+  static String? _shownFor;
+  static bool _over = false;
+  static Timer? _minute;
+  static final _changed = ValueNotifier(0);
+
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _changed.addListener(_rebuild);
+    // Shown from the tray, or the app brought to the front: seen now.
+    _lifecycle = AppLifecycleListener(onStateChange: (_) => _rebuild());
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    _changed.removeListener(_rebuild);
+    super.dispose();
+  }
+
+  void _rebuild() {
+    if (mounted) setState(() {});
+  }
+
+  /// Whether the user can see the home page now.
+  static bool get _seen {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return (state == AppLifecycleState.resumed ||
+            state == AppLifecycleState.inactive) &&
+        !Updates.windowHidden();
+  }
+
+  /// Whether to show the card for [program] ("" for none) now.
+  bool _visible(String program) {
+    if (program.isEmpty) {
+      // The TUN stopped, or the program skips the VPN now: a later refusal
+      // shows again.
+      _shownFor = null;
+      _over = false;
+      _minute?.cancel();
+      _minute = null;
+      return false;
+    }
+    if (program != _shownFor) {
+      _shownFor = program;
+      _over = false;
+      _minute?.cancel();
+      _minute = null;
+    }
+    if (!_over && _minute == null && _seen) {
+      _minute = Timer(_showFor, () {
+        _over = true;
+        _changed.value++;
+      });
+    }
+    return !_over;
+  }
 
   /// A program by the name people know: without ".exe".
   static String _label(String program) => program.toLowerCase().endsWith('.exe')
@@ -2106,6 +2179,7 @@ class _UdpNotice extends StatelessWidget {
     String path,
   ) async {
     final l = AppLocalizations.of(context);
+    final core = widget.core;
     final ok = await runShowingErrors(
       context,
       () => core.editSettings((config) {
@@ -2135,21 +2209,22 @@ class _UdpNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: settings,
+    listenable: widget.settings,
     builder: (context, _) {
+      final status = widget.status, settings = widget.settings;
       final tun = status.tun;
-      final program = tun?.refusedUdp ?? '';
-      if (!status.tunMode ||
-          tun == null ||
-          !tun.on ||
-          !tun.programsSupported ||
-          program.isEmpty ||
+      final refused = status.tunMode && tun != null && tun.on
+          ? tun.refusedUdp
+          : '';
+      if (!_visible(refused) ||
+          !tun!.programsSupported ||
           !settings.udpNotice) {
         return const SizedBox.shrink();
       }
+      final program = refused;
       final l = AppLocalizations.of(context);
       final theme = Theme.of(context);
-      final p = palette;
+      final p = widget.palette;
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Material(
