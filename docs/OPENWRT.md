@@ -21,7 +21,6 @@ Your router becomes a **proxy** (SOCKS5 and HTTP, one port) with a **web panel**
 | Processor | `x86_64` or `aarch64` (others are not supported) |
 | RAM | 128 MB or more |
 | Free storage | 20 MB |
-| Accounts | one or more Firefox Accounts (50 GB a month each) |
 
 Check the processor:
 
