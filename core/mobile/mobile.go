@@ -105,6 +105,7 @@ func Start(dataDir string, on bool) error {
 
 // Stop shuts the daemon down and waits for it (bounded by the daemon).
 func Stop() {
+	stopPlatformTunnel()
 	StopTun()
 	mu.Lock()
 	d, finished := running, done

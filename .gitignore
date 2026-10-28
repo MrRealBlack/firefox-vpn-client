@@ -67,3 +67,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Generated iOS Go framework (scripts/build-ios-core.sh).
+/app/ios/Frameworks/*.xcframework/
